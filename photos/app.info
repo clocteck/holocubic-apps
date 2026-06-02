@@ -1,0 +1,3 @@
+name = photos
+entry = photos.lua
+description = play photos

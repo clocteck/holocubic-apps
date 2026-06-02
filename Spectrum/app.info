@@ -1,0 +1,3 @@
+name = Spectrum
+entry = main.lua
+description = Real-time Spectrum Special effects

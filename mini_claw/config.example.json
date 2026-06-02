@@ -1,0 +1,12 @@
+{
+  "llm_base_url": "https://api.openai.com/v1",
+  "llm_api_key": "",
+  "llm_model": "gpt-4o-mini",
+  "llm_timeout_ms": 45000,
+  "max_tool_rounds": 4,
+  "history_limit": 10,
+  "wechat_enabled": false,
+  "wechat_token": "",
+  "wechat_base_url": "https://ilinkai.weixin.qq.com",
+  "wechat_poll_ms": 3500
+}

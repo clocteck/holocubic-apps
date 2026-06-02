@@ -1,0 +1,6 @@
+name = Mini Claw
+entry = main.lua
+kind = service
+allow_webui = true
+autostart_service = true
+description = Minimal ESP-Claw style chat agent

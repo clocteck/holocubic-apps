@@ -1,0 +1,4 @@
+name = HW Monitor
+entry = main.lua
+allow_webui = true
+description = Desktop hardware monitor

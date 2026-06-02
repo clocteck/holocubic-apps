@@ -1,0 +1,14 @@
+{
+  "name": "codex_chibi",
+  "source": "generated from the user-provided reference image for this Codex Buddy app",
+  "license_note": "Generated local character assets. Verify rights for the user-provided reference image before redistribution.",
+  "states": {
+    "sleep": "sleep.gif",
+    "idle": "idle_0.gif",
+    "busy": "busy.gif",
+    "attention": "attention.gif",
+    "celebrate": "celebrate.gif",
+    "dizzy": "dizzy.gif",
+    "heart": "heart.gif"
+  }
+}

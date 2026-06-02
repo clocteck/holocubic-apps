@@ -1,0 +1,3 @@
+name = Clock
+entry = main.lua
+description = Minimal analog clock

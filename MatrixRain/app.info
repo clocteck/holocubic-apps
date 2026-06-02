@@ -1,0 +1,3 @@
+name = MatrixRain
+entry = main.lua
+description = Matrix code rain effect

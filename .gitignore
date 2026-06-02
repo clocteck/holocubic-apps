@@ -1,0 +1,7 @@
+temp/
+tools/hf_cache/
+tools/temp/
+**/__pycache__/
+*.pyc
+*.log
+*.err.log

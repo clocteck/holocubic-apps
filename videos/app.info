@@ -1,0 +1,3 @@
+name = videos
+entry = videos.lua
+description = play gif videos

@@ -1,0 +1,3 @@
+name = plane
+entry = main.lua
+description = plane war game
