@@ -1,0 +1,6 @@
+name = DevTools
+entry = main.lua
+kind = service
+allow_webui = true
+autostart_service = true
+description = Developer tools service
