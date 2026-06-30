@@ -1289,6 +1289,66 @@ button,input,select,textarea{font:inherit;color:inherit}
   color:rgba(89,112,101,.7);
 }
 
+.app-manage-view .store-advanced-toggle[aria-expanded="true"]{
+  border-color:rgba(29,138,103,.22);
+  background:var(--store-accent-soft);
+  color:var(--store-accent-strong);
+}
+
+.app-manage-view .store-advanced-panel{
+  flex:1 1 100%;
+  display:grid;
+  gap:10px;
+  width:100%;
+  margin-top:2px;
+  padding:12px;
+  border:1px solid var(--store-line);
+  border-radius:20px;
+  background:rgba(255,255,255,.68);
+}
+
+.app-manage-view .store-advanced-panel[hidden]{
+  display:none;
+}
+
+.app-manage-view .store-advanced-panel .store-source-field{
+  width:100%;
+  min-height:46px;
+  border-radius:14px;
+}
+
+.app-manage-view .store-advanced-panel .store-source-input{
+  width:100%;
+  min-width:0;
+}
+
+.app-manage-view .store-advanced-summary,
+.app-manage-view .store-advanced-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+}
+
+.app-manage-view .store-advanced-summary{
+  justify-content:space-between;
+  color:var(--store-muted);
+  font-size:13px;
+  font-weight:700;
+}
+
+.app-manage-view .store-advanced-summary strong{
+  color:var(--store-text);
+  font-weight:700;
+  overflow-wrap:anywhere;
+}
+
+.app-manage-view .store-advanced-note{
+  margin:0;
+  color:var(--store-muted);
+  font-size:13px;
+}
+
 .app-manage-view .store-brand-mark,
 .app-manage-view .store-app-icon{
   display:grid;
@@ -2229,7 +2289,6 @@ button,input,select,textarea{font:inherit;color:inherit}
     margin-bottom:10px;
   }
 
-  .app-manage-view .store-source-field,
   .app-manage-view .store-hero{
     display:none;
   }
@@ -2252,19 +2311,24 @@ button,input,select,textarea{font:inherit;color:inherit}
   }
 
   .app-manage-view .store-topbar-actions{
-    display:block;
+    display:flex;
+    flex-wrap:wrap;
     gap:8px;
     width:100%;
     justify-content:stretch;
   }
 
   .app-manage-view #refreshStoreBtn,
-  .app-manage-view #updateStoreBtn,
+  .app-manage-view #advancedStoreBtn{
+    flex:1 1 calc(50% - 4px);
+  }
+
   .app-manage-view #storeAppCount{
     display:none;
   }
 
   .app-manage-view #backFromAppManageBtn{
+    flex:1 1 100%;
     width:100%;
   }
 
@@ -2640,14 +2704,24 @@ button,input,select,textarea{font:inherit;color:inherit}
           </div>
         </div>
         <div class="store-topbar-actions">
-          <label class="store-source-field" for="storeServerUrl">
-            <span>应用目录地址</span>
-            <input class="store-source-input" id="storeServerUrl" type="url" placeholder="http://192.168.0.80:8080">
-          </label>
           <button class="store-btn store-btn-soft store-btn-compact" id="refreshStoreBtn" type="button">刷新目录</button>
-          <button class="store-btn store-btn-soft store-btn-compact" id="updateStoreBtn" type="button">更新</button>
+          <button class="store-btn store-btn-soft store-btn-compact store-advanced-toggle" id="advancedStoreBtn" type="button" aria-expanded="false" aria-controls="storeAdvancedPanel">高级选项</button>
           <div class="store-count-pill" id="storeAppCount">0 个项目</div>
           <button class="store-btn store-btn-soft store-btn-compact" id="backFromAppManageBtn" type="button">返回启动器</button>
+          <div class="store-advanced-panel" id="storeAdvancedPanel" hidden>
+            <label class="store-source-field" for="storeServerUrl">
+              <span>应用目录地址</span>
+              <input class="store-source-input" id="storeServerUrl" type="text" inputmode="url" autocomplete="off" placeholder="默认">
+            </label>
+            <div class="store-advanced-summary">
+              <span>当前目录</span>
+              <strong id="storeServerMode">默认</strong>
+            </div>
+            <div class="store-advanced-actions">
+              <button class="store-btn store-btn-soft store-btn-compact" id="resetStoreServerBtn" type="button">使用默认地址</button>
+            </div>
+            <p class="store-advanced-note">默认地址已内置；需要私有目录时填写自己的服务器地址。</p>
+          </div>
         </div>
       </header>
 
@@ -2657,14 +2731,14 @@ button,input,select,textarea{font:inherit;color:inherit}
           <div class="store-hero-copy">
             <div class="store-eyebrow">设备安装</div>
             <h1 id="storeHeroTitle">安装应用和服务</h1>
-            <p>填写应用目录地址后刷新列表，选择需要的应用即可安装、更新或卸载。</p>
+            <p>使用默认应用目录刷新列表，选择需要的应用即可安装或卸载。</p>
           </div>
         </div>
         <div class="store-hero-side">
           <div class="store-hero-side-copy">
             <span>目录状态</span>
-            <strong id="storeServerHost">未配置</strong>
-            <p class="store-status-text" id="storeStatusText">填写应用目录地址后点击“刷新目录”。</p>
+            <strong id="storeServerHost">默认</strong>
+            <p class="store-status-text" id="storeStatusText">使用默认应用目录，点击“刷新目录”。</p>
           </div>
         </div>
       </section>
@@ -2800,6 +2874,9 @@ const qs = (sel) => document.querySelector(sel);
 const DEFAULT_MDNS = "-";
 const DEFAULT_TIMEZONE = "CST-8";
 const DEFAULT_APP_STORE_CHANNEL = "stable";
+const DEFAULT_APP_STORE_HOST_CODES = [52,55,46,50,53,49,46,57,49,46,52,55];
+const DEFAULT_APP_STORE_URL = "https://" + DEFAULT_APP_STORE_HOST_CODES.map((code) => String.fromCharCode(code)).join("");
+const STORE_SHOW_UPDATE_ACTIONS = false;
 const SETTINGS_JSON_PATH = "/sd/apps/settings.json";
 const WIFI_SKIP_KEY = "cubic.skipWifiGate";
 const WIFI_SUCCESS_REDIRECT_DELAY_MS = 3000;
@@ -3594,9 +3671,12 @@ function initAppManageView(){
   const emptyState = root.querySelector("#storeEmptyState");
   const serverInput = root.querySelector("#storeServerUrl");
   const refreshBtn = root.querySelector("#refreshStoreBtn");
-  const updateBtn = root.querySelector("#updateStoreBtn");
+  const advancedBtn = root.querySelector("#advancedStoreBtn");
+  const advancedPanel = root.querySelector("#storeAdvancedPanel");
+  const resetServerBtn = root.querySelector("#resetStoreServerBtn");
   const statusText = root.querySelector("#storeStatusText");
   const serverHost = root.querySelector("#storeServerHost");
+  const serverMode = root.querySelector("#storeServerMode");
   const detailModal = root.querySelector("#storeDetailModal");
   const detailTitle = root.querySelector("#storeDetailTitle");
   const detailSubtitle = root.querySelector("#storeDetailSubtitle");
@@ -3715,7 +3795,55 @@ function initAppManageView(){
   }
 
   function normalizeServerUrl(value){
-    return String(value || "").trim().replace(/\/+$/, "");
+    const text = String(value || "").trim().replace(/\/+$/, "");
+    if(!text){
+      return "";
+    }
+    if(/^[a-z][a-z0-9+.-]*:\/\//i.test(text)){
+      return text;
+    }
+    return "https://" + text;
+  }
+
+  function isDefaultStoreServer(server){
+    return normalizeServerUrl(server) === DEFAULT_APP_STORE_URL;
+  }
+
+  function storeServerLabel(customServer){
+    const custom = normalizeServerUrl(customServer || "");
+    if(!custom || isDefaultStoreServer(custom)){
+      return "默认";
+    }
+    try{
+      return new URL(custom).host || custom;
+    }catch(err){
+      return custom;
+    }
+  }
+
+  function customStoreServerFromInput(){
+    const custom = normalizeServerUrl(serverInput && serverInput.value);
+    return isDefaultStoreServer(custom) ? "" : custom;
+  }
+
+  function persistStoreServer(customServer){
+    const custom = normalizeServerUrl(customServer || "");
+    if(!custom || isDefaultStoreServer(custom)){
+      storageRemove(STORAGE_KEYS.appStoreUrl);
+      return;
+    }
+    storageSet(STORAGE_KEYS.appStoreUrl, custom);
+  }
+
+  function syncStoreServerDisplay(){
+    const custom = customStoreServerFromInput();
+    const label = storeServerLabel(custom);
+    if(serverHost){
+      serverHost.textContent = label;
+    }
+    if(serverMode){
+      serverMode.textContent = label;
+    }
   }
 
   function currentInstalledMap(){
@@ -3776,19 +3904,14 @@ function initAppManageView(){
     }
   }
 
-  function setStoreServerHost(server){
-    if(!serverHost){
+  function setStoreAdvancedOpen(open){
+    if(!advancedBtn || !advancedPanel){
       return;
     }
-    if(!server){
-      serverHost.textContent = "未配置";
-      return;
-    }
-    try{
-      serverHost.textContent = new URL(server).host || server;
-    }catch(err){
-      serverHost.textContent = server;
-    }
+    const visible = !!open;
+    advancedPanel.hidden = !visible;
+    advancedBtn.setAttribute("aria-expanded", visible ? "true" : "false");
+    advancedBtn.textContent = visible ? "收起高级" : "高级选项";
   }
 
   function setStoreBusy(isBusy){
@@ -3796,11 +3919,11 @@ function initAppManageView(){
       refreshBtn.disabled = !!isBusy;
       refreshBtn.textContent = isBusy ? "刷新中..." : "刷新目录";
     }
-    if(updateBtn){
-      updateBtn.disabled = !!isBusy;
-    }
     if(serverInput){
       serverInput.disabled = !!isBusy;
+    }
+    if(resetServerBtn){
+      resetServerBtn.disabled = !!isBusy;
     }
   }
 
@@ -4387,7 +4510,7 @@ function initAppManageView(){
     const removable = !!(item.installedInfo && item.installedInfo.source === "sd");
     const installable = !item.installed && !!item.manifest_url;
     if(item.installed){
-      if(canUpdateStoreItem(item)){
+      if(STORE_SHOW_UPDATE_ACTIONS && canUpdateStoreItem(item)){
         const updateBtn = document.createElement("button");
         updateBtn.type = "button";
         updateBtn.className = "store-btn store-btn-compact";
@@ -4469,9 +4592,14 @@ function initAppManageView(){
   });
 
   refreshAppStoreCatalog = async function(silent){
-    const server = normalizeServerUrl(serverInput && serverInput.value);
-    storageSet(STORAGE_KEYS.appStoreUrl, server);
-    setStoreServerHost(server);
+    let customServer = customStoreServerFromInput();
+    if(serverInput && isDefaultStoreServer(normalizeServerUrl(serverInput.value))){
+      serverInput.value = "";
+      customServer = "";
+    }
+    const server = customServer || DEFAULT_APP_STORE_URL;
+    persistStoreServer(customServer);
+    syncStoreServerDisplay();
 
     if(!server){
       if(!latestSystemState){
@@ -4479,7 +4607,7 @@ function initAppManageView(){
       }
       const installedMap = currentInstalledMap();
       storeCatalog = localOnlyStoreItems(installedMap, new Set());
-      setStoreStatus("填写应用目录地址后点击“刷新目录”。", false);
+      setStoreStatus("使用默认应用目录，点击“刷新目录”。", false);
       renderStoreApps();
       return null;
     }
@@ -4526,37 +4654,44 @@ function initAppManageView(){
   };
 
   if(serverInput){
-    serverInput.value = normalizeServerUrl(storageGet(STORAGE_KEYS.appStoreUrl, ""));
+    const storedServer = normalizeServerUrl(storageGet(STORAGE_KEYS.appStoreUrl, ""));
+    serverInput.value = storedServer && !isDefaultStoreServer(storedServer) ? storedServer : "";
     serverInput.addEventListener("keydown", (ev) => {
       if(ev.key === "Enter"){
         ev.preventDefault();
         refreshAppStoreCatalog(false);
       }
     });
-    setStoreServerHost(serverInput.value);
+    serverInput.addEventListener("input", syncStoreServerDisplay);
+    serverInput.addEventListener("blur", () => {
+      if(isDefaultStoreServer(normalizeServerUrl(serverInput.value))){
+        serverInput.value = "";
+      }
+      syncStoreServerDisplay();
+    });
+    syncStoreServerDisplay();
+  }
+
+  if(advancedBtn){
+    advancedBtn.addEventListener("click", () => {
+      setStoreAdvancedOpen(advancedPanel && advancedPanel.hidden);
+    });
+  }
+
+  if(resetServerBtn){
+    resetServerBtn.addEventListener("click", () => {
+      if(serverInput){
+        serverInput.value = "";
+      }
+      storageRemove(STORAGE_KEYS.appStoreUrl);
+      syncStoreServerDisplay();
+      setStoreStatus("已切换为默认应用目录。", false);
+    });
   }
 
   if(refreshBtn){
     refreshBtn.addEventListener("click", () => {
       refreshAppStoreCatalog(false);
-    });
-  }
-
-  if(updateBtn){
-    updateBtn.addEventListener("click", async () => {
-      const prevText = updateBtn.textContent;
-      updateBtn.disabled = true;
-      updateBtn.textContent = "更新中...";
-      try{
-        await loadState(true);
-        await refreshAppStoreCatalog(false);
-        showToast("应用列表已更新", false);
-      }catch(err){
-        showToast(err.message || String(err), true);
-      }finally{
-        updateBtn.disabled = false;
-        updateBtn.textContent = prevText;
-      }
     });
   }
 

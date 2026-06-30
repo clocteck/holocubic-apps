@@ -89,7 +89,7 @@ local function build_html(api_prefix)
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTC Markets</title>
+<title>Ticker</title>
 <style>
 :root{
   color-scheme:light;
@@ -254,7 +254,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
 <main class="page">
   <header class="topbar">
     <div>
-      <h1>BTC Markets</h1>
+      <h1>Ticker</h1>
       <div class="meta" id="routeMeta">loading</div>
     </div>
     <div class="top-actions">
