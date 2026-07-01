@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIDA Monitor 信息</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --ink: #152033;
+      --muted: #667085;
+      --line: #dbe3ef;
+      --accent: #1476c8;
+      --accent-soft: #eaf5ff;
+      --good: #188a5c;
+      --code: #111827;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .page {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 14px 30px rgba(32, 48, 72, .08);
+    }
+
+    .icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      box-shadow: 0 8px 18px rgba(20, 118, 200, .18);
+    }
+
+    .kicker {
+      margin: 0 0 3px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .summary {
+      margin: 10px 0 0;
+      color: var(--muted);
+    }
+
+    .lang-toggle {
+      min-width: 54px;
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid rgba(20, 118, 200, .24);
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      touch-action: manipulation;
+    }
+
+    .lang-toggle:focus-visible {
+      outline: 3px solid rgba(20, 118, 200, .2);
+      outline-offset: 2px;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(230px, .92fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .panel {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .9);
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .steps li {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .num {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .steps strong {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .code {
+      display: block;
+      margin-top: 6px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      background: var(--code);
+      color: #e5eefb;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 0;
+    }
+
+    .chip {
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: #f0f5fb;
+      color: #344054;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hint {
+      margin: 10px 0 0;
+      padding: 10px;
+      border-left: 3px solid var(--good);
+      border-radius: 8px;
+      background: #eefaf5;
+      color: #32624d;
+      font-size: 13px;
+    }
+
+    .meta {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta-item {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .value {
+      display: block;
+      margin-top: 2px;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .note {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .opensource {
+      margin: 12px 2px 0;
+      color: #8a94a6;
+      font-size: 11px;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    .opensource a {
+      color: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    .opensource a:focus-visible {
+      outline: 2px solid rgba(20, 118, 200, .35);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        padding: 12px;
+      }
+
+      .top {
+        grid-template-columns: 56px minmax(0, 1fr) auto;
+        padding: 12px;
+      }
+
+      .icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .top {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .icon {
+        width: 48px;
+        height: 48px;
+      }
+
+      .lang-toggle {
+        grid-column: 1 / -1;
+        justify-self: end;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="top" aria-labelledby="title">
+      <img class="icon" src="data:image/png;base64,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" width="64" height="64" alt="AIDA Monitor 应用图标" data-i18n-alt="iconAlt">
+      <div>
+        <p class="kicker" data-i18n="kicker">硬件监控面板</p>
+        <h1 id="title">AIDA Monitor</h1>
+        <p class="summary" data-i18n="summary">连接 AIDA64 RemoteSensor，在设备上显示 CPU、GPU、内存和温度数据。</p>
+      </div>
+      <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
+    </section>
+
+    <div class="content">
+      <section class="panel" aria-labelledby="setup-title">
+        <h2 id="setup-title" data-i18n="setupTitle">AIDA64 配置</h2>
+        <ol class="steps">
+          <li>
+            <span class="num">1</span>
+            <span><strong data-i18n="stepOpenTitle">开启 RemoteSensor</strong><span data-i18n="stepOpenText">在 AIDA64 中进入 File > Preferences > Hardware Monitoring > LCD，启用 RemoteSensor / LCD 支持。</span></span>
+          </li>
+          <li>
+            <span class="num">2</span>
+            <span><strong data-i18n="stepItemsTitle">导入 LCD 项目</strong><span data-i18n="stepItemsText">打开控制页下载 holo-aida.rslcd，然后在 AIDA64 的 设置 > LCD > LCD 项目 > 导入 中导入。</span></span>
+          </li>
+          <li>
+            <span class="num">3</span>
+            <span><strong data-i18n="stepNetworkTitle">确认访问地址</strong><span data-i18n="stepNetworkText">电脑和设备需在同一网络，浏览器访问 RemoteSensor 地址应能看到 data: 开头的数据。</span><code class="code">http://&lt;pc-ip&gt;:80/sse</code></span>
+          </li>
+          <li>
+            <span class="num">4</span>
+            <span><strong data-i18n="stepConfigTitle">保存电脑 IP</strong><span data-i18n="stepConfigText">进入应用控制页，填写 AIDA64 所在电脑的 IP；如果 AIDA64 使用了其他端口，也同步修改 port。</span><code class="code">config.host = "192.168.0.80"<br>config.port = 80<br>config.path = "/sse"</code></span>
+          </li>
+        </ol>
+        <div class="chips" aria-label="AIDA64 LCD item labels" data-i18n-aria-label="chipsLabel">
+          <span class="chip">CPU Usage</span>
+          <span class="chip">CPU Frequency</span>
+          <span class="chip">CPU Temperature</span>
+          <span class="chip">GPU Usage</span>
+          <span class="chip">GPU Frequency</span>
+          <span class="chip">GPU Temperature</span>
+          <span class="chip">Memory Usage</span>
+        </div>
+        <p class="hint" data-i18n="reloadHint">如果页面只返回 data: ReLoad，说明 RemoteSensor 已启动但还没有输出项目；请在 LCD 项目中导入配置并点击 Apply。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="info-title">
+        <h2 id="info-title" data-i18n="infoTitle">应用信息</h2>
+        <div class="meta">
+          <div class="meta-item">
+            <span class="label" data-i18n="sizeLabel">安装包大小</span>
+            <span class="value" data-i18n="sizeValue">约 77 KB</span>
+          </div>
+          <div class="meta-item">
+            <span class="label" data-i18n="versionLabel">版本号</span>
+            <span class="value">0.1.0</span>
+          </div>
+        </div>
+        <p class="note" data-i18n="note">控制页可保存电脑 IP、重连数据源，并下载 holo-aida.rslcd。</p>
+      </section>
+    </div>
+
+    <footer class="opensource">
+      <span data-i18n="licenseText">开源协议：GPL-3.0</span>
+      <span> · </span>
+      <span data-i18n="repoLabel">Git 地址：</span><a href="https://github.com/clocteck" target="_blank" rel="noopener">github.com/clocteck</a>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var messages = {
+        zh: {
+          title: "AIDA Monitor 信息",
+          toggleLabel: "Switch to English",
+          toggleText: "EN",
+          iconAlt: "AIDA Monitor 应用图标",
+          chipsLabel: "AIDA64 LCD 项目标签",
+          kicker: "硬件监控面板",
+          summary: "连接 AIDA64 RemoteSensor，在设备上显示 CPU、GPU、内存和温度数据。",
+          setupTitle: "AIDA64 配置",
+          stepOpenTitle: "开启 RemoteSensor",
+          stepOpenText: "在 AIDA64 中进入 File > Preferences > Hardware Monitoring > LCD，启用 RemoteSensor / LCD 支持。",
+          stepItemsTitle: "导入 LCD 项目",
+          stepItemsText: "打开控制页下载 holo-aida.rslcd，然后在 AIDA64 的 设置 > LCD > LCD 项目 > 导入 中导入。",
+          stepNetworkTitle: "确认访问地址",
+          stepNetworkText: "电脑和设备需在同一网络，浏览器访问 RemoteSensor 地址应能看到 data: 开头的数据。",
+          stepConfigTitle: "保存电脑 IP",
+          stepConfigText: "进入应用控制页，填写 AIDA64 所在电脑的 IP；如果 AIDA64 使用了其他端口，也同步修改 port。",
+          reloadHint: "如果页面只返回 data: ReLoad，说明 RemoteSensor 已启动但还没有输出项目；请在 LCD 项目中导入配置并点击 Apply。",
+          infoTitle: "应用信息",
+          sizeLabel: "安装包大小",
+          sizeValue: "约 77 KB",
+          versionLabel: "版本号",
+          note: "控制页可保存电脑 IP、重连数据源，并下载 holo-aida.rslcd。",
+          licenseText: "开源协议：GPL-3.0",
+          repoLabel: "Git 地址："
+        },
+        en: {
+          title: "AIDA Monitor Info",
+          toggleLabel: "切换到中文",
+          toggleText: "中文",
+          iconAlt: "AIDA Monitor app icon",
+          chipsLabel: "AIDA64 LCD item labels",
+          kicker: "Hardware monitor panel",
+          summary: "Connects to AIDA64 RemoteSensor and shows CPU, GPU, memory, and temperature data on the device.",
+          setupTitle: "AIDA64 Setup",
+          stepOpenTitle: "Enable RemoteSensor",
+          stepOpenText: "In AIDA64, open File > Preferences > Hardware Monitoring > LCD, then enable RemoteSensor / LCD support.",
+          stepItemsTitle: "Import LCD items",
+          stepItemsText: "Open the control page, download holo-aida.rslcd, then import it from AIDA64 Settings > LCD > LCD Items > Import.",
+          stepNetworkTitle: "Check the endpoint",
+          stepNetworkText: "Keep the PC and device on the same network. Opening the RemoteSensor URL in a browser should show data: lines.",
+          stepConfigTitle: "Save the PC IP",
+          stepConfigText: "Open the control page and enter the IP of the PC running AIDA64. If AIDA64 uses another port, update port as well.",
+          reloadHint: "If the page only returns data: ReLoad, RemoteSensor is running but has no emitted items yet. Import the LCD items and click Apply.",
+          infoTitle: "App Info",
+          sizeLabel: "Package size",
+          sizeValue: "About 77 KB",
+          versionLabel: "Version",
+          note: "The control page can save the PC IP, reconnect the data source, and download holo-aida.rslcd.",
+          licenseText: "Open source license: GPL-3.0",
+          repoLabel: "Git: "
+        }
+      };
+
+      var toggle = document.querySelector("[data-lang-toggle]");
+      var lang = "zh";
+
+      try {
+        lang = localStorage.getItem("aida_monitor.info.lang") || lang;
+      } catch (err) {
+        lang = "zh";
+      }
+
+      if (!messages[lang]) {
+        lang = "zh";
+      }
+
+      function applyLang(nextLang) {
+        var dict = messages[nextLang];
+        document.documentElement.lang = nextLang === "zh" ? "zh-CN" : "en";
+        document.title = dict.title;
+
+        document.querySelectorAll("[data-i18n]").forEach(function (node) {
+          var key = node.getAttribute("data-i18n");
+          if (dict[key]) {
+            node.textContent = dict[key];
+          }
+        });
+
+        document.querySelectorAll("[data-i18n-alt]").forEach(function (node) {
+          var key = node.getAttribute("data-i18n-alt");
+          if (dict[key]) {
+            node.setAttribute("alt", dict[key]);
+          }
+        });
+
+        document.querySelectorAll("[data-i18n-aria-label]").forEach(function (node) {
+          var key = node.getAttribute("data-i18n-aria-label");
+          if (dict[key]) {
+            node.setAttribute("aria-label", dict[key]);
+          }
+        });
+
+        toggle.textContent = dict.toggleText;
+        toggle.setAttribute("aria-label", dict.toggleLabel);
+        lang = nextLang;
+
+        try {
+          localStorage.setItem("aida_monitor.info.lang", lang);
+        } catch (err) {}
+      }
+
+      toggle.addEventListener("click", function () {
+        applyLang(lang === "zh" ? "en" : "zh");
+      });
+
+      applyLang(lang);
+    }());
+  </script>
+</body>
+</html>
