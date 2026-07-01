@@ -4246,13 +4246,18 @@ function initAppManageView(){
     return String(info && (info.version || info.app_version) || "");
   }
 
+  function installedVersionForCompare(item){
+    const version = installedVersionForItem(item).trim();
+    return version || "0.0";
+  }
+
   function canUpdateStoreItem(item){
     if(!item || !item.installed || !item.manifest_url){
       return false;
     }
     const remoteVersion = String(item.version || "");
-    const installedVersion = installedVersionForItem(item);
-    if(!hasPositiveVersion(remoteVersion) || !hasPositiveVersion(installedVersion)){
+    const installedVersion = installedVersionForCompare(item);
+    if(!hasPositiveVersion(remoteVersion)){
       return false;
     }
     return compareVersions(remoteVersion, installedVersion) > 0;
