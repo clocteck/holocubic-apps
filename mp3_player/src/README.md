@@ -26,7 +26,7 @@ cmake --build build --target so --config Release
 设备路径：
 
 ```text
-/sd/modules/audio.so
+/sd/apps/mp3_player/modules/audio.so
 ```
 
 本仓库中的当前模块快照在：

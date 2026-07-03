@@ -9,11 +9,11 @@ MUSIC_PLAYER_APP = {
   VERSION = "2026-06-04-music-player-lvgl-demo-ui-v8-ui-crash-guard",
   SCREEN_W = 320,
   SCREEN_H = 240,
-  APP_DIR = "/sd/apps/music",
-  ASSET_DIR = "/sd/apps/music/assets",
-  FONT_DIR = "/sd/apps/music/font",
+  APP_DIR = "/sd/apps/mp3_player",
+  ASSET_DIR = "/sd/apps/mp3_player/assets",
+  FONT_DIR = "/sd/apps/mp3_player/font",
   MUSIC_DIRS = { "/sd/mp3", "/sd/MP3" },
-  MODULE_PATH = "/sd/modules/audio.so",
+  MODULE_PATH = "/sd/apps/mp3_player/modules/audio.so",
   I2S_ID = 0,
   I2S_BITS = 16,
   DATA_OUT_PIN = 48,
@@ -471,10 +471,10 @@ fillMainVolume();load().catch(e=>show(e.message,true));loadEq().catch(e=>show(e.
 ]=]
 
 local WEB = {
-  route_base = (app and app.route_base and app.route_base()) or "/music",
+  route_base = (app and app.route_base and app.route_base()) or "/mp3_player",
 }
 if WEB.route_base == "" then
-  WEB.route_base = "/music"
+  WEB.route_base = "/mp3_player"
 end
 
 local function web_url_decode(s)

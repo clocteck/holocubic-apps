@@ -14,7 +14,6 @@ cmake --build build --target so --config Release
 
 Deploy:
 
-- Copy `package/` contents to `/sd/apps/music_player/`.
-- Upload `package/modules/audio.so` to `/sd/modules/audio.so`.
+- Copy `package/` contents to `/sd/apps/mp3_player/`.
 
-Runtime entry is `package/main.lua`; it loads the module from `/sd/modules/audio.so`.
+Runtime entry is `package/main.lua`; it loads the module from `/sd/apps/mp3_player/modules/audio.so`.
