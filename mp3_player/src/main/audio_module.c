@@ -14,12 +14,13 @@
 #include "dsps_biquad.h"
 
 #define AUDIO_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define AUDIO_VERSION "1.1.0"
+#define AUDIO_VERSION "1.12"
 #define AUDIO_IN_CAP 2048u
 #define AUDIO_PREFETCH_CAP (2u * 1024u * 1024u)
 #define AUDIO_PREFETCH_READ_CHUNK 8192u
 #define AUDIO_PREFETCH_LOW_BYTES (128u * 1024u)
 #define AUDIO_PREFETCH_TARGET_BYTES (256u * 1024u)
+#define AUDIO_MP3_PROBE_BYTES (64u * 1024u)
 #define AUDIO_OUT_CAP 8192u
 #define AUDIO_OUT_INIT 4608u
 #define AUDIO_DEFAULT_READ 4096u
@@ -1106,6 +1107,228 @@ static esp_audio_simple_dec_type_t audio_type_from_path(const char *path, const 
     return ESP_AUDIO_SIMPLE_DEC_TYPE_NONE;
 }
 
+static uint32_t audio_mp3_synchsafe_size(const uint8_t *p)
+{
+    if (!p) {
+        return 0;
+    }
+    return ((uint32_t)(p[0] & 0x7fu) << 21u) |
+           ((uint32_t)(p[1] & 0x7fu) << 14u) |
+           ((uint32_t)(p[2] & 0x7fu) << 7u) |
+           (uint32_t)(p[3] & 0x7fu);
+}
+
+static uint32_t audio_mp3_bitrate_kbps(uint8_t version, uint8_t layer, uint8_t idx)
+{
+    static const uint16_t mpeg1_l1[16] = {0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0};
+    static const uint16_t mpeg1_l2[16] = {0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0};
+    static const uint16_t mpeg1_l3[16] = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0};
+    static const uint16_t mpeg2_l1[16] = {0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0};
+    static const uint16_t mpeg2_l23[16] = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0};
+    if (idx == 0 || idx == 15) {
+        return 0;
+    }
+    if (version == 3u) {
+        if (layer == 3u) {
+            return mpeg1_l1[idx];
+        }
+        if (layer == 2u) {
+            return mpeg1_l2[idx];
+        }
+        if (layer == 1u) {
+            return mpeg1_l3[idx];
+        }
+    } else if (version == 2u || version == 0u) {
+        if (layer == 3u) {
+            return mpeg2_l1[idx];
+        }
+        if (layer == 2u || layer == 1u) {
+            return mpeg2_l23[idx];
+        }
+    }
+    return 0;
+}
+
+static int audio_parse_mp3_frame_header(const uint8_t *p,
+                                        uint32_t *out_rate,
+                                        uint8_t *out_channels,
+                                        uint32_t *out_bitrate,
+                                        uint32_t *out_frame_len,
+                                        uint8_t *out_version,
+                                        uint8_t *out_layer)
+{
+    static const uint16_t rate_mpeg1[4] = {44100, 48000, 32000, 0};
+    static const uint16_t rate_mpeg2[4] = {22050, 24000, 16000, 0};
+    static const uint16_t rate_mpeg25[4] = {11025, 12000, 8000, 0};
+    uint8_t version = 0;
+    uint8_t layer = 0;
+    uint8_t bitrate_idx = 0;
+    uint8_t rate_idx = 0;
+    uint8_t padding = 0;
+    uint8_t channel_mode = 0;
+    uint32_t bitrate = 0;
+    uint32_t rate = 0;
+    uint32_t frame_len = 0;
+    if (!p || p[0] != 0xffu || (p[1] & 0xe0u) != 0xe0u) {
+        return 0;
+    }
+    version = (uint8_t)((p[1] >> 3u) & 0x03u);
+    layer = (uint8_t)((p[1] >> 1u) & 0x03u);
+    bitrate_idx = (uint8_t)((p[2] >> 4u) & 0x0fu);
+    rate_idx = (uint8_t)((p[2] >> 2u) & 0x03u);
+    padding = (uint8_t)((p[2] >> 1u) & 0x01u);
+    channel_mode = (uint8_t)((p[3] >> 6u) & 0x03u);
+    if (version == 1u || layer == 0u || rate_idx == 3u) {
+        return 0;
+    }
+    bitrate = audio_mp3_bitrate_kbps(version, layer, bitrate_idx);
+    if (bitrate == 0) {
+        return 0;
+    }
+    if (version == 3u) {
+        rate = rate_mpeg1[rate_idx];
+    } else if (version == 2u) {
+        rate = rate_mpeg2[rate_idx];
+    } else {
+        rate = rate_mpeg25[rate_idx];
+    }
+    if (rate == 0) {
+        return 0;
+    }
+    if (layer == 3u) {
+        frame_len = (((12u * bitrate * 1000u) / rate) + padding) * 4u;
+    } else if (layer == 2u) {
+        frame_len = ((144u * bitrate * 1000u) / rate) + padding;
+    } else if (version == 3u) {
+        frame_len = ((144u * bitrate * 1000u) / rate) + padding;
+    } else {
+        frame_len = ((72u * bitrate * 1000u) / rate) + padding;
+    }
+    if (frame_len < 24u) {
+        return 0;
+    }
+    if (out_rate) {
+        *out_rate = rate;
+    }
+    if (out_channels) {
+        *out_channels = (channel_mode == 3u) ? 1u : 2u;
+    }
+    if (out_bitrate) {
+        *out_bitrate = bitrate * 1000u;
+    }
+    if (out_frame_len) {
+        *out_frame_len = frame_len;
+    }
+    if (out_version) {
+        *out_version = version;
+    }
+    if (out_layer) {
+        *out_layer = layer;
+    }
+    return 1;
+}
+
+static int audio_probe_mp3_info_from_buffer(audio_instance_t *inst, const uint8_t *buf, size_t len)
+{
+    size_t start = 0;
+    size_t i = 0;
+    if (!inst || !buf || len < 4u) {
+        return 0;
+    }
+    if (len >= 10u && buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3') {
+        start = 10u + (size_t)audio_mp3_synchsafe_size(buf + 6u);
+        if ((buf[5] & 0x10u) != 0u) {
+            start += 10u;
+        }
+        if (start + 4u > len) {
+            return 0;
+        }
+    }
+    for (i = start; i + 4u <= len; ++i) {
+        uint32_t rate = 0;
+        uint32_t bitrate = 0;
+        uint32_t frame_len = 0;
+        uint8_t channels = 0;
+        uint8_t version = 0;
+        uint8_t layer = 0;
+        if (!audio_parse_mp3_frame_header(buf + i, &rate, &channels, &bitrate, &frame_len, &version, &layer)) {
+            continue;
+        }
+        if (i + frame_len + 4u <= len) {
+            uint32_t next_rate = 0;
+            uint32_t next_frame_len = 0;
+            uint8_t next_version = 0;
+            uint8_t next_layer = 0;
+            if (!audio_parse_mp3_frame_header(buf + i + frame_len,
+                                              &next_rate,
+                                              NULL,
+                                              NULL,
+                                              &next_frame_len,
+                                              &next_version,
+                                              &next_layer) ||
+                next_rate != rate || next_version != version || next_layer != layer) {
+                continue;
+            }
+        }
+        inst->sample_rate = rate;
+        inst->source_channels = channels;
+        inst->bitrate = bitrate;
+        audio_rebuild_filters(inst);
+        return 1;
+    }
+    return 0;
+}
+
+static int audio_probe_mp3_info(audio_instance_t *inst)
+{
+    uint8_t *scratch = NULL;
+    size_t cap = 0;
+    size_t got = 0;
+    uint64_t saved_pos = 0;
+    int have_saved_pos = 0;
+    int found = 0;
+    if (!inst || !inst->file || !inst->host.file.read || !inst->host.file.seek) {
+        return 0;
+    }
+    scratch = inst->prefetch_buf ? inst->prefetch_buf : inst->in_buf;
+    cap = inst->prefetch_buf ? inst->prefetch_cap : inst->in_cap;
+    if (!scratch || cap < 512u) {
+        return 0;
+    }
+    if (cap > AUDIO_MP3_PROBE_BYTES) {
+        cap = AUDIO_MP3_PROBE_BYTES;
+    }
+    if (inst->host.file.position &&
+        inst->host.file.position(inst->file, &saved_pos) == MODULE_OK) {
+        have_saved_pos = 1;
+    }
+    if (inst->host.file.seek(inst->file, 0, MODULE_SEEK_SET) != MODULE_OK) {
+        return 0;
+    }
+    if (inst->host.file.read(inst->file, scratch, cap, &got) == MODULE_OK && got > 0u) {
+        found = audio_probe_mp3_info_from_buffer(inst, scratch, got);
+        if (!found && got >= 10u && scratch[0] == 'I' && scratch[1] == 'D' && scratch[2] == '3') {
+            uint32_t id3_total = 10u + audio_mp3_synchsafe_size(scratch + 6u);
+            if ((scratch[5] & 0x10u) != 0u) {
+                id3_total += 10u;
+            }
+            if ((inst->file_size == 0 || (uint64_t)id3_total < inst->file_size) &&
+                id3_total > got &&
+                inst->host.file.seek(inst->file, id3_total, MODULE_SEEK_SET) == MODULE_OK &&
+                inst->host.file.read(inst->file, scratch, cap, &got) == MODULE_OK &&
+                got > 0u) {
+                found = audio_probe_mp3_info_from_buffer(inst, scratch, got);
+            }
+        }
+    }
+    if (have_saved_pos) {
+        inst->host.file.seek(inst->file, (int64_t)saved_pos, MODULE_SEEK_SET);
+    } else {
+        inst->host.file.seek(inst->file, 0, MODULE_SEEK_SET);
+    }
+    return found;
+}
+
 /* 打开 simple decoder；分析和正式播放共用同一套配置。 */
 static int audio_open_decoder(audio_instance_t *inst, esp_audio_simple_dec_type_t dec_type)
 {
@@ -1777,6 +2000,9 @@ static int l_audio_open(lua_State *L)
         if (host->file.size_bytes(inst->file, &file_size) == MODULE_OK) {
             inst->file_size = file_size;
         }
+    }
+    if (dec_type == ESP_AUDIO_SIMPLE_DEC_TYPE_MP3) {
+        audio_probe_mp3_info(inst);
     }
 
     if (!audio_open_decoder(inst, dec_type)) {

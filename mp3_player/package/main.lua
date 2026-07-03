@@ -6,7 +6,7 @@ if prev and prev.stop then
 end
 
 MUSIC_PLAYER_APP = {
-  VERSION = "1.1.0",
+  VERSION = "1.12",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/mp3_player",
