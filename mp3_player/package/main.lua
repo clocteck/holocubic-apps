@@ -151,6 +151,7 @@ APP.state = {
   play_task_last_written_bytes = 0,
   play_task_last_progress_ms = 0,
   play_task_stall_logged_ms = 0,
+  eof_advanced = false,
   duration_ms = 0,
   clock_base_ms = 0,
   clock_start_ms = 0,
@@ -1810,6 +1811,26 @@ local function current_track()
   return APP.tracks[APP.index]
 end
 
+local function same_track(a, b)
+  if not a or not b then return false end
+  local ap = text_or(a.path, ""):lower()
+  local bp = text_or(b.path, ""):lower()
+  if ap ~= "" and bp ~= "" then
+    return ap == bp
+  end
+  return text_or(a.name, ""):lower() == text_or(b.name, ""):lower()
+end
+
+local function find_track_index(track)
+  if not track then return nil end
+  for i, item in ipairs(APP.tracks or {}) do
+    if same_track(item, track) then
+      return i
+    end
+  end
+  return nil
+end
+
 local function update_track_audio_info(info, track)
   if type(info) ~= "table" then return end
   S.sample_rate = tonumber(info.sample_rate) or S.sample_rate or 44100
@@ -1860,7 +1881,7 @@ local function refresh_track_audio_info()
   end
 end
 
-local function open_track(index, autoplay)
+local function open_track(index, autoplay, anchor_track, delta)
   if S.opening then return end
   S.opening = true
   close_audio()
@@ -1874,6 +1895,13 @@ local function open_track(index, autoplay)
     return
   end
 
+  if anchor_track then
+    local anchor_index = find_track_index(anchor_track)
+    if anchor_index then
+      index = anchor_index + (delta or 0)
+    end
+  end
+
   while index < 1 do index = index + n end
   while index > n do index = index - n end
   APP.index = index
@@ -1882,7 +1910,8 @@ local function open_track(index, autoplay)
   local ok, err = pcall(function()
     local audio = ensure_audio()
     apply_audio_effects()
-    local opened, open_err = audio.open(track.name)
+    local open_path = text_or(track.path, track.name)
+    local opened, open_err = audio.open(open_path)
     if not opened then
       error("audio.open failed: " .. tostring(open_err))
     end
@@ -1902,6 +1931,7 @@ local function open_track(index, autoplay)
     S.play_task_last_written_bytes = 0
     S.play_task_last_progress_ms = now_ms()
     S.play_task_stall_logged_ms = 0
+    S.eof_advanced = false
     S.lyric_idx = 1
     S.error = ""
     S.buffering = false
@@ -1988,12 +2018,14 @@ end
 
 local function next_track(delta)
   if #APP.tracks == 0 then return end
-  if (tonumber(delta) or 1) < 0 then
+  local step = tonumber(delta) or 1
+  local from_track = current_track()
+  if step < 0 then
     feature_log("Previous track requested")
   else
     feature_log("Next track requested")
   end
-  open_track(APP.index + (delta or 1), true)
+  open_track(APP.index + step, true, from_track, step)
 end
 
 local function play_tick()
@@ -2055,7 +2087,8 @@ local function play_tick()
     if tonumber(st.error) == 1 then
       error("audio play task failed: " .. tostring(st.last_error or "task error"))
     end
-    if tonumber(st.eof) == 1 and tonumber(st.running) ~= 1 then
+    if tonumber(st.eof) == 1 and not S.eof_advanced then
+      S.eof_advanced = true
       advance_track = true
     end
   end)
@@ -2065,6 +2098,8 @@ local function play_tick()
   end
 
   if ok and advance_track then
+    S.playing = false
+    S.status = "NEXT"
     next_track(1)
     return
   end

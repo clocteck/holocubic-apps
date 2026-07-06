@@ -42,7 +42,7 @@ lv_obj_set_align(info, LV_ALIGN_BOTTOM_MID, 0, -8)
 
 local dir = "/sd/gifs"
 local play_ms = 10000
-local last_switch = 0
+local last_switch = millis() or 0
 
 local function is_gif(name)
   local ext = name:match("%.([%a%d]+)$")
@@ -67,6 +67,54 @@ local function list_gifs(path)
   end
   table.sort(out)
   return out
+end
+
+-- 读取 GIF 逻辑画布尺寸，用于显示层自动缩放；解码仍由底层按原尺寸完成。
+local function read_gif_size(path)
+  local fd = file.open(path, "r")
+  if not fd then
+    return nil, nil
+  end
+
+  local header = fd:read(10)
+  fd:close()
+  if not header or #header < 10 then
+    return nil, nil
+  end
+
+  local sig = header:sub(1, 6)
+  if sig ~= "GIF87a" and sig ~= "GIF89a" then
+    return nil, nil
+  end
+
+  local b1, b2, b3, b4 = string.byte(header, 7, 10)
+  if not b1 or not b2 or not b3 or not b4 then
+    return nil, nil
+  end
+
+  local width = b1 + b2 * 256
+  local height = b3 + b4 * 256
+  if width <= 0 or height <= 0 then
+    return nil, nil
+  end
+  return width, height
+end
+
+local function calc_fit_zoom(width, height)
+  if not width or not height or width <= 0 or height <= 0 then
+    return 256
+  end
+
+  local scale = math.min(screen_w / width, screen_h / height)
+  if scale > 1 then
+    scale = 1
+  end
+
+  local zoom = math.floor(scale * 256 + 0.5)
+  if zoom < 1 then
+    zoom = 1
+  end
+  return zoom
 end
 
 local gifs = list_gifs(dir)
@@ -97,7 +145,13 @@ local function show_gif()
   local src = base .. "/" .. name
   set_label(name)
   if gif and gif ~= 0 then
+    local width, height = read_gif_size(src)
+    local zoom = calc_fit_zoom(width, height)
     lv_gif_set_src(gif, src)
+    lv_img_set_size_mode(gif, LV_IMG_SIZE_MODE_REAL)
+    lv_img_set_zoom(gif, zoom)
+    lv_obj_set_size(gif, LV_SIZE_CONTENT, LV_SIZE_CONTENT)
+    lv_obj_set_align(gif, LV_ALIGN_CENTER, 0, 0)
   end
 end
 
@@ -106,17 +160,19 @@ show_gif()
 local long_repeat_state = {}
 local last_tick_log_ms = -1000000
 
-local function confirm_left(ts_ms)
-  index = index - 1
+local function switch_gif(delta, ts_ms)
+  index = index + (delta or 1)
   show_gif()
   last_switch = ts_ms or (millis() or 0)
+end
+
+local function confirm_left(ts_ms)
+  switch_gif(-1, ts_ms)
   print("KEY_LEFT_CONFIRM")
 end
 
 local function confirm_right(ts_ms)
-  index = index + 1
-  show_gif()
-  last_switch = ts_ms or (millis() or 0)
+  switch_gif(1, ts_ms)
   print("KEY_RIGHT_CONFIRM")
 end
 
@@ -178,9 +234,7 @@ tick_timer:alarm(20, tmr.ALARM_AUTO, function()
   end
   if #gifs == 0 then return end
   if play_ms > 0 and (ts_ms - last_switch) >= play_ms then
-    index = index + 1
-    --show_gif()
-    last_switch = ts_ms
+    switch_gif(1, ts_ms)
   end
   -- ptint ("SCRIPT :  tick_20ms \n")
 end)
