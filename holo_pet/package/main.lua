@@ -43,6 +43,7 @@ local APP = {
   last_clock_check_ms = -1000,
   last_clock_retry_ms = -30000,
   next_weather_ms = 0,
+  last_weather_sync_slot = "",
   weather_status = "waiting",
   weather_sync_text = "--:--",
   last_weather_updated_ms = 0,
@@ -123,7 +124,7 @@ local IDLE_MAX_MINUTES = 5
 local SESSION_MEME_MIN_MS = 60 * 1000
 local SESSION_MEME_MAX_MS = 150 * 1000
 local PAGE_SWITCH_COOLDOWN_MS = 1000
-local WEATHER_REFRESH_MS = 5 * 60 * 1000
+local WEATHER_FALLBACK_REFRESH_MS = 15 * 60 * 1000
 local LOCAL_TZ_OFFSET_SEC = 8 * 60 * 60
 local LOCAL_TIMEZONE = "CST-8"
 local NTP_SERVER = "ntp.aliyun.com"
@@ -947,6 +948,14 @@ local function update_clock()
   end
 end
 
+local function weather_quarter_slot()
+  local hour, minute = tostring(APP.clock_text or ""):match("^(%d%d):(%d%d)$")
+  hour, minute = tonumber(hour), tonumber(minute)
+  if not hour or not minute then return nil, false end
+  if minute % 15 ~= 0 then return nil, true end
+  return string.format("%02d:%02d", hour, minute), true
+end
+
 local function weather_color(kind)
   if kind == "clear" then return C.warn end
   if kind == "partly" then return C.peach end
@@ -1483,7 +1492,9 @@ APP.weather = WeatherClient.new({
   end,
 })
 APP.weather:start()
-APP.next_weather_ms = now_ms() + WEATHER_REFRESH_MS
+local initial_weather_slot = weather_quarter_slot()
+if initial_weather_slot then APP.last_weather_sync_slot = initial_weather_slot end
+APP.next_weather_ms = now_ms() + WEATHER_FALLBACK_REFRESH_MS
 bind_keys()
 
 APP.web = HoloWeb.new({
@@ -1538,9 +1549,18 @@ APP.timer:alarm(250, tmr.ALARM_AUTO, function()
     APP.next_idle_ms = ts + APP.idle_delay_ms
     set_visual("idle")
   end
-  if APP.weather and APP.next_weather_ms > 0 and ts >= APP.next_weather_ms then
-    APP.next_weather_ms = ts + WEATHER_REFRESH_MS
-    APP.weather:fetch()
+  if APP.weather then
+    local weather_slot, clock_valid = weather_quarter_slot()
+    if clock_valid then
+      if weather_slot and weather_slot ~= APP.last_weather_sync_slot then
+        APP.last_weather_sync_slot = weather_slot
+        APP.next_weather_ms = ts + WEATHER_FALLBACK_REFRESH_MS
+        APP.weather:fetch()
+      end
+    elseif APP.next_weather_ms > 0 and ts >= APP.next_weather_ms then
+      APP.next_weather_ms = ts + WEATHER_FALLBACK_REFRESH_MS
+      APP.weather:fetch()
+    end
   end
   update_clock()
   update_timers()
