@@ -229,7 +229,7 @@ def panic_button() -> Path:
 
 
 def contact_sheet(paths: list[Path]) -> None:
-    sheet = Image.new("RGBA", (N * len(paths), N), (6, 5, 4, 255))
+    sheet = Image.new("RGBA", (N * len(paths), N), (16, 4, 8, 255))
     for index, path in enumerate(paths):
         still = Image.open(path.with_name(path.stem + "_still.png")).convert("RGBA")
         sheet.alpha_composite(still, (index * N, 0))

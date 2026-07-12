@@ -38,7 +38,7 @@ DURATION_MS = 120
 # Fixed palette. Index 0 is always transparent in status GIFs.
 COLORS = [
     (1, 2, 3),       # 0 transparent sentinel
-    (6, 5, 4),       # 1 bg
+    (16, 4, 8),      # 1 RGB565-safe warm near-black bg
     (18, 13, 10),    # 2 panel
     (85, 52, 39),    # 3 line
     (218, 119, 88),  # 4 Clawd rust
@@ -478,7 +478,7 @@ def contact_sheet(paths: list[Path], output: Path, columns: int, tile: int) -> N
     for i, path in enumerate(paths):
         with Image.open(path) as gif:
             still = gif.convert("RGBA")
-            bg = Image.new("RGBA", still.size, (6, 5, 4, 255))
+            bg = Image.new("RGBA", still.size, (16, 4, 8, 255))
             bg.alpha_composite(still)
             still_rgb = bg.convert("RGB")
             if still_rgb.size != (tile, tile):
