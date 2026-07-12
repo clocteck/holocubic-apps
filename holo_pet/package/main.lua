@@ -286,14 +286,14 @@ style_text(APP.ui.title, C.rust, FONT_14, ALIGN_LEFT)
 set_text(APP.ui.title, "CODEX // CLAWD")
 
 APP.ui.clock = lv_label_create(APP.ui.status_page)
-lv_obj_set_size(APP.ui.clock, 47, 18)
-lv_obj_set_pos(APP.ui.clock, 202, 5)
+lv_obj_set_size(APP.ui.clock, 58, 18)
+lv_obj_set_pos(APP.ui.clock, 253, 5)
 style_text(APP.ui.clock, C.peach, FONT_12, ALIGN_RIGHT)
 set_text(APP.ui.clock, APP.clock_text)
 
 APP.ui.live = lv_label_create(APP.ui.status_page)
-lv_obj_set_size(APP.ui.live, 60, 18)
-lv_obj_set_pos(APP.ui.live, 251, 5)
+lv_obj_set_size(APP.ui.live, 47, 18)
+lv_obj_set_pos(APP.ui.live, 202, 5)
 style_text(APP.ui.live, C.dim, FONT_12, ALIGN_RIGHT)
 set_text(APP.ui.live, "[WAIT]")
 
