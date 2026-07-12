@@ -44,6 +44,8 @@ local APP = {
   last_clock_retry_ms = -30000,
   next_weather_ms = 0,
   weather_status = "waiting",
+  weather_sync_text = "--:--",
+  last_weather_updated_ms = 0,
   session_meme_loaded = nil,
   session_meme_index = 1,
   next_session_meme_ms = 0,
@@ -121,6 +123,7 @@ local IDLE_MAX_MINUTES = 5
 local SESSION_MEME_MIN_MS = 60 * 1000
 local SESSION_MEME_MAX_MS = 150 * 1000
 local PAGE_SWITCH_COOLDOWN_MS = 1000
+local WEATHER_REFRESH_MS = 5 * 60 * 1000
 local LOCAL_TZ_OFFSET_SEC = 8 * 60 * 60
 local LOCAL_TIMEZONE = "CST-8"
 local NTP_SERVER = "ntp.aliyun.com"
@@ -1189,7 +1192,9 @@ local function render_weather()
   set_text(APP.ui.weather_wind, "$ W" .. tostring(math.floor((tonumber(current.wind_speed) or 0) + 0.5))
     .. " > G" .. tostring(math.floor((tonumber(current.wind_gust) or 0) + 0.5))
     .. " " .. string.format("%03d", tonumber(current.wind_direction) or 0) .. "D")
-  set_text(APP.ui.weather_updated, (state.stale and "STALE " or "MODEL ") .. tostring(current.time or ""):sub(12, 16))
+  local data_time = tostring(current.time or ""):sub(12, 16)
+  set_text(APP.ui.weather_updated, (state.stale and "STALE " or "DATA ") .. data_time
+    .. " SYNC " .. tostring(APP.weather_sync_text or "--:--"))
   set_text(APP.ui.weather_alert_text, "RAIN " .. tostring(state.rain_probability or 0) .. "% @"
     .. tostring(state.rain_time or "DRY") .. "  >  GUST " .. tostring(math.floor((tonumber(state.max_gust) or 0) + 0.5)))
   render_weather_trend(state)
@@ -1464,7 +1469,13 @@ apply_remote_state("idle")
 request_time_sync(true)
 update_clock()
 APP.weather = WeatherClient.new({
-  on_update = function()
+  on_update = function(state)
+    local updated_at = state and tonumber(state.updated_at_ms) or 0
+    if state and state.valid and not state.loading and not state.stale
+      and updated_at > 0 and updated_at ~= APP.last_weather_updated_ms then
+      APP.last_weather_updated_ms = updated_at
+      APP.weather_sync_text = APP.clock_text
+    end
     if APP.running then render_weather() end
   end,
   on_status = function(state)
@@ -1472,7 +1483,7 @@ APP.weather = WeatherClient.new({
   end,
 })
 APP.weather:start()
-APP.next_weather_ms = now_ms() + 15 * 60 * 1000
+APP.next_weather_ms = now_ms() + WEATHER_REFRESH_MS
 bind_keys()
 
 APP.web = HoloWeb.new({
@@ -1503,6 +1514,7 @@ APP.web = HoloWeb.new({
       visual_index = APP.current_visual_group == "Idle" and APP.idle_index or APP.event_visual_index,
       weather = APP.weather and APP.weather.state or nil,
       weather_visual = APP.current_weather_visual,
+      weather_sync = APP.weather_sync_text,
       activity = APP.remote.activity,
       session_meme = SESSION_MEMES[APP.session_meme_index] and SESSION_MEMES[APP.session_meme_index].label or "",
     }
@@ -1527,7 +1539,7 @@ APP.timer:alarm(250, tmr.ALARM_AUTO, function()
     set_visual("idle")
   end
   if APP.weather and APP.next_weather_ms > 0 and ts >= APP.next_weather_ms then
-    APP.next_weather_ms = ts + 15 * 60 * 1000
+    APP.next_weather_ms = ts + WEATHER_REFRESH_MS
     APP.weather:fetch()
   end
   update_clock()

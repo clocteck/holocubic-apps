@@ -149,6 +149,7 @@ function Web.new(opts)
       visual_index = extra.visual_index,
       weather = extra.weather,
       weather_visual = extra.weather_visual,
+      weather_sync = extra.weather_sync,
       activity = extra.activity,
       session_meme = extra.session_meme,
       chat_timer = extra.chat_timer or "", state_timer = extra.state_timer or "",

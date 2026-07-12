@@ -238,7 +238,7 @@ function WeatherClient:parse_forecast(doc)
       precipitation = number(daily.precipitation_sum and daily.precipitation_sum[2], 0),
       gust = tomorrow_gust,
     }
-  else
+  elseif type(self.state.tomorrow) ~= "table" then
     self.state.tomorrow = {}
   end
   self.state.rain_probability = rounded(max_pop)
@@ -262,24 +262,39 @@ function WeatherClient:fetch()
   self:resolve_location(address, function(ok, err)
     if not self.running then return end
     if not ok then self:fail(err); return end
-    local url = "https://api.open-meteo.com/v1/forecast?latitude=" .. tostring(self.latitude)
+    local base_url = "https://api.open-meteo.com/v1/forecast?latitude=" .. tostring(self.latitude)
       .. "&longitude=" .. tostring(self.longitude)
       .. "&timezone=" .. url_encode(self.timezone)
+    local forecast_url = base_url
       .. "&forecast_hours=8"
-      .. "&forecast_days=3"
       .. "&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m"
-      .. "&hourly=temperature_2m,precipitation_probability,precipitation,wind_gusts_10m"
+      .. "&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m"
+    local daily_url = base_url
+      .. "&forecast_days=3"
       .. "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_gusts_10m_max"
     self:emit_status("loading", "forecast")
-    http.get(url, { timeout = 12000, headers = { ["Accept-Encoding"] = "identity" } }, function(code, body)
+    http.get(forecast_url, { timeout = 12000, headers = { ["Accept-Encoding"] = "identity" } }, function(code, body)
       if not self.running then return end
-      self.inflight = false
       local doc = code == 200 and decode(body) or nil
       if not doc then self:fail("forecast " .. tostring(code or "?")); return end
-      local parsed, parse_err = self:parse_forecast(doc)
-      if not parsed then self:fail(parse_err); return end
-      self:emit_status("online", "updated")
-      self:emit_update()
+      self:emit_status("loading", "daily")
+      http.get(daily_url, { timeout = 12000, headers = { ["Accept-Encoding"] = "identity" } }, function(daily_code, daily_body)
+        if not self.running then return end
+        self.inflight = false
+        local daily_doc = daily_code == 200 and decode(daily_body) or nil
+        if daily_doc and type(daily_doc.daily) == "table" then
+          doc.daily = daily_doc.daily
+        end
+        local parsed, parse_err = self:parse_forecast(doc)
+        if not parsed then self:fail(parse_err); return end
+        if not daily_doc then
+          self.state.error = "daily " .. tostring(daily_code or "?")
+          self:emit_status("partial", self.state.error)
+        else
+          self:emit_status("online", "updated")
+        end
+        self:emit_update()
+      end)
     end)
   end)
 end
