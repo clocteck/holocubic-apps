@@ -8,7 +8,10 @@ sprite from clawdmoji project.
 
 - Codex state animations are native 160 x 160 indexed GIFs. There is no runtime
   scaling or cropped desktop artwork.
-- IDLE rotates through 24 ClawdMoji loops every random 2 to 5 whole minutes.
+- IDLE rotates every random 2 to 5 whole minutes through 24 narrative loops:
+  12 everyday micro-stories with two reactions/directions each. Every story
+  uses varied frame timing, a calm setup, an interaction, and a seamless return
+  over roughly 6.8 seconds instead of repeating a short mascot-plus-prop pose.
 - Each supported Codex Hook event has 4 distinct expressions (Stop has 5),
   with separate Error and Sleeping families.
 - The launcher icon is a native 75 x 75 ClawdMoji render with no resampling.
@@ -94,7 +97,8 @@ python tools\generate_clawdmoji_pack.py
 ```
 
 The generator also writes contact sheets under `art/` and a build report beside
-the generated assets.
+the generated assets. `art/idle-stories-preview.gif` is a 4 x 3 animated QA
+sheet containing one representative variant of every IDLE story.
 
 ## Codex hooks
 

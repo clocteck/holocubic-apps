@@ -33,6 +33,7 @@ PREVIEW_OUT = Path(__file__).resolve().parents[1] / "art"
 STATUS_SIZE = 160
 WEATHER_SIZE = 128
 FRAMES = 12
+IDLE_FRAMES = 30
 DURATION_MS = 120
 
 # Fixed palette. Index 0 is always transparent in status GIFs.
@@ -79,12 +80,17 @@ def frame(size: int, fill: int = 0) -> Image.Image:
     return image
 
 
-def save_gif(frames: list[Image.Image], path: Path, transparent: bool) -> None:
+def save_gif(
+    frames: list[Image.Image],
+    path: Path,
+    transparent: bool,
+    durations: list[int] | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     options = dict(
         save_all=True,
         append_images=frames[1:],
-        duration=DURATION_MS,
+        duration=durations or DURATION_MS,
         loop=0,
         optimize=True,
         disposal=2,
@@ -321,11 +327,11 @@ def draw_prop(d: ImageDraw.ImageDraw, name: str, f: int, variant: int) -> None:
             d.rectangle((x, 97, x + 6, 103), fill=5)
 
 
-IDLE_PROPS = [
-    "coffee", "book", "plant", "music", "star", "bug", "clock", "paint",
-    "snack", "radio", "orbit", "stretch", "toe", "sway", "wave", "breathe",
-    "yawn", "nap", "code", "rainwatch", "sun", "moon", "dance", "tidy",
+IDLE_SCENE_NAMES = [
+    "sun_chase", "rain_window", "doze", "screen_wipe", "roomba", "paper_plane",
+    "swivel_chair", "cable_tangle", "plant_growth", "snack_tug", "shadow_play", "box_fort",
 ]
+IDLE_SCENES = [(name, variant) for name in IDLE_SCENE_NAMES for variant in range(2)]
 
 EVENT_PROPS = {
     "SessionStart": ["sun", "wave", "coffee", "spark"],
@@ -341,6 +347,259 @@ EVENT_PROPS = {
     "Error": ["cross", "smoke", "bugerror", "bandage"],
     "Sleeping": ["moon", "zzz", "blanket", "lamp"],
 }
+
+
+def story_progress(frame_index: int, start: int, end: int) -> float:
+    if frame_index <= start:
+        return 0.0
+    if frame_index >= end:
+        return 1.0
+    value = (frame_index - start) / (end - start)
+    return value * value * (3 - 2 * value)
+
+
+def story_durations(reaction_frame: int = 21) -> list[int]:
+    durations = [140] * IDLE_FRAMES
+    durations[0] = 900
+    durations[1] = 420
+    durations[reaction_frame] = 620
+    durations[-2] = 420
+    durations[-1] = 900
+    return durations
+
+
+def draw_story_floor(draw: ImageDraw.ImageDraw, y: int = 143) -> None:
+    draw.line((8, y, 151, y), fill=3, width=2)
+    draw.line((25, y + 3, 135, y + 3), fill=2, width=1)
+
+
+def idle_story_frames(scene: str, variant: int) -> tuple[list[Image.Image], list[int]]:
+    """Create a calm setup/action/reaction loop instead of a mascot-plus-prop pose."""
+    images: list[Image.Image] = []
+    for f in range(IDLE_FRAMES):
+        image = frame(STATUS_SIZE)
+        d = ImageDraw.Draw(image)
+        phase = 2 * math.pi * f / IDLE_FRAMES
+
+        if scene == "sun_chase":
+            draw_story_floor(d)
+            patch_x = 13 + int(34 * (0.5 - 0.5 * math.cos(phase)))
+            d.ellipse((patch_x, 116, patch_x + 82, 151), fill=24)
+            follow = 15 + int(25 * (0.5 - 0.5 * math.cos(max(0.0, phase - 0.45))))
+            resting = 10 <= f <= 23
+            draw_clawd(image, follow, 72 + (2 if resting else 0), 8,
+                       eye="closed" if resting else "open", outline=1)
+            if resting:
+                d.line((follow + 23, 135, follow + 72, 135), fill=5, width=3)
+                if variant:
+                    sparkle(d, patch_x + 70, 112, 9, 2)
+
+        elif scene == "rain_window":
+            d.rectangle((10, 9, 150, 105), fill=3)
+            d.rectangle((14, 13, 146, 101), fill=13)
+            d.line((80, 13, 80, 101), fill=15, width=3)
+            d.line((14, 58, 146, 58), fill=15, width=3)
+            for i in range(12):
+                x = 18 + (i * 29 + f * 5) % 126
+                y = 16 + (i * 17 + f * 8) % 78
+                d.line((x, y, x - 2, y + 7), fill=19, width=1)
+            draw_story_floor(d)
+            draw_clawd(image, 43, 78, 7, eye="open" if f < 23 else "closed", outline=1)
+            reveal = max(0, min(8, f - 7, 25 - f))
+            if reveal > 0:
+                points = ((94, 43), (102, 35), (110, 43), (102, 52), (94, 43)) if not variant else ((94, 45), (99, 40), (104, 45), (109, 40), (114, 45))
+                d.line(points[:max(2, min(len(points), reveal))], fill=5, width=2)
+                d.line((95, 82, 96, 54), fill=4, width=3)
+            if f >= 22:
+                drop_y = 26 + (f - 22) * 9
+                d.line((102, drop_y, 100, drop_y + 10), fill=19, width=3)
+
+        elif scene == "doze":
+            draw_story_floor(d)
+            d.rectangle((26, 128, 137, 134), fill=25)
+            d.line((38, 134, 34, 151), fill=25, width=4)
+            d.line((126, 134, 130, 151), fill=25, width=4)
+            nod = int(8 * story_progress(f, 6, 16)) if f < 18 else 0
+            jump = -9 if f in (18, 19) else 0
+            eye = "closed" if 7 <= f <= 17 else "wide" if f in (18, 19) else "open"
+            draw_clawd(image, 32, 61 + nod + jump, 8, eye=eye, outline=1)
+            if 9 <= f <= 17:
+                d.line((119, 68, 129, 68, 120, 78, 132, 78), fill=22, width=3)
+            if f in (18, 19):
+                for x, y in ((25, 61), (132, 49), (143, 76)):
+                    sparkle(d, x, y, 9, 3)
+            if variant and 13 <= f <= 17:
+                d.line((80, 123, 84, 132), fill=19, width=2)
+
+        elif scene == "screen_wipe":
+            d.rectangle((9, 8, 150, 145), outline=3, width=3)
+            for i in range(5):
+                x = 22 + i * 25
+                d.line((x, 23, x + 13, 31), fill=27, width=2)
+            wipe = story_progress(f, 5, 19) * (1 - story_progress(f, 23, 29))
+            cloth_x = 18 + int(wipe * 108)
+            draw_clawd(image, max(18, cloth_x - 60), 72, 7,
+                       eye="focus" if f < 22 else "happy", outline=1)
+            d.line((cloth_x - 18, 93, cloth_x, 76), fill=4, width=5)
+            d.rectangle((cloth_x - 6, 66, cloth_x + 9, 82), fill=8 if not variant else 22)
+            for i in range(5):
+                x = 22 + i * 25
+                if x > cloth_x:
+                    d.line((x, 23, x + 13, 31), fill=27, width=2)
+            if 19 <= f <= 23:
+                sparkle(d, 133, 25, 9, 4)
+
+        elif scene == "roomba":
+            draw_story_floor(d, 145)
+            travel = story_progress(f, 3, 26)
+            x = -105 + int(travel * 275)
+            bump = -8 if f in (15, 16) else 0
+            d.ellipse((x + 8, 126, x + 92, 149), fill=15)
+            d.rectangle((x + 15, 124, x + 85, 139), fill=27)
+            d.rectangle((x + 31, 128, x + 69, 132), fill=8)
+            if 3 <= f <= 26:
+                draw_clawd(image, x + 2, 61 + bump, 8,
+                           eye="wide" if bump else "happy", outline=1)
+                if variant and 10 <= f <= 19:
+                    d.line((x + 18, 60, x + 5, 44), fill=4, width=4)
+                    d.rectangle((x, 38, x + 9, 47), fill=9)
+
+        elif scene == "paper_plane":
+            draw_story_floor(d)
+            draw_clawd(image, 24, 72, 8, eye="wide" if 21 <= f <= 25 else "open", outline=1)
+            t = story_progress(f, 5, 22)
+            if 5 <= f <= 25:
+                x = int(112 + 42 * math.sin(t * math.pi * 1.7))
+                y = int(87 - 58 * math.sin(t * math.pi))
+                if f >= 22:
+                    x, y = 76, 62
+                d.polygon(((x, y), (x + 20, y - 7), (x + 8, y + 6), (x + 5, y + 16)), fill=6)
+                d.line((x, y, x + 8, y + 6), fill=3, width=1)
+            if f < 7:
+                d.line((107, 102, 123, 89), fill=4, width=4)
+            if variant and f in (23, 24):
+                d.line((39, 52, 28, 39), fill=4, width=4)
+
+        elif scene == "swivel_chair":
+            draw_story_floor(d)
+            spin = story_progress(f, 6, 19)
+            sway = int(math.sin(spin * math.pi * 8) * (3 + 8 * spin)) if f <= 20 else 0
+            d.rectangle((55, 116, 109, 130), fill=25)
+            d.line((82, 130, 82, 145), fill=25, width=4)
+            d.line((57, 148, 107, 148), fill=25, width=4)
+            draw_clawd(image, 32 + sway, 61, 8,
+                       eye="wide" if 19 <= f <= 23 else "happy" if 8 <= f < 19 else "open", outline=1)
+            if 8 <= f <= 19:
+                d.arc((17, 43, 145, 150), 205, 330, fill=8 if variant else 9, width=2)
+            if 20 <= f <= 25:
+                for i in range(3):
+                    a = phase + i * 2.1
+                    sparkle(d, int(82 + math.cos(a) * 55), int(49 + math.sin(a) * 13), 9, 2)
+
+        elif scene == "cable_tangle":
+            draw_story_floor(d)
+            roll = int(16 * story_progress(f, 21, 24) * (1 - story_progress(f, 25, 29)))
+            draw_clawd(image, 25 + roll, 71, 8,
+                       eye="wide" if 15 <= f <= 24 else "focus", outline=1)
+            d.line((0, 119, 34 + roll, 110), fill=26, width=3)
+            loops = max(0, min(4, (f - 6) // 3, (27 - f) // 2))
+            for i in range(loops):
+                inset = i * 5
+                d.arc((31 + inset + roll, 73 + inset, 128 - inset + roll, 139 - inset), 10, 350, fill=26, width=2)
+            if f >= 11:
+                d.line((124 + roll, 101, 151, 82 if variant else 126), fill=26, width=3)
+            if f in (20, 21):
+                sparkle(d, 139, 82 if variant else 126, 10, 3)
+
+        elif scene == "plant_growth":
+            draw_story_floor(d)
+            draw_clawd(image, 18, 73, 8, eye="wide" if 17 <= f <= 23 else "open", outline=1)
+            d.rectangle((122, 118, 148, 144), fill=25)
+            d.rectangle((118, 114, 151, 121), fill=28)
+            growth = story_progress(f, 6, 18) * (1 - story_progress(f, 24, 29))
+            top = 116 - int(88 * growth)
+            d.line((135, 116, 133, top), fill=17, width=4)
+            for i in range(int(growth * 5)):
+                y = 106 - i * 16
+                side = -1 if i % 2 else 1
+                leaf_x1, leaf_x2 = sorted((133 + side * 3, 133 + side * 18))
+                d.ellipse((leaf_x1, y - 5, leaf_x2, y + 7), fill=16)
+            if growth > 0.82:
+                sparkle(d, 133, top - 3, 22 if variant else 9, 5)
+                d.arc((48, 67, 130, 137), 10, 270, fill=17, width=3)
+            if f < 10:
+                d.line((102, 104, 121, 94), fill=4, width=5)
+                for i in range(3):
+                    d.line((119 + i * 5, 93, 121 + i * 5, 101), fill=19, width=2)
+
+        elif scene == "snack_tug":
+            draw_story_floor(d)
+            draw_clawd(image, 14, 72, 8, eye="focus" if 9 <= f <= 22 else "open", outline=1)
+            bug_t = story_progress(f, 5, 12)
+            escape = int(45 * story_progress(f, 23, 29))
+            bug_x = 158 - int(43 * bug_t) + escape
+            tug = int(math.sin(f * 1.8) * 6) if 11 <= f <= 21 else 0
+            snack_x = 111 + tug
+            if f < 24:
+                d.rectangle((snack_x, 119, snack_x + 12, 128), fill=9)
+                d.line((98, 107, snack_x, 121), fill=4, width=4)
+            d.rectangle((bug_x, 121, bug_x + 6, 126), fill=7)
+            d.line((bug_x + 1, 121, bug_x - 3, 116), fill=7, width=1)
+            d.line((bug_x + 5, 121, bug_x + 9, 116), fill=7, width=1)
+            if f >= 23:
+                d.rectangle((124 + escape, 119, 136 + escape, 128), fill=9)
+                if variant:
+                    d.rectangle((118 + escape, 126, 123 + escape, 130), fill=7)
+
+        elif scene == "shadow_play":
+            draw_story_floor(d)
+            shadow_shift = int(12 * story_progress(f, 8, 16) * (1 - story_progress(f, 23, 29)))
+            draw_clawd(image, 44 + shadow_shift, 79, 7, eye="closed", body_color=27, outline=0)
+            if 11 <= f <= 22:
+                d.line((120 + shadow_shift, 97, 143 + shadow_shift, 72 + int(math.sin(phase * 4) * 8)), fill=27, width=6)
+            draw_clawd(image, 32, 68, 8,
+                       eye="wide" if 15 <= f <= 23 else "open", outline=1)
+            if 16 <= f <= 25:
+                d.line((37, 67, 24, 56), fill=4, width=4)
+            if variant and f == 21:
+                sparkle(d, 142, 66, 22, 3)
+
+        elif scene == "box_fort":
+            draw_story_floor(d)
+            move = story_progress(f, 5, 12) * (1 - story_progress(f, 24, 29))
+            box_x = 119 - int(move * 42)
+            clawd_x = 15 + int(move * 24)
+            draw_clawd(image, clawd_x, 72, 8,
+                       eye="happy" if 14 <= f <= 21 else "wide" if 22 <= f <= 24 else "open", outline=1)
+            if f < 13 or f >= 24:
+                d.rectangle((box_x, 94, box_x + 39, 143), fill=25)
+                d.line((box_x, 109, box_x + 39, 109), fill=9, width=2)
+                d.line((box_x + 20, 94, box_x + 20, 143), fill=9, width=2)
+                d.line((111, 112, box_x, 118), fill=4, width=4)
+            else:
+                collapse = int(31 * story_progress(f, 21, 24))
+                top = 53 + collapse
+                d.polygon(((49, top + 16), (80, top), (112, top + 16), (112, 143), (49, 143)), fill=25)
+                d.rectangle((58, top + 31, 75, top + 46), fill=2)
+                d.rectangle((87, top + 31, 104, top + 46), fill=2)
+                d.rectangle((64, top + 36, 69, top + 41), fill=7)
+                d.rectangle((93, top + 36, 98, top + 41), fill=7)
+                if variant:
+                    d.polygon(((80, top), (92, top + 17), (68, top + 17)), fill=9)
+
+        if variant:
+            image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        images.append(image)
+
+    reaction_frames = {
+        "sun_chase": 18, "rain_window": 22, "doze": 18, "screen_wipe": 22,
+        "roomba": 15, "paper_plane": 22, "swivel_chair": 20, "cable_tangle": 20,
+        "plant_growth": 18, "snack_tug": 22, "shadow_play": 18, "box_fort": 22,
+    }
+    # A duplicated calm keyframe makes the GIF boundary invisible during the
+    # several minutes an IDLE story may remain selected on the desk.
+    images[-1] = images[0].copy()
+    return images, story_durations(reaction_frames.get(scene, 21))
 
 
 def status_frames(event: str, prop: str, variant: int) -> list[Image.Image]:
@@ -477,6 +736,8 @@ def contact_sheet(paths: list[Path], output: Path, columns: int, tile: int) -> N
     sheet = Image.new("RGB", (columns * tile, rows * tile), (18, 13, 10))
     for i, path in enumerate(paths):
         with Image.open(path) as gif:
+            if getattr(gif, "n_frames", 1) > 1:
+                gif.seek(gif.n_frames // 2)
             still = gif.convert("RGBA")
             bg = Image.new("RGBA", still.size, (16, 4, 8, 255))
             bg.alpha_composite(still)
@@ -488,6 +749,35 @@ def contact_sheet(paths: list[Path], output: Path, columns: int, tile: int) -> N
     sheet.save(output)
 
 
+def animated_contact_sheet(paths: list[Path], output: Path, columns: int = 4, tile: int = 80) -> None:
+    """Render one variant of each IDLE story into a compact animated QA sheet."""
+    if not paths:
+        return
+    rows = math.ceil(len(paths) / columns)
+    gifs = [Image.open(path) for path in paths]
+    fixed_palette = Image.new("P", (1, 1))
+    fixed_palette.putpalette(PALETTE)
+    frames: list[Image.Image] = []
+    try:
+        frame_count = max(getattr(gif, "n_frames", 1) for gif in gifs)
+        for frame_index in range(frame_count):
+            sheet = Image.new("RGBA", (columns * tile, rows * tile), (16, 4, 8, 255))
+            for index, gif in enumerate(gifs):
+                gif.seek(frame_index % getattr(gif, "n_frames", 1))
+                still = gif.convert("RGBA")
+                background = Image.new("RGBA", still.size, (16, 4, 8, 255))
+                background.alpha_composite(still)
+                background = background.resize((tile, tile), Image.Resampling.NEAREST)
+                sheet.alpha_composite(background, ((index % columns) * tile, (index // columns) * tile))
+            frames.append(sheet.convert("RGB").quantize(palette=fixed_palette, dither=Image.Dither.NONE))
+    finally:
+        for gif in gifs:
+            gif.close()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    frames[0].save(output, save_all=True, append_images=frames[1:], duration=140, loop=0,
+                   disposal=1, optimize=False)
+
+
 def lua_quote(value: str) -> str:
     return json.dumps(value).replace("\\/", "/")
 
@@ -495,8 +785,11 @@ def lua_quote(value: str) -> str:
 def main() -> None:
     if not (CLAWDMOJI / "shared" / "clawd.py").exists():
         raise SystemExit(f"ClawdMoji source not found: {CLAWDMOJI}")
-    if OUT.exists():
-        shutil.rmtree(OUT)
+    # Preserve the independently generated/curated Session meme directory.
+    for generated_dir in (STATUS_OUT, WEATHER_OUT):
+        if generated_dir.exists():
+            shutil.rmtree(generated_dir)
+    OUT.mkdir(parents=True, exist_ok=True)
     STATUS_OUT.mkdir(parents=True)
     WEATHER_OUT.mkdir(parents=True)
 
@@ -504,10 +797,11 @@ def main() -> None:
     status_paths: list[Path] = []
 
     idle_files: list[str] = []
-    for i, prop in enumerate(IDLE_PROPS, 1):
+    for i, (scene, variant) in enumerate(IDLE_SCENES, 1):
         filename = f"idle_{i:02d}.gif"
         path = STATUS_OUT / filename
-        save_gif(status_frames("Idle", prop, i), path, True)
+        frames, durations = idle_story_frames(scene, variant)
+        save_gif(frames, path, True, durations)
         idle_files.append(f"/sd/apps/holo_pet/assets/clawdmoji/status/{filename}")
         status_paths.append(path)
     status_manifest["Idle"] = idle_files
@@ -554,11 +848,14 @@ def main() -> None:
 
     contact_sheet(status_paths, PREVIEW_OUT / "clawdmoji-status-contact-sheet.png", 8, 80)
     contact_sheet(weather_paths, PREVIEW_OUT / "clawdmoji-weather-contact-sheet.png", 10, 64)
+    animated_contact_sheet(status_paths[:24:2], PREVIEW_OUT / "idle-stories-preview.gif")
 
     total_bytes = sum(p.stat().st_size for p in OUT.rglob("*") if p.is_file())
     report = {
         "source": "https://github.com/afspies/ClawdMoji/blob/main/shared/clawd.py",
         "idle_animations": len(status_manifest["Idle"]),
+        "idle_scene_families": len(IDLE_SCENE_NAMES),
+        "idle_loop_duration_ms": sum(story_durations()),
         "event_groups": {key: len(value) for key, value in status_manifest.items() if key != "Idle"},
         "weather_combinations": len(weather_paths),
         "total_files": len(status_paths) + len(weather_paths),

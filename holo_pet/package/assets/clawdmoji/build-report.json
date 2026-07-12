@@ -1,6 +1,8 @@
 {
   "source": "https://github.com/afspies/ClawdMoji/blob/main/shared/clawd.py",
   "idle_animations": 24,
+  "idle_scene_families": 12,
+  "idle_loop_duration_ms": 6760,
   "event_groups": {
     "SessionStart": 4,
     "UserPromptSubmit": 4,
@@ -17,6 +19,6 @@
   },
   "weather_combinations": 60,
   "total_files": 133,
-  "total_bytes": 1218535,
+  "total_bytes": 1854927,
   "launcher_icon": "package/main.png"
 }
