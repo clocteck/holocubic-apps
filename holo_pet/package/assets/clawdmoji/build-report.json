@@ -1,0 +1,22 @@
+{
+  "source": "https://github.com/afspies/ClawdMoji/blob/main/shared/clawd.py",
+  "idle_animations": 24,
+  "event_groups": {
+    "SessionStart": 4,
+    "UserPromptSubmit": 4,
+    "PreToolUse": 4,
+    "PermissionRequest": 4,
+    "PostToolUse": 4,
+    "PreCompact": 4,
+    "PostCompact": 4,
+    "SubagentStart": 4,
+    "SubagentStop": 4,
+    "Stop": 5,
+    "Error": 4,
+    "Sleeping": 4
+  },
+  "weather_combinations": 60,
+  "total_files": 133,
+  "total_bytes": 1218535,
+  "launcher_icon": "package/main.png"
+}

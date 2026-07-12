@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Clawd Monitor</title>
+  <style>
+    :root{color-scheme:dark;font-family:Consolas,"Cascadia Mono","Microsoft YaHei",monospace}
+    body{margin:0;padding:18px;background:#060504;color:#fff3e8;line-height:1.65}
+    .panel{border:1px solid #553427;border-radius:10px;padding:18px;background:#120d0a}
+    h1{margin:0;color:#d97757;font-size:22px}.dim{color:#9a7564}.live{color:#8fe0c7}
+    code{color:#f4c1a7}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+    .cell{border:1px solid #553427;padding:10px;background:#0a0705}b{color:#f4c1a7}
+    @media(max-width:480px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <section class="panel">
+    <h1>CODEX // CLAWD <span class="live">[LIVE]</span></h1>
+    <p>在 HoloCubic 上显示 Codex App 实时状态与逐小时天气。全部角色动画从 ClawdMoji 的 12×8 像素角色程序化生成，并以原生尺寸播放。</p>
+    <div class="grid">
+      <div class="cell"><b>IDLE ×24</b><br>2–5 分钟随机轮播</div>
+      <div class="cell"><b>HOOK ×10</b><br>每类事件独立表情组</div>
+      <div class="cell"><b>WEATHER ×60</b><br>天气 × 温湿度体感组合</div>
+      <div class="cell"><b>HOURLY</b><br>降雨、温湿度、风向与阵风</div>
+      <div class="cell"><b>CLAWD TUI</b><br>状态与天气双页面</div>
+    </div>
+    <p class="dim">Powerline 状态栏：<code>WORKING &gt; ~/project [LOG]</code><br><code>C11:31 · S11:13 · 5H35% · R22:18 · W4%</code></p>
+    <p class="dim">管理入口：<code>/holo_pet/</code> · 示例主机：<code>192.168.0.100:17321</code></p>
+  </section>
+</body>
+</html>
