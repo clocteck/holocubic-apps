@@ -2,4 +2,4 @@ name = Settings
 entry = main.lua
 icon = main.png
 description = Device settings
-version = 0.0.0
+version = 0.0.1
