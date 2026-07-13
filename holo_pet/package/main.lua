@@ -104,8 +104,8 @@ local FLAG_HIDDEN = rawget(_G, "LV_OBJ_FLAG_HIDDEN")
 local CANVAS_FMT = rawget(_G, "LV_IMG_CF_TRUE_COLOR") or rawget(_G, "LV_COLOR_FORMAT_NATIVE")
 
 local C = {
-  -- RGB565-safe near black. The old 0x060504 truncated to green-only 0x0020.
-  bg = 0x100408,
+  -- True RGB565 black removes the warm cast from the backlit LCD background.
+  bg = 0x000000,
   panel = 0x120D0A,
   line = 0x553427,
   rust = 0xD97757,
