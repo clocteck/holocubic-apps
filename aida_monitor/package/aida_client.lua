@@ -96,6 +96,104 @@ local function parse_payload(payload)
   return raw, entries
 end
 
+local function split_fields(entry)
+  local fields = {}
+  local start = 1
+  while true do
+    local pos = entry:find("|", start, true)
+    if not pos then
+      fields[#fields + 1] = entry:sub(start)
+      break
+    end
+    fields[#fields + 1] = entry:sub(start, pos - 1)
+    start = pos + 1
+  end
+  return fields
+end
+
+local function color_value(text, fallback)
+  local hex = tostring(text or ""):match("#([%x][%x][%x][%x][%x][%x])")
+  return hex and tonumber(hex, 16) or fallback
+end
+
+local function gradient_value(text, fallback)
+  local result = {}
+  for hex in tostring(text or ""):gmatch("#([%x][%x][%x][%x][%x][%x])") do
+    result[#result + 1] = tonumber(hex, 16)
+    if #result == 2 then break end
+  end
+  if #result == 0 then result[1] = fallback or 0 end
+  if #result == 1 then result[2] = result[1] end
+  return result
+end
+
+local function html_decode(text)
+  text = tostring(text or "")
+  text = text:gsub("&nbsp;", " "):gsub("&deg;", "°")
+  text = text:gsub("&quot;", '"'):gsub("&#39;", "'")
+  text = text:gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&amp;", "&")
+  return text
+end
+
+local function parse_remote_payload(payload)
+  local sample = {
+    payload = payload,
+    page = nil,
+    updates = {},
+    control = nil,
+  }
+  for _, entry in ipairs(split_remote_items(payload)) do
+    entry = trim(entry)
+    if entry ~= "" then
+      if entry == "ReLoad" then
+        sample.control = "ReLoad"
+      else
+        local page = entry:match("^Page(%d+)$")
+        if page then
+          sample.page = tonumber(page) + 1
+        else
+          local fields = split_fields(entry)
+          local id = fields[1] or ""
+          if id:match("^SIV%d+$") or id:match("^Simple%d+$") then
+            sample.updates[#sample.updates + 1] = {
+              id = id, kind = "text", text = html_decode(fields[2] or ""),
+              visible = (fields[2] or "") ~= "",
+            }
+          elseif id:match("^Bar%d+p$") then
+            sample.updates[#sample.updates + 1] = {
+              id = id,
+              kind = "bar",
+              percent = tonumber(fields[2]) or 0,
+              visible = (fields[2] or "") ~= "",
+              background = gradient_value(fields[3], 0x202020),
+              foreground = gradient_value(fields[4], 0x00FF00),
+            }
+          elseif id:match("^Gph%d+p$") then
+            if (fields[2] or "") == "" then
+              sample.updates[#sample.updates + 1] = { id = id, kind = "graph_clear" }
+            else
+              sample.updates[#sample.updates + 1] = {
+                id = id, kind = "graph", value = tonumber(fields[2]) or first_number(fields[2]) or 0,
+              }
+            end
+          elseif id:match("^Arc%d+p$") then
+            sample.updates[#sample.updates + 1] = {
+              id = id,
+              kind = "arc",
+              percent = tonumber(fields[2]) or 0,
+              text = html_decode(fields[3] or ""),
+              visible = (fields[3] or "") ~= "",
+              background_color = color_value(fields[4], 0x202020),
+              active_color = color_value(fields[5], 0x00FF00),
+            }
+          end
+        end
+      end
+    end
+  end
+  return sample
+end
+
 local function map_metrics(entries, metric_defs)
   local metrics = {}
 
@@ -199,8 +297,16 @@ function AidaClient:emit_status(state, detail)
 end
 
 function AidaClient:emit_sample(payload)
+  local protocol = parse_remote_payload(payload)
+  if protocol.control then
+    if self.handlers.on_control then
+      local ok, err = pcall(function() self.handlers.on_control(protocol.control) end)
+      if not ok then self:log("on_control_error", err) end
+    end
+    return
+  end
   local raw, entries = parse_payload(payload)
-  if #entries == 0 then
+  if #entries == 0 and #protocol.updates == 0 and not protocol.page then
     if self.handlers.on_control then
       local ok, err = pcall(function()
         self.handlers.on_control(payload)
@@ -216,6 +322,8 @@ function AidaClient:emit_sample(payload)
   local sample = {
     received_at = now_ms(),
     payload = payload,
+    page = protocol.page,
+    updates = protocol.updates,
     raw = raw,
     entries = entries,
     metrics = map_metrics(entries, self.config.metrics)
@@ -497,6 +605,7 @@ function AidaClient:stop()
 end
 
 AidaClient.parse_payload = parse_payload
+AidaClient.parse_remote_payload = parse_remote_payload
 AidaClient.map_metrics = map_metrics
 
 return AidaClient

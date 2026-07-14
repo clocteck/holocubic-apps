@@ -2,5 +2,5 @@ name = AIDA Monitor
 kind = app
 entry = main.lua
 icon = main.png
-description = AIDA64 hardware monitor
-version = 0.1.0
+description = Dynamic AIDA64 RemoteSensor LCD renderer
+version = 0.5.1
