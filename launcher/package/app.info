@@ -1,5 +1,5 @@
 name = Launcher
-version = 1.2.2
+version = 1.0.3
 kind = app
 entry = main.lua
-description = Built-in system launcher override
+description = 系统启动器：支持应用自启动、全局亮度和自动休眠唤醒
