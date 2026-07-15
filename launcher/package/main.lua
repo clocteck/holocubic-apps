@@ -19,6 +19,11 @@ local DEFAULT_LANGUAGE = "zh-CN"
 local AP_POLICY_START_DELAY_MS = 750
 local AP_IP_WAIT_MS = 5000
 local AP_POLICY_POLL_MS = 250
+local AUTOSTART_BOOT_WINDOW_MS = 5000
+local AUTOSTART_DELAY_MS = 200
+local AUTOSTART_MARK_PATH = "/tmp/launcher_autostart_fired"
+local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
+local DISPLAY_SERVICE_ID = "display_service"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -51,6 +56,8 @@ end
 local SETTINGS = read_settings()
 local LANGUAGE = normalize_language(SETTINGS.language or SETTINGS.locale or SETTINGS.lang)
 local AP_PREFERRED_ENABLED = setting_bool(SETTINGS.ap_enabled, true)
+local AUTOSTART_ENABLED = setting_bool(SETTINGS.autostart_enabled, true)
+local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART_APP_ID)
 local UI_TEXT = {
   ["zh-CN"] = { no_apps = "暂无应用", loading = "正在启动" },
   en = { no_apps = "NO APPS", loading = "Starting" },
@@ -115,6 +122,7 @@ local STATE = {
   repeat_right = 0,
   repeat_up = 0,
   up_launch_fired = false,
+  autostart_fired = false,
 }
 
 local UI = {}
@@ -156,6 +164,15 @@ local function sync_ntp_once()
   end
   pcall(function()
     time_mod.initntp(NTP_SERVER)
+  end)
+end
+
+local function start_display_service()
+  if not app or not app.start_service then
+    return
+  end
+  pcall(function()
+    app.start_service(DISPLAY_SERVICE_ID)
   end)
 end
 
@@ -697,8 +714,14 @@ local function move(delta)
   render(delta)
 end
 
+local launch_item
+
 local function launch_current()
   local item = current_item()
+  launch_item(item)
+end
+
+launch_item = function(item)
   if not item then
     return
   end
@@ -717,6 +740,103 @@ local function launch_current()
   if not ok then
     print("launch failed:", text_or(err, "unknown"))
   end
+end
+
+local function boot_millis()
+  local fn = rawget(_G, "millis")
+  if type(fn) ~= "function" then
+    return nil
+  end
+  local ok, value = pcall(fn)
+  if not ok then
+    return nil
+  end
+  return tonumber(value)
+end
+
+local function autostart_marker_exists()
+  return path_exists(AUTOSTART_MARK_PATH)
+end
+
+local function mark_autostart_fired()
+  if not file or not file.open then
+    return
+  end
+  local fd = file.open(AUTOSTART_MARK_PATH, "w")
+  if not fd then
+    return
+  end
+  fd:write("app_id=" .. AUTOSTART_APP_ID .. "\n")
+  fd:write("ms=" .. tostring(boot_millis() or "") .. "\n")
+  fd:close()
+end
+
+local function should_autostart()
+  local ms = boot_millis()
+  return AUTOSTART_ENABLED
+    and AUTOSTART_APP_ID ~= ""
+    and not autostart_marker_exists()
+    and ms ~= nil
+    and ms >= 0
+    and ms <= AUTOSTART_BOOT_WINDOW_MS
+end
+
+local function autostart_candidate(item)
+  local id = text_or(item and item.id, "")
+  if id == "" or id ~= AUTOSTART_APP_ID or id == "launcher" then
+    return false
+  end
+  local kind = tostring(item.kind or ""):lower()
+  return kind ~= "service"
+end
+
+local function find_autostart_app()
+  local list = {}
+  if app and app.list then
+    list = app.list() or {}
+  else
+    list = STATE.apps
+  end
+  for _, item in ipairs(list) do
+    if autostart_candidate(item) then
+      return item
+    end
+  end
+  return nil
+end
+
+local function run_autostart(skip_boot_window_check)
+  if STATE.autostart_fired then
+    return
+  end
+  if not skip_boot_window_check and not should_autostart() then
+    return
+  end
+  STATE.autostart_fired = true
+  local item = find_autostart_app()
+  if not item then
+    print("[launcher] autostart app not found:", AUTOSTART_APP_ID)
+    return
+  end
+  mark_autostart_fired()
+  launch_item(item)
+end
+
+local function schedule_autostart()
+  if not should_autostart() then
+    return
+  end
+  if not tmr or not tmr.create then
+    run_autostart(true)
+    return
+  end
+  local t = tmr.create()
+  t:alarm(AUTOSTART_DELAY_MS, tmr.ALARM_SINGLE, function(self)
+    pcall(function()
+      self:unregister()
+    end)
+    run_autostart(true)
+  end)
 end
 
 local function rescan_apps()
@@ -775,7 +895,9 @@ end
 build_ui()
 load_apps(0)
 sync_ntp_once()
+start_display_service()
 start_ap_policy()
+schedule_autostart()
 
 key.on(key.LEFT, function(evt_type, ts_ms)
   if evt_type == key.START then

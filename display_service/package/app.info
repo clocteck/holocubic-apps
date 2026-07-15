@@ -1,0 +1,5 @@
+name = Display Service
+version = 1.0.4
+kind = service
+entry = main.lua
+description = Global display brightness service

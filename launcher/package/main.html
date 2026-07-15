@@ -551,6 +551,9 @@ button,input,select,textarea{font:inherit;color:inherit}
   background:var(--surface);
   transition:border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
+.range-row{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:12px;align-items:center}
+.range-row input[type="range"]{padding:0;min-height:28px}
+.range-value{font-weight:700;text-align:right;color:var(--accent-strong)}
 .settings-grid{grid-template-columns:1fr}
 .settings-actions{margin-top:12px}
 .empty{
@@ -2653,6 +2656,33 @@ button,input,select,textarea{font:inherit;color:inherit}
                 </select>
                 <small>下次启动 Launcher 时生效；关闭偏好下等待约 5 秒，无 IP 会恢复热点。</small>
               </label>
+              <label class="field" for="brightnessRange">
+                <span>屏幕亮度</span>
+                <div class="range-row">
+                  <input id="brightnessRange" name="brightness" type="range" min="1" max="100" step="1">
+                  <output class="range-value" id="brightnessValue" for="brightnessRange">80%</output>
+                </div>
+                <small>全局亮度，拖动时立即应用到设备。</small>
+              </label>
+              <label class="field" for="autoSleepSelect">
+                <span>自动休眠</span>
+                <select id="autoSleepSelect" name="autoSleep">
+                  <option value="0">关闭</option>
+                  <option value="60">1min</option>
+                  <option value="600">10min</option>
+                  <option value="1800">30min</option>
+                  <option value="3600">1h</option>
+                  <option value="7200">2h</option>
+                </select>
+                <small>选择无操作多久后自动息屏，按键后恢复亮度。</small>
+              </label>
+              <label class="field" for="autostartAppSelect">
+                <span>开机自启动应用</span>
+                <select id="autostartAppSelect" name="autostartApp">
+                  <option value="">关闭自启动</option>
+                </select>
+                <small>仅设备开机约 5 秒内启动 Launcher 时触发；返回 Launcher 不会重复启动。</small>
+              </label>
             </div>
             <span class="visually-hidden" id="settingsRoute">/main</span>
             <div class="settings-actions">
@@ -2897,6 +2927,11 @@ const DEFAULT_MDNS = "-";
 const DEFAULT_TIMEZONE = "CST-8";
 const DEFAULT_LANGUAGE = "zh-CN";
 const DEFAULT_AP_ENABLED = true;
+const DEFAULT_BRIGHTNESS = 80;
+const DEFAULT_AUTO_SLEEP_ENABLED = false;
+const DEFAULT_AUTO_SLEEP_SECONDS = 1800;
+const AUTO_SLEEP_OPTIONS = [0, 60, 600, 1800, 3600, 7200];
+const DEFAULT_AUTOSTART_APP_ID = "wifi_guide";
 const DEFAULT_APP_STORE_CHANNEL = "stable";
 const DEFAULT_APP_STORE_HOST_CODES = [99,117,98,105,99,46,99,108,111,99,116,101,99,107,46,99,111,109];
 const DEFAULT_APP_STORE_URL = "https://" + DEFAULT_APP_STORE_HOST_CODES.map((code) => String.fromCharCode(code)).join("");
@@ -2912,11 +2947,17 @@ const STORAGE_KEYS = {
   weatherAddress: "cubic.mainpage.weatherAddress",
   language: "cubic.mainpage.language",
   apEnabled: "cubic.mainpage.apEnabled",
+  brightness: "cubic.mainpage.brightness",
+  autoSleepEnabled: "cubic.mainpage.autoSleepEnabled",
+  autoSleepSeconds: "cubic.mainpage.autoSleepSeconds",
+  autostartAppId: "cubic.mainpage.autostartAppId",
   appStoreUrl: "cubic.mainpage.appStoreUrl"
 };
 let toastTimer = 0;
 let latestSystemState = null;
 let latestDeviceSettings = {};
+let autostartAppOptionsSignature = "";
+let brightnessApplyTimer = 0;
 let wifiScanRequested = false;
 let selectedWifiSsid = "";
 let currentView = "start";
@@ -3405,16 +3446,189 @@ function normalizeApEnabled(value, fallback){
   return fallback !== false;
 }
 
+function normalizeAutostartEnabled(value, fallback){
+  if(typeof value === "boolean") return value;
+  if(typeof value === "number") return value !== 0;
+  const text = String(value == null ? "" : value).trim().toLowerCase();
+  if(["true", "1", "on", "enabled"].includes(text)) return true;
+  if(["false", "0", "off", "disabled"].includes(text)) return false;
+  return fallback === true;
+}
+
+function normalizeBrightness(value, fallback){
+  const num = Number(value);
+  const base = Number.isFinite(num) ? num : fallback;
+  return Math.max(1, Math.min(100, Math.round(base || DEFAULT_BRIGHTNESS)));
+}
+
+function normalizeBool(value, fallback){
+  if(typeof value === "boolean") return value;
+  if(typeof value === "number") return value !== 0;
+  const text = String(value == null ? "" : value).trim().toLowerCase();
+  if(["true", "1", "on", "enabled"].includes(text)) return true;
+  if(["false", "0", "off", "disabled"].includes(text)) return false;
+  return fallback === true;
+}
+
+function normalizeAutoSleepSeconds(value, fallback){
+  if(typeof value === "boolean"){
+    return value ? DEFAULT_AUTO_SLEEP_SECONDS : 0;
+  }
+  const text = String(value == null ? "" : value).trim().toLowerCase();
+  if(["true", "on", "enabled"].includes(text)) return DEFAULT_AUTO_SLEEP_SECONDS;
+  if(["false", "off", "disabled", ""].includes(text)) return 0;
+  const num = Number(value);
+  if(!Number.isFinite(num)){
+    return normalizeAutoSleepSeconds(fallback, 0);
+  }
+  const rounded = Math.max(0, Math.round(num));
+  return AUTO_SLEEP_OPTIONS.includes(rounded) ? rounded : DEFAULT_AUTO_SLEEP_SECONDS;
+}
+
+function setBrightnessControl(value){
+  const brightness = normalizeBrightness(value, DEFAULT_BRIGHTNESS);
+  const input = qs("#brightnessRange");
+  const output = qs("#brightnessValue");
+  if(input) input.value = String(brightness);
+  if(output) output.textContent = brightness + "%";
+}
+
+function setAutoSleepControl(seconds){
+  const normalized = normalizeAutoSleepSeconds(seconds, DEFAULT_AUTO_SLEEP_ENABLED ? DEFAULT_AUTO_SLEEP_SECONDS : 0);
+  const select = qs("#autoSleepSelect");
+  if(select) select.value = String(normalized);
+}
+
+async function applyAutoSleepNow(seconds){
+  const normalized = normalizeAutoSleepSeconds(seconds, DEFAULT_AUTO_SLEEP_ENABLED ? DEFAULT_AUTO_SLEEP_SECONDS : 0);
+  const on = normalized > 0;
+  const response = await fetch(
+    "/display/api/sleep?enabled=" + encodeURIComponent(on ? "true" : "false") +
+      "&seconds=" + encodeURIComponent(String(on ? normalized : DEFAULT_AUTO_SLEEP_SECONDS)),
+    {
+      method: "POST",
+      cache: "no-store"
+    }
+  );
+  let data = null;
+  try{
+    data = await response.json();
+  }catch(err){
+    data = null;
+  }
+  if(!response.ok || !data || data.ok === false){
+    throw new Error(data && data.error ? data.error : ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function applyBrightnessNow(value){
+  const brightness = normalizeBrightness(value, DEFAULT_BRIGHTNESS);
+  const response = await fetch("/display/api/brightness?value=" + encodeURIComponent(String(brightness)), {
+    method: "POST",
+    cache: "no-store"
+  });
+  let data = null;
+  try{
+    data = await response.json();
+  }catch(err){
+    data = null;
+  }
+  if(!response.ok || !data || data.ok === false){
+    throw new Error(data && data.error ? data.error : ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function wakeDisplayNow(){
+  const response = await fetch("/display/api/wake", {
+    method: "POST",
+    cache: "no-store"
+  });
+  if(!response.ok){
+    const brightness = normalizeBrightness(qs("#brightnessRange") && qs("#brightnessRange").value, DEFAULT_BRIGHTNESS);
+    await applyBrightnessNow(brightness);
+    return null;
+  }
+  return response;
+}
+
+function scheduleBrightnessApply(value){
+  const brightness = normalizeBrightness(value, DEFAULT_BRIGHTNESS);
+  window.clearTimeout(brightnessApplyTimer);
+  brightnessApplyTimer = window.setTimeout(() => {
+    applyBrightnessNow(brightness).catch((err) => showToast("亮度服务未响应：" + (err.message || String(err)), true));
+  }, 80);
+}
+
+function autostartAppItems(data){
+  const merged = []
+    .concat(Array.isArray(data && data.apps) ? data.apps : [])
+    .concat(Array.isArray(data && data.installed_apps) ? data.installed_apps : []);
+  const seen = new Set();
+  return merged.filter((app) => {
+    const id = String(app && app.id || "");
+    if(!id || id === "launcher" || seen.has(id)){
+      return false;
+    }
+    seen.add(id);
+    return String(app && app.kind || "").toLowerCase() !== "service";
+  });
+}
+
+function setAutostartSelectValue(appId, data){
+  const select = qs("#autostartAppSelect");
+  if(!select) return;
+  const selected = String(appId || "");
+  const apps = autostartAppItems(data || latestSystemState);
+  const signature = selected + "\n" + apps.map((app) => {
+    return String(app && app.id || "") + "\t" + String(app && app.name || "") + "\t" + String(app && app.kind || "");
+  }).join("\n");
+  if(signature === autostartAppOptionsSignature && select.value === selected){
+    return;
+  }
+  autostartAppOptionsSignature = signature;
+  select.innerHTML = "";
+  const off = document.createElement("option");
+  off.value = "";
+  off.textContent = "关闭自启动";
+  select.appendChild(off);
+  apps.forEach((app) => {
+    const id = String(app && app.id || "");
+    const name = String(app && app.name || id);
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = name === id ? id : (name + " (" + id + ")");
+    select.appendChild(option);
+  });
+  if(selected && !apps.some((app) => String(app && app.id || "") === selected)){
+    const missing = document.createElement("option");
+    missing.value = selected;
+    missing.textContent = selected + "（未在列表中）";
+    select.appendChild(missing);
+  }
+  select.value = selected;
+}
+
 function loadStoredSettings(){
   const timezone = storageGet(STORAGE_KEYS.timezone, DEFAULT_TIMEZONE);
   const weatherAddress = storageGet(STORAGE_KEYS.weatherAddress, "");
   const language = normalizeLanguage(storageGet(STORAGE_KEYS.language, DEFAULT_LANGUAGE));
   const apEnabled = normalizeApEnabled(storageGet(STORAGE_KEYS.apEnabled, DEFAULT_AP_ENABLED), DEFAULT_AP_ENABLED);
+  const brightness = normalizeBrightness(storageGet(STORAGE_KEYS.brightness, DEFAULT_BRIGHTNESS), DEFAULT_BRIGHTNESS);
+  const autoSleepSeconds = normalizeAutoSleepSeconds(
+    storageGet(STORAGE_KEYS.autoSleepSeconds, storageGet(STORAGE_KEYS.autoSleepEnabled, DEFAULT_AUTO_SLEEP_ENABLED)),
+    DEFAULT_AUTO_SLEEP_ENABLED ? DEFAULT_AUTO_SLEEP_SECONDS : 0
+  );
+  const autostartAppId = storageGet(STORAGE_KEYS.autostartAppId, DEFAULT_AUTOSTART_APP_ID);
   ensureTimezoneOption(timezone);
   qs("#timezoneSelect").value = timezone;
   qs("#weatherAddress").value = weatherAddress;
   qs("#languageSelect").value = language;
   qs("#apEnabledSelect").value = apEnabled ? "true" : "false";
+  setBrightnessControl(brightness);
+  setAutoSleepControl(autoSleepSeconds);
+  setAutostartSelectValue(autostartAppId, latestSystemState);
   applyLanguage(language, false);
 }
 
@@ -3427,15 +3641,30 @@ async function loadDeviceSettings(){
     const weatherAddress = String(doc.weather_address || doc.weatherAddress || "");
     const language = normalizeLanguage(doc.language || doc.locale || doc.lang || DEFAULT_LANGUAGE);
     const apEnabled = normalizeApEnabled(doc.ap_enabled, DEFAULT_AP_ENABLED);
+    const brightness = normalizeBrightness(doc.brightness || doc.display_brightness, DEFAULT_BRIGHTNESS);
+    const autoSleepEnabled = normalizeBool(doc.auto_sleep_enabled, DEFAULT_AUTO_SLEEP_ENABLED);
+    const autoSleepSeconds = normalizeAutoSleepSeconds(
+      autoSleepEnabled ? doc.auto_sleep_seconds : 0,
+      autoSleepEnabled ? DEFAULT_AUTO_SLEEP_SECONDS : 0
+    );
+    const autostartEnabled = normalizeAutostartEnabled(doc.autostart_enabled, true);
+    const autostartAppId = autostartEnabled ? String(doc.autostart_app_id || DEFAULT_AUTOSTART_APP_ID) : "";
     ensureTimezoneOption(timezone);
     qs("#timezoneSelect").value = timezone;
     qs("#weatherAddress").value = weatherAddress;
     qs("#languageSelect").value = language;
     qs("#apEnabledSelect").value = apEnabled ? "true" : "false";
+    setBrightnessControl(brightness);
+    setAutoSleepControl(autoSleepSeconds);
+    setAutostartSelectValue(autostartAppId, latestSystemState);
     storageSet(STORAGE_KEYS.timezone, timezone);
     storageSet(STORAGE_KEYS.weatherAddress, weatherAddress);
     storageSet(STORAGE_KEYS.language, language);
     storageSet(STORAGE_KEYS.apEnabled, apEnabled ? "true" : "false");
+    storageSet(STORAGE_KEYS.brightness, String(brightness));
+    storageSet(STORAGE_KEYS.autoSleepEnabled, autoSleepEnabled ? "true" : "false");
+    storageSet(STORAGE_KEYS.autoSleepSeconds, String(autoSleepSeconds));
+    storageSet(STORAGE_KEYS.autostartAppId, autostartAppId);
     applyLanguage(language, false);
     return doc;
   }catch(err){
@@ -5344,6 +5573,9 @@ async function launchApp(app, button){
   button.disabled = true;
   button.textContent = "打开中...";
   try{
+    try{
+      await wakeDisplayNow();
+    }catch(wakeErr){}
     await api("/api/system/launch?id=" + encodeURIComponent(app.id || ""), { method: "POST" });
     showToast("正在打开 " + (app.name || app.id || "应用"), false);
     setTimeout(() => loadState(true), 350);
@@ -6347,6 +6579,7 @@ function renderState(data){
   qs("#wifiMdns").textContent = networkInfo.mdns;
   qs("#wifiStateText").textContent = networkInfo.wifiName;
   qs("#settingsRoute").textContent = routeText;
+  setAutostartSelectValue(qs("#autostartAppSelect").value, data);
   setBadgeState("#wifiStateBadge", networkInfo.tone, networkInfo.badge);
   setBadgeState("#appStateBadge", "neutral", status);
   qs("#exitBtn").disabled = !current;
@@ -6393,12 +6626,21 @@ async function exitToLauncher(){
 
 function currentSettingsPayload(){
   const weatherAddress = qs("#weatherAddress").value.trim();
+  const autostartAppId = qs("#autostartAppSelect").value || "";
+  const brightness = normalizeBrightness(qs("#brightnessRange").value, DEFAULT_BRIGHTNESS);
+  const autoSleepSeconds = normalizeAutoSleepSeconds(qs("#autoSleepSelect").value, 0);
+  const autoSleepEnabled = autoSleepSeconds > 0;
   const previousAddress = String(latestDeviceSettings.weather_address || latestDeviceSettings.weatherAddress || "").trim();
   const payload = Object.assign({}, latestDeviceSettings, {
     timezone: qs("#timezoneSelect").value || DEFAULT_TIMEZONE,
     weather_address: weatherAddress,
     language: normalizeLanguage(qs("#languageSelect").value),
     ap_enabled: qs("#apEnabledSelect").value !== "false",
+    brightness,
+    auto_sleep_enabled: autoSleepEnabled,
+    auto_sleep_seconds: autoSleepEnabled ? autoSleepSeconds : DEFAULT_AUTO_SLEEP_SECONDS,
+    autostart_enabled: autostartAppId !== "",
+    autostart_app_id: autostartAppId,
     saved_at: new Date().toISOString()
   });
   if(weatherAddress !== previousAddress){
@@ -6407,6 +6649,10 @@ function currentSettingsPayload(){
     delete payload.weather_location_id;
     delete payload.weather_city;
   }
+  delete payload.boot_app;
+  delete payload.display_brightness;
+  delete payload.screen_idle_timeout_seconds;
+  delete payload.idle_sleep_seconds;
   return payload;
 }
 
@@ -6419,13 +6665,28 @@ async function saveSettings(ev){
   storageSet(STORAGE_KEYS.weatherAddress, payload.weather_address);
   storageSet(STORAGE_KEYS.language, payload.language);
   storageSet(STORAGE_KEYS.apEnabled, payload.ap_enabled ? "true" : "false");
+  storageSet(STORAGE_KEYS.brightness, String(payload.brightness));
+  storageSet(STORAGE_KEYS.autoSleepEnabled, payload.auto_sleep_enabled ? "true" : "false");
+  storageSet(STORAGE_KEYS.autoSleepSeconds, String(payload.auto_sleep_enabled ? payload.auto_sleep_seconds : 0));
+  storageSet(STORAGE_KEYS.autostartAppId, payload.autostart_app_id || "");
   applyLanguage(payload.language, false);
   button.disabled = true;
   button.textContent = "保存中...";
   try{
     await uploadJsonFile(SETTINGS_JSON_PATH, payload);
+    let brightnessError = null;
+    try{
+      await applyBrightnessNow(payload.brightness);
+      await applyAutoSleepNow(payload.auto_sleep_enabled ? payload.auto_sleep_seconds : 0);
+    }catch(err){
+      brightnessError = err;
+    }
     latestDeviceSettings = Object.assign({}, payload);
-    showToast("已保存到设备", false);
+    if(brightnessError){
+      showToast("已保存到设备；亮度服务暂未响应，重进 Launcher 后会自动拉起。", true);
+    }else{
+      showToast("已保存到设备", false);
+    }
   }catch(err){
     showToast("页面已保存，写入设备失败：" + (err.message || String(err)), true);
   }finally{
@@ -6439,6 +6700,10 @@ async function resetSettings(){
   storageRemove(STORAGE_KEYS.weatherAddress);
   storageRemove(STORAGE_KEYS.language);
   storageRemove(STORAGE_KEYS.apEnabled);
+  storageRemove(STORAGE_KEYS.brightness);
+  storageRemove(STORAGE_KEYS.autoSleepEnabled);
+  storageRemove(STORAGE_KEYS.autoSleepSeconds);
+  storageRemove(STORAGE_KEYS.autostartAppId);
   loadStoredSettings();
   const button = qs("#resetSettings");
   const prevText = button.textContent;
@@ -6574,6 +6839,13 @@ qs("#exitBtn").addEventListener("click", exitToLauncher);
 qs("#settingsForm").addEventListener("submit", saveSettings);
 qs("#resetSettings").addEventListener("click", resetSettings);
 qs("#languageSelect").addEventListener("change", (ev) => applyLanguage(ev.target.value, true));
+qs("#brightnessRange").addEventListener("input", (ev) => {
+  setBrightnessControl(ev.target.value);
+  scheduleBrightnessApply(ev.target.value);
+});
+qs("#autoSleepSelect").addEventListener("change", (ev) => {
+  applyAutoSleepNow(ev.target.value).catch((err) => showToast("自动休眠服务未响应：" + (err.message || String(err)), true));
+});
 qs("#installAppBtn").addEventListener("click", openAppManageView);
 qs("#openServiceManageBtn").addEventListener("click", () => openAppManageView("service"));
 qs("#backFromAppManageBtn").addEventListener("click", returnToStartView);
