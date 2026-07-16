@@ -22,6 +22,7 @@ local AP_IP_WAIT_MS = 5000
 local AP_POLICY_POLL_MS = 250
 local AUTOSTART_BOOT_WINDOW_MS = 5000
 local AUTOSTART_DELAY_MS = 200
+local APP_LIST_POLL_MS = 1000
 local AUTOSTART_MARK_PATH = "/tmp/launcher_autostart_fired"
 local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 
@@ -67,6 +68,8 @@ local STATE = {
   repeat_up = 0,
   up_launch_fired = false,
   autostart_fired = false,
+  app_list_signature = "",
+  app_list_timer = nil,
   controller_timer = nil,
   controller_buttons = 0,
 }
@@ -498,9 +501,19 @@ local function start_slide(dir)
   end
 end
 
-local function load_apps()
+local function app_list_signature(list)
+  local ids = {}
+  for _, item in ipairs(list or {}) do
+    ids[#ids + 1] = text_or(item and item.id, "")
+  end
+  table.sort(ids)
+  return table.concat(ids, "\n")
+end
+
+local function load_apps(list)
   STATE.icon_sizes = {}
-  local list = app.list() or {}
+  list = type(list) == "table" and list or (app.list() or {})
+  STATE.app_list_signature = app_list_signature(list)
   local visible = {}
   for _, item in ipairs(list) do
     if has_display_icon(item) then
@@ -511,6 +524,24 @@ local function load_apps()
   clamp_index()
   render_initial()
   show_initial_labels()
+end
+
+local function start_app_list_watch()
+  if not tmr or not tmr.create then
+    return
+  end
+  local t = tmr.create()
+  STATE.app_list_timer = t
+  t:alarm(APP_LIST_POLL_MS, tmr.ALARM_AUTO, function()
+    if STATE.animating then
+      return
+    end
+    local ok, list = pcall(function() return app.list() end)
+    if ok and type(list) == "table"
+      and app_list_signature(list) ~= STATE.app_list_signature then
+      load_apps(list)
+    end
+  end)
 end
 
 local function schedule_reload(delay_ms)
@@ -704,6 +735,7 @@ end
 
 build_ui()
 load_apps()
+start_app_list_watch()
 sync_ntp_once()
 start_ap_policy()
 schedule_autostart()

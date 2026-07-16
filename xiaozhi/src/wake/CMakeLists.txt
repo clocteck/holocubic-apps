@@ -60,7 +60,14 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+if(NOT DEFINED WAKE_MODEL_PATH)
+    set(WAKE_MODEL_PATH "/sd/apps/xiaozhi/wake")
+endif()
 idf_build_set_property(COMPILE_DEFINITIONS "WAKE_USE_ESP_SR=1" APPEND)
+idf_build_set_property(COMPILE_DEFINITIONS
+    "WAKE_MODEL_PATH=${WAKE_MODEL_PATH}"
+    APPEND
+)
 set(_wake_ninja_cmd "")
 if(CMAKE_MAKE_PROGRAM AND EXISTS "${CMAKE_MAKE_PROGRAM}")
     set(_wake_ninja_cmd "${CMAKE_MAKE_PROGRAM}")

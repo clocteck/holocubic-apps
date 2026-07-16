@@ -18,8 +18,13 @@
 #define WAKE_ENGINE "WakeNet9s"
 #define WAKE_MODEL "wn9s_nihaoxiaozhi"
 #define WAKE_WORD "你好小智"
-#define WAKE_MODEL_PATH "/sd/apps/xiaozhi/wake"
-#define WAKE_MODEL_DIR WAKE_MODEL_PATH "/" WAKE_MODEL
+#define WAKE_STRINGIFY_INNER(value) #value
+#define WAKE_STRINGIFY(value) WAKE_STRINGIFY_INNER(value)
+#ifndef WAKE_MODEL_PATH
+#define WAKE_MODEL_PATH /sd/apps/xiaozhi/wake
+#endif
+#define WAKE_MODEL_PATH_STRING WAKE_STRINGIFY(WAKE_MODEL_PATH)
+#define WAKE_MODEL_DIR WAKE_MODEL_PATH_STRING "/" WAKE_MODEL
 #define WAKE_MODEL_INDEX_FILE WAKE_MODEL_DIR "/wn9_index"
 #define WAKE_MODEL_DATA_FILE WAKE_MODEL_DIR "/wn9_data"
 #define WAKE_SAMPLE_RATE 16000u
@@ -1220,7 +1225,7 @@ static int wake_required_model_files_ready(wake_instance_t *inst, const char **o
  */
 char *get_model_base_path(void)
 {
-    return (char *)WAKE_MODEL_PATH;
+    return (char *)WAKE_MODEL_PATH_STRING;
 }
 
 /**
@@ -1890,7 +1895,7 @@ static void push_status_table(lua_State *L, const module_host_api_v2 *host, wake
     set_string_field(L, host, "engine", WAKE_ENGINE);
     set_string_field(L, host, "model", WAKE_MODEL);
     set_string_field(L, host, "word", WAKE_WORD);
-    set_string_field(L, host, "model_path", WAKE_MODEL_PATH);
+    set_string_field(L, host, "model_path", WAKE_MODEL_PATH_STRING);
     set_string_field(L, host, "backend", WAKE_REAL_BACKEND ? "esp-sr" : "synthetic");
     set_boolean_field(L, host, "real_backend", WAKE_REAL_BACKEND);
     set_boolean_field(L, host, "initialized", wake_is_initialized(inst));
@@ -2017,7 +2022,7 @@ static int l_selftest(lua_State *L)
     set_string_field(L, host, "word", WAKE_WORD);
     set_string_field(L, host, "engine", WAKE_ENGINE);
     set_string_field(L, host, "model", WAKE_MODEL);
-    set_string_field(L, host, "model_path", WAKE_MODEL_PATH);
+    set_string_field(L, host, "model_path", WAKE_MODEL_PATH_STRING);
     set_string_field(L, host, "backend", WAKE_REAL_BACKEND ? "esp-sr" : "synthetic");
     set_boolean_field(L, host, "real_backend", WAKE_REAL_BACKEND);
     set_integer_field(L, host, "sample_rate", inst->sample_rate ? inst->sample_rate : WAKE_SAMPLE_RATE);
@@ -2365,7 +2370,7 @@ WAKE_MODULE_EXPORT int32_t module_luaopen_v1(void *instance, lua_State *L)
     set_string_field(L, host, "ENGINE", WAKE_ENGINE);
     set_string_field(L, host, "MODEL", WAKE_MODEL);
     set_string_field(L, host, "WORD", WAKE_WORD);
-    set_string_field(L, host, "MODEL_PATH", WAKE_MODEL_PATH);
+    set_string_field(L, host, "MODEL_PATH", WAKE_MODEL_PATH_STRING);
     set_boolean_field(L, host, "REAL_BACKEND", WAKE_REAL_BACKEND);
     set_integer_field(L, host, "SAMPLE_RATE", WAKE_SAMPLE_RATE);
     set_function_field(L, host, "info", l_info, inst);
