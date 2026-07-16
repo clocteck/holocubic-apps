@@ -521,7 +521,7 @@ end
 
 local function redraw_dashboard(cvs)
   local clock, date = dashboard_clock()
-  local weather = S.weather_city .. "//" .. S.weather_text .. "//" .. (S.weather_temp and tostring(math_floor(S.weather_temp + 0.5)) .. "C" or "--C")
+  local weather = S.weather_city .. "//" .. S.weather_text .. "//" .. (S.weather_temp and tostring(math_floor(S.weather_temp + 0.5)) .. "°C" or "--°C")
   local function weather_icon(x, y, code)
     code = tostring(code or "999")
     local is_rain = code:match("^3") ~= nil
