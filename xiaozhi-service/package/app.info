@@ -1,0 +1,7 @@
+name = XiaoZhi Service
+kind = service
+entry = main.lua
+allow_webui = true
+autostart_service = true
+description = Always-on XiaoZhi voice service with WakeNet and dialog overlay
+version = 1.0.0

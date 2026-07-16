@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "deny_apps": {
+    "holo-retro-go": true,
+    "mp3_player": true,
+    "Spectrum": true,
+    "videos": true
+  }
+}

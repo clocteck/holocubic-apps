@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XiaoZhi Service 信息</title>
+  <style>
+    :root { --bg:#f6f8fb; --surface:#ffffff; --text:#0f172a; --muted:#64748b; --line:#e2e8f0; --accent:#f59e0b; --soft:#fffbeb; --focus:rgba(37,99,235,.28); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); }
+    .page { width: min(960px, 100%); margin: 0 auto; padding: 14px; }
+    .top { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 36px rgba(15,23,42,.08); }
+    .icon { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 10px 24px rgba(15,23,42,.14); object-fit: cover; background: #fff; }
+    .kicker { margin: 0 0 4px; color: var(--accent); font-size: 13px; font-weight: 800; }
+    h1 { margin: 0; font-size: 32px; line-height: 1.05; letter-spacing: 0; }
+    .summary { margin: 8px 0 0; color: #475569; font-size: 15px; line-height: 1.45; }
+    .lang-toggle { min-width: 64px; min-height: 44px; border: 1px solid #bfdbfe; border-radius: 10px; background: var(--soft); color: var(--accent); font-size: 14px; font-weight: 800; cursor: pointer; }
+    .lang-toggle:focus-visible, .opensource a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .grid { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(220px,.75fr); gap: 12px; margin-top: 12px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+    h2 { margin: 0 0 10px; font-size: 17px; line-height: 1.2; }
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+    .list li { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 9px; align-items: start; }
+    .badge { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--soft); color: var(--accent); font-size: 13px; font-weight: 850; }
+    .list strong { display: block; font-size: 14px; line-height: 1.25; }
+    .list span span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .meta { display: grid; gap: 9px; }
+    .meta-item { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; }
+    .label { display: block; color: var(--muted); font-size: 12px; font-weight: 750; }
+    .value { display: block; margin-top: 2px; font-size: 16px; font-weight: 850; line-height: 1.2; overflow-wrap: anywhere; }
+    .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .requirement { margin-top: 12px; border-color: #f59e0b; background: #fffbeb; }
+    .requirement p { margin: 6px 0 0; color: #92400e; font-size: 14px; line-height: 1.55; }
+    .opensource { margin: 12px 2px 0; color: #8792a3; font-size: 11px; line-height: 1.45; text-align: center; }
+    .opensource a { color: inherit; font-weight: 700; text-decoration: none; overflow-wrap: anywhere; }
+    [data-lang="en"] .zh, [data-lang="zh"] .en { display: none; }
+    @media (max-width: 660px) { .page { padding: 12px; } .top { grid-template-columns: 56px minmax(0,1fr) auto; padding: 12px; gap: 12px; } .icon { width:56px; height:56px; border-radius:14px; } h1 { font-size: 28px; } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 380px) { .top { grid-template-columns: 48px minmax(0,1fr); } .icon { width:48px; height:48px; } .lang-toggle { grid-column: 1 / -1; justify-self: end; } }
+  </style>
+</head>
+<body data-lang="zh">
+  <main class="page">
+    <section class="top" aria-labelledby="title">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAEE0AABBNAWeMAeAAABFxSURBVHhe7V0LdBTVGZ4E5RVASLKv8DLsbgJaH8fWY6vSan0AIpDsTggvUUA5KgerCHhUlCpofbX1iVpb29Nja6VVAZN95KlYfECpVOVI1T60PvCALxRETe7t/925m0zCJtmZ3SQ74X7n/Ceb+Wd2Zu7/3f/+/3/vzmgKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKfQMP8SO0F9hAbSMfJD4r9GFE2EgtzspI1pL8meRlLcp2kfxXiwnZRdu20t8ntSj/GX0Oa7V8tDxawZHYxAu0GnaRVseiZNB92vOcay+SbCF5juRZkgYp+IxtfyXBPti3hn2p1TXX0t+L6XiX/FaFrMeTzKs1sJvI8O9rL0ij1pHESWIWBMckSFPPdtN33qI9w4rkWRSyEjVsCRn+I+0lMhp6djLD2hF8F76znu3RatmVWjnPlWdUyApU8WKtvrk+44ZvL61E2KxtYCXy7Aq9igibQu55t3D3yYzWHYI4ooHt1ar5DHkVCr2CKJunNbJvRQAXNRmouwXnQuDYSFLddLG8mtQQZ4NpmFqkNTRdQuQdKrcqWEZV0zxtMxkAbrknjZ8QnLOeBEFmNWUKqaCWD9OizVu1v9Ex20jibIfIVhQsIsrOJRfc1GvGNwtIAG9QxabLq+sYcX6JMHziWBAhTkGlggVUsTHkQvf2uNvvSBLDQT37jDxBUF5lckQoPUUQmTgWn+NsjdQqdIlVPId6//Mi4MsG4ycE14LAMMq3dVpWrmLLkxBgudQqdIlqyvNfNjVgtgmurZqtkFdrBHz1bIFWw27UYiQR1iC8RWJ/8Zm2QYd9EByqwLADVHEPNdLH3ZrnpyuIB2rZPnGt1ay/CPgw5qOno6IIg5s9V2L4gA77qMCwE0TYWtHDssn1txdcm/BQTddpkW/DIshLtl9nsh1/2dXyrhUEYmwEjf17u7X310ixOmfQXuAFouw/1JNvFXFBsn06EhAIBIiya+WdKwhE2ELhJpM1WroCF0wZRU60WUji/6T7piqYRIqyVSJghRdIdQjAvjXsbbrfkfLOFQQQPKHgYm7kdAU9fTPn/R/cyYdX3MELT1/KC09bykeEbuMD7n9V6Gx7AxAgxmpFQFfXtIy8wmr6rtVk8EZRPUzsZ3xuFDrs00gZAeIHBRNqmI960gExPWtu5HSFDJx3XTX3jpnKfb5z6e807h07TXz2jT6P563cYN8T1JLE2beHTB+rNNAGoqzc6FEZFHK7/dft5N7RU7n36BncE9TbSnEZ942czAfcvcM+CeCxIk1z5V0YaF8IEsMau1lqFZIiwm7P6PgPt05GHaHfLnr7IcaX4iuaxPOn3Wy4aTtDAa450nyfvAsDsaYlLaVgjP8Y86OmuoFCEsTZUxkd/ynSz4k08cJTlwiXn8z4EHgG13cX8ZxNXxkuPdl3dSa45mhzTN6Fgci+QrqfnSLSh6iArytwpIDb047KzSLTvcIfXUnj/vlJjQ8RBDhpIc/ZaJMAIuInYz/RbvXQUyxfBHuN/BoV8HWFbfwIasQ320TO6QrFE/3W7+Wuky8hI09PanyId+QUnj91tTHdbGcIEDUL9q5Ydq5gE+t5HhHgPdsFoERxB59hxC0U/P3qDeHajd5fcYjhhQTCghwDfrHdfhBoFIT2EHmPknejYBlVfDg14l7RmMkauSORxZyW4g6MSMYftKaBe2Fciv49JYbxvaOmiN4usgF/eSsBimfwAfe9KnN6G2IQ4BNRxVSwCasEQC9PUtwZPuceftTCh0WvF4aG8ceVU6o3RWQDI8K3cTeN957SStpeJvQgSeEZy3hOTVOrF7Ei4prZx4oA6cAqAToq7lBOD0HPFsYdO537yMBDrlpvVPzIY+RG9hNxdnGvJAc8Ab4j7/qoMdef7HydiSJABmCFAF0Vd4QYxveMr+SD7njBMCx6NzwHKo2Uuw9b/Fvu857TQhT3iRfx3A37pEEtiCJABpAqAWDAFIo7qPC5T5jPj/zNv5P3ajpP7oYvhNFFhkAkABmGLX6Ui1VICbK0Py6ZKAJkAKkSgAyTUnGHerTr+5cZx3SU2xMxBq+KtRKJhgNvMMz7P/I2z6lnLQFm0mPNogiQAVghQPW33PWDyzsngCjuLOq8uEPbc2qbRQDYki1QRuA+fj4v/OFPUp8tVATIAKwMAdQzR5StpZ47KanxIUj5YMAuezAyiftfo1SQMoJAyDiePiOLgGdIabZQESADsBIEkjEG3P2KEe0jlWtnfAgMWHD2Sp4TOygrdR0IAsqH/sm9qAv4JQHMkspsoSJABmCFABAyxpBlfxEzed6iyaKYA7ffMiwgqCPdiLJbjPE82RqDloDyDrHvIcaX0uVsoSJAW7j95dO8pXP/6AnoK7SJE/vJzZ3DKgEQpZPxBv58m6jju09cwF3fu1gUg8wTPz7P2fyo+euMcRzHtPuOjMwW2iCAJxheSm30uNsfmik39Q0UBipO8JZUct+EebzomPncHQhdIVWdwyoBEgK3TC4+d8N+MtABnhs/yPOnr6Hxm/J71P8DYTGWD73icWPa1tyDLQWUncwWWiQAdYyFRRPmc9/4edxbOpt7A6GJUuV8uAP6E77xc0XD+SbMJQKEH5WqzmGXABAYFS4exiE3nVt9QET2IkhEZE9jO9x4HqV8bWoCqQaUNMTkn3djx7OFFglAbXQ3Ogh5ASLBHASftVLlbBQUhwLU674RjY6GI3a7/fo0qe4c6RDALHL1bb8nP+aukxeLbMBI7yiyp14+8M6X25KAPEinASXmEciDDLxzq+FtzOdKiFUP4Nd/6C2ZRd+Pdqrg8Jhef8VJUu1cUIPdlOj9wvgBfatUdY1MEQACEjzP+ZG/f5d7jp1DOT7FBEQCVPxEoeehN+QqHrk/GfaQgBKCeYXE8NGR8SEWCQCQZ6zzlVLvp7ZCm7mD4fulyqGgYI9uape3FMzGTc2B+18gtV0jkwRICBl5wAOvU+8KCeMLEqDgc9w8fsQf3jMCQ5AgSUCJEnH+lFV84B0vGsZvH0CaxQYBXEG9DJ1EdBbyABSrfOD5ztzBUu08uPzlp4gbES5tJoy/d8jYGakvkOgOAkDI3Q+6bYuYNcQwIEgwcgp3nXIp7/fUp0a51+QJEgFl7tNfGmN+V1VAiA0CFBWFB7qD+rtGmxke0zWufJJUOw8UyKxtCf5E79f/JFWpobsIACES5F1bZeT6KPYQCRD0FZy1kudGZaEIPRwCYyOYRFDZleETYoMAAPX6B1vbTATM90qV80BjWGPCpYEAhUH9AqlKDd1JABiShoOhSx4zpn+xVoA8FT6PKLuV59Q18RykhHZ/LmaTAN6S8OSWYQBDZ0B/hTbnGFoHoWiCPoLY+wlcv4i4g/pBVzBULNWpoTsJAEGvJsMOn3uvKA6h0UXDo2R8xtW88EwSuz8Xs+sBxoULiYyfe2S7URsedJVUjpVq58AY/+kmMP4Tk2lse02qUkd3EwBCbj2nrpnnT7/ZGA4MsgoSCKE0MeUJILPYJADgCYZfMHuBAvIKUuUc0Pi/UBQ06CZk9P+4VKWOniAAgj0EeZEDNP6vaFMybiOpTACZJQ0CuEQc0JoOUprqvOcFuP36re2CmVVSlTp6ggAJoXhADAWU87cxvEm6nAAyS1oeQF9i7jwIDKXKOUCPb7mJ0jnc5dfnSVXq6CkCINjL9M/F0iPAeS21ExoKKJiOSpVzQKx9tnUcq+Ruf+gMqUodPUmATEwAmSUNAhT5wye2lIQNImyXKueACPB34+JFUNXsCoaPk6rU0VMEgDvPxASQWdIgALIlCpq/QiZgVAT1t8eMmdRfqh2A8fqRFMm+iZ6PmyAX9pVrrI1UpidjAArs0p4AMksaBEAqSEPop8iiQABqv4+GHq0Pk+rsh1HSDL8j2ItUMBDel18yyyfVqaMnCQAhw6Y1AWSWNAgwrHjyUBjdIAA6kP6Jr2RGvlRnP44qmTaEjP4BCGDUAvTPCo6tdEt16mjkeVqs+X3hcpM1cqYFZV8ysO0JILMYBNgjSGwRw8freeT2329pv4D+ua326y14vecPSkxqGDdg0wOsf/1IIsBbIu1K1sjdJTA0agNWJ4DMgmOi7H9anFmezRMeIKDvTrSf4zyARgELApfEEIAYwDNaP1pqLYDjGUGvpOx2MykwNiZ/rEwAmQXzBzH2htbQkNr6RxOKikQZ/WMYH23o9jssBoDhKAj8h8gCjNKqvSwAiLKNYqFGskbOZjEeFVcj78ISUPunTnMgkQUQGf41atTEAVLtDJAHeM6oA2AtQCUvsLvIMcbuyuhDonpKjCeArZN3YQm+QMUJbeoAxoygs0Dj1hOJ5U0gAjF6llRZQ5xVOtIDiDWGLPXVTyYYU8JGJVAW05y3QJTc1u1t5gKCYXvPv93ER1NDHuyy8pZNgkwh3tyk1bCAvAtLcAVCl5rnAqjtHpEq54A8wOI2ExrB8GNSZR145m6mHxbZnWKsK9ym0R87oM5zj7nzeAKha6TKOfAFw6eLLEC4MTGO7ZAq64iwyxwVB4ingbJl8uotgzpLy0oqMXwGwlOlyjkoKK50I/8XlUCsbAnqB7zFFfZeyIx398bZZz1WEUxHRNrI9mtPHxglr94S8oyVVCIFlBnUN4X+snFS7SwQk7eYmezxhyukyjqQDTjhhRHo/ZFm2/P3hYHwOa0B4Cz0/p1aebkzX1VLvd60KESsCvqdVFlHjI2ioOqLrPYCuLZadkCrZ7Z7LHWaX7YLnp0XACYgfu6UYLOIB8Ifos4t1dYRYSsd8NKon8qrtY6JE/tRG71lTgFdJSHnvp4Wc9jU699J3JDMCiql2jrw6Fg8Oxg5djYNBbgW1Cri7HWtgduu2Pn8M89tGTKNCuAezAtItTNB0f9dCZdmRLSh56TKHmK8VKtj+9r8eqe3BRM/9eT6n2HHy6u0BXcwtKk1dSb379d/LVXOhad45rEUzTa3KW2W6GdKtT1Us5CYIMqGeABRP2oUVaztyyEsosBfcRK1T5O5nbwlFadJtbNBvb66JbCZMC8zgQ1qAxgKQILe8gQwPuoTUXaVvCrboJT5LuP5APCU8AKhLVLlfHjHhU6F+wcJio650H5ZuD1ibInwBFgv0JMkwLlwTvT8SGbe8UfB31K0DdoIgvkAqeobIEZf6Bs/u4EYfheWjMnN6SPGZtL4u8+YfOkhQcDXwPbTua391rETjMc6ykB4ja9kdkOhP3y53KyQEjay48gdbxNpWHcNCfhOuHxxDrZDq+LOf3pHnwLe1VvLrifjfC6qcTBWMkMmBLOLcOGQrmYa8V34znr2JWUgN2kPq7eAZC9izE/u+R7yBJ8Ko2Fmrr2ByUvkVH/NB615lg++qYHnPHPwUM+BKV0ciyAPL4SuZ+toe6k8i0LWo5aPJiJcpdWwl0i+ETECnvhNBs2JN/P8Sddxn/vHvMh9lvhRaG7ka8PY2Af71rAm+o5tWl3TCi3ObKxnVMgeNKJ4xC8koz6gbWY1A2+o+bAIvwAKGD/6KPKewwev3Lhbe57VUW9/kNz8Qtpvgjxaoa/BPa7sxkRdQtQmUH0rnmG/hq/gLLiPLl/VlgCUdwfKbpBqhb4Od0Bv5wHwObxaqhX6OhQBDnMoAhzmUAQ4zKEIcJhDEeAwhyLAYQ5FgMMcigCHOdx+fRnezdNKAHwOLZdqBScBL1Rwl1YscJfoN6JnpyLU2+PiCWaSAFiA6Q7q9cn2TSp0LlfJzEXDiuc4e8m204HHppBBtmIxJdx4qmL8TgGPhzcIgM/YlmzfDmXCBTh2hzc4u0BejkJPwxXQLy0yDNErgnM78kHOfQXU+6/obQJkbIWzgnUYT9TUd8IQSd10N4ogXkB/2+cvGykvR6E3gOfneYMzl3mCFauRyvWM0LlKK5cXjKnwyMtQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUMgSaNr/AQZPZPmPhBkKAAAAAElFTkSuQmCC" class="icon" width="64" height="64" alt="XiaoZhi AI 应用图标" data-alt-zh="XiaoZhi AI 应用图标" data-alt-en="XiaoZhi AI app icon">
+      <div>
+        <p class="kicker zh">小智语音助手</p><p class="kicker en">XiaoZhi voice assistant</p>
+        <h1 id="title">XiaoZhi Service</h1>
+        <p class="summary zh">连接官方或自建小智服务端，支持语音会话、设备 MCP 和表情 UI。</p><p class="summary en">Connects to official or self-hosted XiaoZhi servers with voice chat, device MCP, and emoji UI.</p>
+      </div>
+      <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
+    </section>
+    <section class="panel requirement" aria-labelledby="requirement-title">
+      <h2 id="requirement-title" class="zh">系统与应用要求</h2><h2 class="en">System and app requirements</h2>
+      <p class="zh">这是独立的后台小智语音服务，不会覆盖或替换原有的“小智”前台 App。需要系统固件 1.102 或更高版本；版本不足时仅在串口输出错误，不会继续加载 Lua 模块、动态模块、WakeNet 或音频资源。</p>
+      <p class="en">This is a separate background XiaoZhi voice service and does not replace the existing XiaoZhi foreground app. Firmware 1.102 or newer is required. On older firmware it only reports an error over serial and does not load Lua modules, native modules, WakeNet, or audio resources.</p>
+    </section>
+    <div class="grid">
+      <section class="panel" aria-labelledby="feature-title">
+        <h2 id="feature-title" class="zh">功能说明</h2><h2 class="en">Features</h2>
+        <ul class="list zh">
+          <li><span class="badge">1</span><span><strong>语音唤醒</strong><span>支持“你好小智”唤醒词。</span></span></li>
+          <li><span class="badge">2</span><span><strong>服务端连接</strong><span>兼容官方 OTA 激活和自建服务端 WebSocket。</span></span></li>
+          <li><span class="badge">3</span><span><strong>设备 MCP</strong><span>支持设备状态、应用启动、时间、亮度和蓝牙工具。</span></span></li>
+        </ul>
+        <ul class="list en">
+          <li><span class="badge">1</span><span><strong>Wake word</strong><span>Supports the wake phrase Ni Hao XiaoZhi.</span></span></li>
+          <li><span class="badge">2</span><span><strong>Server connection</strong><span>Supports official OTA activation and self-hosted WebSocket servers.</span></span></li>
+          <li><span class="badge">3</span><span><strong>Device MCP</strong><span>Provides device status, app launch, time, brightness, and Bluetooth tools.</span></span></li>
+        </ul>
+      </section>
+      <section class="panel" aria-labelledby="info-title">
+        <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
+        <div class="meta">
+          <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 5.9 MB</span><span class="value en">About 5.9 MB</span></div>
+          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.0</span></div>
+        </div>
+        <p class="note zh">页面为应用说明，图标已内嵌。</p><p class="note en">This page describes the app, with the icon bundled inline.</p>
+      </section>
+    </div>
+    <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
+  </main>
+  <script>
+    (function () {
+      var body = document.body;
+      var toggle = document.querySelector("[data-lang-toggle]");
+      var img = document.querySelector("[data-alt-zh]");
+      var lang = "zh";
+      try { lang = localStorage.getItem("xiaozhi.info.lang") || lang; } catch (err) { lang = "zh"; }
+      function applyLang(next) {
+        lang = next === "en" ? "en" : "zh";
+        body.setAttribute("data-lang", lang);
+        document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+        document.title = lang === "zh" ? "XiaoZhi Service 信息" : "XiaoZhi Service Info";
+        if (toggle) { toggle.textContent = lang === "zh" ? "EN" : "中文"; toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文"); }
+        if (img) { img.alt = lang === "zh" ? img.getAttribute("data-alt-zh") : img.getAttribute("data-alt-en"); }
+        try { localStorage.setItem("xiaozhi.info.lang", lang); } catch (err) {}
+      }
+      if (toggle) { toggle.addEventListener("click", function () { applyLang(lang === "zh" ? "en" : "zh"); }); }
+      applyLang(lang);
+    })();
+  </script>
+</body>
+</html>

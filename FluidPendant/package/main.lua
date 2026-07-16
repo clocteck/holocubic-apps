@@ -6,14 +6,13 @@ if prev and prev.stop then
 end
 
 FLUID_PENDANT_APP = {
-  VERSION = "2026-07-14-lvgl-throttle-v1"
+  VERSION = "2026-07-16-viper-display-scan-v1"
 }
 
 local APP = FLUID_PENDANT_APP
 
 local pcall_fn = pcall
 local math_floor = math.floor
-local math_sqrt = math.sqrt
 local math_sin = math.sin
 local math_cos = math.cos
 local math_rad = math.rad
@@ -117,51 +116,11 @@ local C = {
   edge = 0x000000,
 }
 
-local particle_x = {}
-local particle_y = {}
-local particle_vx = {}
-local particle_vy = {}
-
-local u_vel = {}
-local v_vel = {}
-local u_prev = {}
-local v_prev = {}
-local u_weight = {}
-local v_weight = {}
-local particle_density = {}
-local solid_mask = {}
-local base_cell_type = {}
-local cell_type = {}
-
-local cell_particle_count_prefix = {}
-local particle_pos_id = {}
-local particle_cell_nr = {}
-local fluid_cells = {}
-local fluid_count = 0
-
-local pressure_right = {}
-local pressure_top = {}
-local pressure_sx0 = {}
-local pressure_sx1 = {}
-local pressure_sy0 = {}
-local pressure_sy1 = {}
-local pressure_s = {}
-local u_restore_cells = {}
-local v_restore_cells = {}
-local u_restore_count = 0
-local v_restore_count = 0
-
-local display_cell = {}
 local display_x = {}
 local display_y = {}
-local display_density = {}
-local display_lit = {}
-local display_edge_count = {}
 local display_count = 0
 local lvgl_draw_command_count = 0
 
-local invert_spacing = 1 / SPACING
-local particle_rest_density = 0
 local min_x = SPACING + PARTICLE_RADIUS
 local min_y = SPACING + PARTICLE_RADIUS
 local max_x = 0
@@ -854,6 +813,86 @@ void fluid_g2p(int32_t *p, int32_t *g, uint8_t *ct, int32_t *cfg) {
 }
 ]=]
 
+APP.VIPER_SRC.display_scan = [=[
+void fluid_display_scan(int32_t *g, int32_t *level, uint8_t *lit,
+                        int32_t *edge, uint16_t *changed, uint32_t *stats,
+                        int32_t *cfg, int32_t *display_cfg, int32_t full_redraw) {
+  int32_t cnx = cfg[1];
+  int32_t cny = cfg[2];
+  int32_t q = cfg[4];
+  int32_t stride = cfg[25];
+  int32_t density0 = stride * 6;
+  int32_t blend = display_cfg[0];
+  int32_t on_threshold = display_cfg[1];
+  int32_t off_threshold = display_cfg[2];
+  int32_t edge_margin = display_cfg[3];
+  int32_t confirm_frames = display_cfg[4];
+  int32_t edge_on_threshold = on_threshold + edge_margin;
+  int32_t edge_off_threshold = off_threshold - edge_margin;
+  int32_t changed_count = 0;
+  int32_t slot = 0;
+
+  for (int32_t y = 1; y < cny - 1; y = y + 1) {
+    for (int32_t x = 1; x < cnx - 1; x = x + 1) {
+      int32_t cell = x * cny + y;
+      int32_t density = g[density0 + cell];
+      int32_t next_level = (level[cell] * (q - blend) + density * blend) / q;
+      int32_t prev_lit = lit[cell];
+      int32_t next_lit = prev_lit;
+      int32_t edge_count = edge[cell];
+
+      level[cell] = next_level;
+
+      if (next_level >= edge_on_threshold) {
+        next_lit = 1;
+        edge_count = 0;
+      } else if (next_level <= edge_off_threshold) {
+        next_lit = 0;
+        edge_count = 0;
+      } else if (next_level >= on_threshold) {
+        if (prev_lit != 0) {
+          edge_count = 0;
+        } else {
+          if (edge_count > 0) { edge_count = edge_count + 1; }
+          else { edge_count = 1; }
+          if (edge_count >= confirm_frames) {
+            next_lit = 1;
+            edge_count = 0;
+          }
+        }
+      } else if (next_level <= off_threshold) {
+        if (prev_lit != 0) {
+          if (edge_count < 0) { edge_count = edge_count - 1; }
+          else { edge_count = -1; }
+          if (0 - edge_count >= confirm_frames) {
+            next_lit = 0;
+            edge_count = 0;
+          }
+        } else {
+          edge_count = 0;
+        }
+      } else {
+        edge_count = 0;
+      }
+
+      lit[cell] = next_lit;
+      edge[cell] = edge_count;
+
+      if ((full_redraw != 0 && next_lit != 0) ||
+          (full_redraw == 0 && next_lit != prev_lit)) {
+        int32_t command = slot;
+        if (next_lit != 0) { command = command + 32768; }
+        changed[changed_count] = command;
+        changed_count = changed_count + 1;
+      }
+      slot = slot + 1;
+    }
+  }
+
+  stats[0] = changed_count;
+}
+]=]
+
 
 local canvas = nil
 local time_hour_label = nil
@@ -897,14 +936,7 @@ local function cell_index(x, y)
   return x * CELL_NUM_Y + y + 1
 end
 
-local function fill_array(t, count, value)
-  for i = 1, count do
-    t[i] = value
-  end
-end
-
 local function init_sim_bounds()
-  invert_spacing = 1.0 / SPACING
   min_x = SPACING + PARTICLE_RADIUS
   min_y = SPACING + PARTICLE_RADIUS
   max_x = (CELL_NUM_X - 1) * SPACING - PARTICLE_RADIUS
@@ -916,12 +948,6 @@ local function base_type_for_cell(x, y)
     return SOLID_CELL
   end
   return AIR_CELL
-end
-
-local function init_display_state()
-  fill_array(display_density, CELL_COUNT, 0)
-  fill_array(display_lit, CELL_COUNT, false)
-  fill_array(display_edge_count, CELL_COUNT, 0)
 end
 
 local function now_us()
@@ -1064,109 +1090,13 @@ local function update_time_label()
   end
 end
 
-local function setup_solid_mask()
-  u_restore_count = 0
-  v_restore_count = 0
-
-  for x = 0, CELL_NUM_X - 1 do
-    for y = 0, CELL_NUM_Y - 1 do
-      local base_type = base_type_for_cell(x, y)
-      local idx = x * CELL_NUM_Y + y + 1
-      solid_mask[idx] = (base_type == SOLID_CELL) and 0 or 1
-      base_cell_type[idx] = base_type
-    end
-  end
-
-  for x = 0, CELL_NUM_X - 1 do
-    for y = 0, CELL_NUM_Y - 1 do
-      local idx = x * CELL_NUM_Y + y + 1
-      local solid = base_cell_type[idx] == SOLID_CELL
-      local left_solid = x > 0 and base_cell_type[(x - 1) * CELL_NUM_Y + y + 1] == SOLID_CELL
-      local bottom_solid = y > 0 and base_cell_type[x * CELL_NUM_Y + y] == SOLID_CELL
-
-      if solid or left_solid then
-        u_restore_count = u_restore_count + 1
-        u_restore_cells[u_restore_count] = idx
-      end
-      if solid or bottom_solid then
-        v_restore_count = v_restore_count + 1
-        v_restore_cells[v_restore_count] = idx
-      end
-    end
-  end
-
-  for x = 1, CELL_NUM_X - 2 do
-    for y = 1, CELL_NUM_Y - 2 do
-      local center = x * CELL_NUM_Y + y + 1
-      local left = (x - 1) * CELL_NUM_Y + y + 1
-      local right = (x + 1) * CELL_NUM_Y + y + 1
-      local bottom = x * CELL_NUM_Y + (y - 1) + 1
-      local top = x * CELL_NUM_Y + (y + 1) + 1
-      local sx0 = solid_mask[left]
-      local sx1 = solid_mask[right]
-      local sy0 = solid_mask[bottom]
-      local sy1 = solid_mask[top]
-
-      pressure_right[center] = right
-      pressure_top[center] = top
-      pressure_sx0[center] = sx0
-      pressure_sx1[center] = sx1
-      pressure_sy0[center] = sy0
-      pressure_sy1[center] = sy1
-      pressure_s[center] = sx0 + sx1 + sy0 + sy1
-    end
-  end
-end
-
 local function build_display_lookup()
   display_count = 0
   for y = 1, CELL_NUM_Y - 2 do
     for x = 1, CELL_NUM_X - 2 do
       display_count = display_count + 1
-      display_cell[display_count] = cell_index(x, y)
       display_x[display_count] = MATRIX_X + (x - 1) * DOT_PITCH
       display_y[display_count] = MATRIX_Y + (y - 1) * DOT_PITCH
-    end
-  end
-end
-
-local function init_particles()
-  fill_array(particle_x, NUMBER_OF_PARTICLES, SPACING + PARTICLE_RADIUS)
-  fill_array(particle_y, NUMBER_OF_PARTICLES, SPACING + PARTICLE_RADIUS)
-  fill_array(particle_vx, NUMBER_OF_PARTICLES, 0)
-  fill_array(particle_vy, NUMBER_OF_PARTICLES, 0)
-
-  fill_array(u_vel, CELL_COUNT, 0)
-  fill_array(v_vel, CELL_COUNT, 0)
-  fill_array(u_prev, CELL_COUNT, 0)
-  fill_array(v_prev, CELL_COUNT, 0)
-  fill_array(u_weight, CELL_COUNT, 0)
-  fill_array(v_weight, CELL_COUNT, 0)
-  fill_array(particle_density, CELL_COUNT, 0)
-  fill_array(cell_type, CELL_COUNT, FLUID_CELL)
-  init_display_state()
-
-  particle_rest_density = 0
-  init_sim_bounds()
-  setup_solid_mask()
-
-  local h = SPACING
-  local r = PARTICLE_RADIUS
-  local dx = 2.0 * r
-  local dy = 0.86602540378 * dx
-
-  local p_num = 1
-  for i = 0, CELL_NUM_X - 1 do
-    for j = 0, CELL_NUM_Y - 1 do
-      if p_num <= NUMBER_OF_PARTICLES then
-        local px = h + r + dx * i + ((j % 2 == 0) and 0 or r)
-        local py = h + r + dy * j
-        if px <= (CELL_NUM_X - 1) * h - r and py <= (CELL_NUM_Y - 1) * h - r then
-          particle_x[p_num] = px
-          particle_y[p_num] = py
-          p_num = p_num + 1
-        end
-      end
     end
   end
 end
@@ -1212,7 +1142,7 @@ end
 function APP.init_viper_engine()
   local viper_mod = rawget(_G, "viper")
   if not viper_mod or not viper_mod.compile_c or not viper_mod.buf then
-    return false
+    return false, "viper runtime unavailable"
   end
 
   init_sim_bounds()
@@ -1226,6 +1156,12 @@ function APP.init_viper_engine()
     ctx.fluid = viper_mod.buf(CELL_COUNT * 2)
     ctx.stats = viper_mod.buf(8 * 4)
     ctx.cfg = viper_mod.buf((APP.CFG.COUNT + NUMBER_OF_PARTICLES + CELL_COUNT + 1 + NUMBER_OF_PARTICLES) * 4)
+    ctx.display_level = viper_mod.buf(CELL_COUNT * 4)
+    ctx.display_lit = viper_mod.buf(CELL_COUNT)
+    ctx.display_edge = viper_mod.buf(CELL_COUNT * 4)
+    ctx.display_changed = viper_mod.buf(CELL_COUNT * 2)
+    ctx.display_stats = viper_mod.buf(4)
+    ctx.display_cfg = viper_mod.buf(5 * 4)
 
     ctx.integrate_push = viper_mod.compile_c(APP.VIPER_SRC.integrate_push, { bounds = false })
     ctx.push_apply = viper_mod.compile_c(APP.VIPER_SRC.push_apply, { bounds = false })
@@ -1233,6 +1169,7 @@ function APP.init_viper_engine()
     ctx.finish = viper_mod.compile_c(APP.VIPER_SRC.finish, { bounds = false })
     ctx.force = viper_mod.compile_c(APP.VIPER_SRC.force, { bounds = false })
     ctx.g2p = viper_mod.compile_c(APP.VIPER_SRC.g2p, { bounds = false })
+    ctx.display_scan = viper_mod.compile_c(APP.VIPER_SRC.display_scan, { bounds = false })
 
     ctx.cfg:set32(APP.CFG.N, NUMBER_OF_PARTICLES)
     ctx.cfg:set32(APP.CFG.CNX, CELL_NUM_X)
@@ -1261,6 +1198,11 @@ function APP.init_viper_engine()
     ctx.cfg:set32(APP.CFG.SOLID_CELL, SOLID_CELL)
     ctx.cfg:set32(APP.CFG.GRID_STRIDE, CELL_COUNT)
     ctx.cfg:set32(APP.CFG.DISPLAY_BLEND_Q, APP.qnum(DISPLAY_DENSITY_BLEND))
+    ctx.display_cfg:set32(0, APP.qnum(DISPLAY_DENSITY_BLEND))
+    ctx.display_cfg:set32(1, APP.qnum(DISPLAY_ON_THRESHOLD))
+    ctx.display_cfg:set32(2, APP.qnum(DISPLAY_OFF_THRESHOLD))
+    ctx.display_cfg:set32(3, APP.qnum(DISPLAY_EDGE_MARGIN))
+    ctx.display_cfg:set32(4, DISPLAY_EDGE_CONFIRM_FRAMES)
 
     init_viper_particles(ctx)
 
@@ -1287,13 +1229,12 @@ function APP.init_viper_engine()
   if print then
     print("[FluidPendant] viper disabled:", tostring(ctx_or_err))
   end
-  return false
+  return false, tostring(ctx_or_err or "viper initialization failed")
 end
 
 function APP.viper_particles_to_grid(ctx)
   ctx.clear_scatter(ctx.p, ctx.g, ctx.ct, ctx.base, ctx.cfg)
   ctx.finish(ctx.g, ctx.ct, ctx.base, ctx.fluid, ctx.stats, ctx.cfg)
-  particle_rest_density = (ctx.cfg:get32(APP.CFG.REST_DENSITY_Q) or 0) / FX_Q
 end
 
 function APP.viper_simulation_step(ctx, x_accel, y_accel)
@@ -1302,461 +1243,6 @@ function APP.viper_simulation_step(ctx, x_accel, y_accel)
   APP.viper_particles_to_grid(ctx)
   ctx.force(ctx.g, ctx.base, ctx.fluid, ctx.stats, ctx.cfg)
   ctx.g2p(ctx.p, ctx.g, ctx.ct, ctx.cfg)
-end
-
-local function integrate_particles(x_accel, y_accel)
-  for i = 1, NUMBER_OF_PARTICLES do
-    local vx = particle_vx[i] + x_accel * DT
-    local vy = particle_vy[i] + y_accel * DT
-    local x = particle_x[i] + vx * DT
-    local y = particle_y[i] + vy * DT
-
-    if x < min_x then
-      x = min_x
-      vx = vx * BOUNCYNESS
-    end
-    if x > max_x then
-      x = max_x
-      vx = vx * BOUNCYNESS
-    end
-    if y < min_y then
-      y = min_y
-      vy = vy * BOUNCYNESS
-    end
-    if y > max_y then
-      y = max_y
-      vy = vy * BOUNCYNESS
-    end
-
-    particle_vx[i] = vx
-    particle_vy[i] = vy
-    particle_x[i] = x
-    particle_y[i] = y
-  end
-end
-
-local function enforce_particle_bounds()
-  for i = 1, NUMBER_OF_PARTICLES do
-    local x = particle_x[i]
-    local y = particle_y[i]
-
-    if x < min_x then
-      x = min_x
-      particle_vx[i] = particle_vx[i] * BOUNCYNESS
-    end
-    if x > max_x then
-      x = max_x
-      particle_vx[i] = particle_vx[i] * BOUNCYNESS
-    end
-    if y < min_y then
-      y = min_y
-      particle_vy[i] = particle_vy[i] * BOUNCYNESS
-    end
-    if y > max_y then
-      y = max_y
-      particle_vy[i] = particle_vy[i] * BOUNCYNESS
-    end
-
-    particle_x[i] = x
-    particle_y[i] = y
-  end
-end
-
-local function push_particles_apart(n_iters)
-  local px_arr = particle_x
-  local py_arr = particle_y
-  local prefix_arr = cell_particle_count_prefix
-  local pos_id = particle_pos_id
-  local particle_cell = particle_cell_nr
-  local h1 = invert_spacing
-  local cny = CELL_NUM_Y
-  local sqrt_fn = math_sqrt
-
-  fill_array(prefix_arr, CELL_COUNT + 1, 0)
-
-  for i = 1, NUMBER_OF_PARTICLES do
-    local xi = math_floor(px_arr[i] * h1)
-    local yi = math_floor(py_arr[i] * h1)
-    if xi < 0 then xi = 0 elseif xi >= CELL_NUM_X then xi = CELL_NUM_X - 1 end
-    if yi < 0 then yi = 0 elseif yi >= CELL_NUM_Y then yi = CELL_NUM_Y - 1 end
-    local cell_nr = xi * cny + yi + 1
-    particle_cell[i] = cell_nr
-    prefix_arr[cell_nr] = prefix_arr[cell_nr] + 1
-  end
-
-  local prefix = 0
-  for i = 1, CELL_COUNT do
-    prefix = prefix + prefix_arr[i]
-    prefix_arr[i] = prefix
-  end
-  prefix_arr[CELL_COUNT + 1] = prefix
-
-  for i = 1, NUMBER_OF_PARTICLES do
-    local cell_nr = particle_cell[i]
-    local slot = prefix_arr[cell_nr] - 1
-    prefix_arr[cell_nr] = slot
-    pos_id[slot + 1] = i
-  end
-
-  local min_dist = 2.0 * PARTICLE_RADIUS
-  local min_dist2 = min_dist * min_dist
-
-  for _ = 1, n_iters do
-    for i = 1, NUMBER_OF_PARTICLES do
-      local px = px_arr[i]
-      local py = py_arr[i]
-      local pxi = math_floor(px * h1)
-      local pyi = math_floor(py * h1)
-      if pxi < 0 then pxi = 0 elseif pxi >= CELL_NUM_X then pxi = CELL_NUM_X - 1 end
-      if pyi < 0 then pyi = 0 elseif pyi >= CELL_NUM_Y then pyi = CELL_NUM_Y - 1 end
-      local x0 = (pxi > 0) and (pxi - 1) or 0
-      local y0 = (pyi > 0) and (pyi - 1) or 0
-      local x1 = (pxi + 1 < CELL_NUM_X) and (pxi + 1) or (CELL_NUM_X - 1)
-      local y1 = (pyi + 1 < CELL_NUM_Y) and (pyi + 1) or (CELL_NUM_Y - 1)
-
-      for xi = x0, x1 do
-        local row = xi * cny + 1
-        for yi = y0, y1 do
-          local cell_nr = row + yi
-          local first_idx = prefix_arr[cell_nr]
-          local last_idx = prefix_arr[cell_nr + 1]
-          for j = first_idx, last_idx - 1 do
-            local id = pos_id[j + 1]
-            if id ~= i then
-              local qx = px_arr[id]
-              local qy = py_arr[id]
-              local dx = qx - px
-              local dy = qy - py
-              local d2 = dx * dx + dy * dy
-              if d2 <= min_dist2 and d2 > 0 then
-                local d = sqrt_fn(d2)
-                local s = 0.5 * (min_dist - d) / d
-                dx = dx * s
-                dy = dy * s
-                px_arr[i] = px_arr[i] - dx
-                py_arr[i] = py_arr[i] - dy
-                px_arr[id] = px_arr[id] + dx
-                py_arr[id] = py_arr[id] + dy
-              end
-            end
-          end
-        end
-      end
-    end
-  end
-
-  enforce_particle_bounds()
-end
-
-local function particles_to_grid()
-  local px_arr = particle_x
-  local py_arr = particle_y
-  local pvx_arr = particle_vx
-  local pvy_arr = particle_vy
-  local uv = u_vel
-  local vv = v_vel
-  local up = u_prev
-  local vp = v_prev
-  local uw = u_weight
-  local vw = v_weight
-  local pd = particle_density
-  local ct = cell_type
-  local base_type = base_cell_type
-  local cny = CELL_NUM_Y
-  local h = SPACING
-  local h1 = invert_spacing
-  local h2 = 0.5 * h
-  local x_max = CELL_NUM_X - 2
-  local y_max = CELL_NUM_Y - 2
-
-  for i = 1, CELL_COUNT do
-    uv[i] = 0
-    vv[i] = 0
-    uw[i] = 0
-    vw[i] = 0
-    pd[i] = 0
-    ct[i] = base_type[i]
-  end
-
-  for i = 1, NUMBER_OF_PARTICLES do
-    local x = px_arr[i]
-    local y = py_arr[i]
-
-    local xi = math_floor(x * h1)
-    local yi = math_floor(y * h1)
-    if xi < 0 then xi = 0 elseif xi >= CELL_NUM_X then xi = CELL_NUM_X - 1 end
-    if yi < 0 then yi = 0 elseif yi >= CELL_NUM_Y then yi = CELL_NUM_Y - 1 end
-    local fluid_idx = xi * cny + yi + 1
-    if ct[fluid_idx] ~= FLUID_CELL then
-      ct[fluid_idx] = FLUID_CELL
-    end
-
-    local x0 = math_floor((x - h2) * h1)
-    local y0 = math_floor((y - h2) * h1)
-    if x0 < 0 then x0 = 0 elseif x0 > x_max then x0 = x_max end
-    if y0 < 0 then y0 = 0 elseif y0 > y_max then y0 = y_max end
-    local tx = ((x - h2) - x0 * h) * h1
-    local ty = ((y - h2) - y0 * h) * h1
-    local sx = 1.0 - tx
-    local sy = 1.0 - ty
-    local w0 = sx * sy
-    local w1 = tx * sy
-    local w2 = tx * ty
-    local w3 = sx * ty
-    local nr0 = x0 * cny + y0 + 1
-    local nr1 = nr0 + cny
-    local nr2 = nr1 + 1
-    local nr3 = nr0 + 1
-    pd[nr0] = pd[nr0] + w0
-    pd[nr1] = pd[nr1] + w1
-    pd[nr2] = pd[nr2] + w2
-    pd[nr3] = pd[nr3] + w3
-
-    x0 = math_floor(x * h1)
-    y0 = math_floor((y - h2) * h1)
-    if x0 < 0 then x0 = 0 elseif x0 > x_max then x0 = x_max end
-    if y0 < 0 then y0 = 0 elseif y0 > y_max then y0 = y_max end
-    tx = (x - x0 * h) * h1
-    ty = ((y - h2) - y0 * h) * h1
-    sx = 1.0 - tx
-    sy = 1.0 - ty
-    w0 = sx * sy
-    w1 = tx * sy
-    w2 = tx * ty
-    w3 = sx * ty
-    nr0 = x0 * cny + y0 + 1
-    nr1 = nr0 + cny
-    nr2 = nr1 + 1
-    nr3 = nr0 + 1
-    local pv = pvx_arr[i]
-    uv[nr0] = uv[nr0] + pv * w0
-    uw[nr0] = uw[nr0] + w0
-    uv[nr1] = uv[nr1] + pv * w1
-    uw[nr1] = uw[nr1] + w1
-    uv[nr2] = uv[nr2] + pv * w2
-    uw[nr2] = uw[nr2] + w2
-    uv[nr3] = uv[nr3] + pv * w3
-    uw[nr3] = uw[nr3] + w3
-
-    x0 = math_floor((x - h2) * h1)
-    y0 = math_floor(y * h1)
-    if x0 < 0 then x0 = 0 elseif x0 > x_max then x0 = x_max end
-    if y0 < 0 then y0 = 0 elseif y0 > y_max then y0 = y_max end
-    tx = ((x - h2) - x0 * h) * h1
-    ty = (y - y0 * h) * h1
-    sx = 1.0 - tx
-    sy = 1.0 - ty
-    w0 = sx * sy
-    w1 = tx * sy
-    w2 = tx * ty
-    w3 = sx * ty
-    nr0 = x0 * cny + y0 + 1
-    nr1 = nr0 + cny
-    nr2 = nr1 + 1
-    nr3 = nr0 + 1
-    pv = pvy_arr[i]
-    vv[nr0] = vv[nr0] + pv * w0
-    vw[nr0] = vw[nr0] + w0
-    vv[nr1] = vv[nr1] + pv * w1
-    vw[nr1] = vw[nr1] + w1
-    vv[nr2] = vv[nr2] + pv * w2
-    vw[nr2] = vw[nr2] + w2
-    vv[nr3] = vv[nr3] + pv * w3
-    vw[nr3] = vw[nr3] + w3
-  end
-
-  fluid_count = 0
-  for x = 1, CELL_NUM_X - 2 do
-    local row = x * cny + 1
-    for y = 1, CELL_NUM_Y - 2 do
-      local idx = row + y
-      if ct[idx] == FLUID_CELL then
-        fluid_count = fluid_count + 1
-        fluid_cells[fluid_count] = idx
-      end
-    end
-  end
-
-  if particle_rest_density == 0 then
-    local sum = 0
-    for i = 1, fluid_count do
-      sum = sum + pd[fluid_cells[i]]
-    end
-    if fluid_count > 0 then
-      particle_rest_density = sum / fluid_count
-    end
-  end
-
-  for i = 1, CELL_COUNT do
-    local w = uw[i]
-    if w > 0 then
-      uv[i] = uv[i] / w
-    end
-    w = vw[i]
-    if w > 0 then
-      vv[i] = vv[i] / w
-    end
-  end
-
-  for i = 1, u_restore_count do
-    local idx = u_restore_cells[i]
-    uv[idx] = up[idx]
-  end
-  for i = 1, v_restore_count do
-    local idx = v_restore_cells[i]
-    vv[idx] = vp[idx]
-  end
-end
-
-local function compute_grid_forces(n_iters)
-  local uv = u_vel
-  local vv = v_vel
-  local up = u_prev
-  local vp = v_prev
-  local pd = particle_density
-  local cells = fluid_cells
-  local right_arr = pressure_right
-  local top_arr = pressure_top
-  local sx0_arr = pressure_sx0
-  local sx1_arr = pressure_sx1
-  local sy0_arr = pressure_sy0
-  local sy1_arr = pressure_sy1
-  local s_arr = pressure_s
-
-  for i = 1, CELL_COUNT do
-    up[i] = uv[i]
-    vp[i] = vv[i]
-  end
-
-  for _ = 1, n_iters do
-    for n = 1, fluid_count do
-      local center = cells[n]
-      local s = s_arr[center]
-      if s and s ~= 0 then
-        local right = right_arr[center]
-        local top = top_arr[center]
-        local div = uv[right] - uv[center] + vv[top] - vv[center]
-
-        if particle_rest_density > 0 then
-          local compression = pd[center] - particle_rest_density
-          if compression > 0 then
-            div = div - compression * STIFFNESS_COEFFICIENT
-          end
-        end
-
-        local p = -(div / s) * OVER_RELAXATION
-        local sx0 = sx0_arr[center]
-        local sx1 = sx1_arr[center]
-        local sy0 = sy0_arr[center]
-        local sy1 = sy1_arr[center]
-        uv[center] = uv[center] - sx0 * p
-        uv[right] = uv[right] + sx1 * p
-        vv[center] = vv[center] - sy0 * p
-        vv[top] = vv[top] + sy1 * p
-      end
-    end
-  end
-end
-
-local function grid_to_particles()
-  local px_arr = particle_x
-  local py_arr = particle_y
-  local pvx_arr = particle_vx
-  local pvy_arr = particle_vy
-  local uv = u_vel
-  local vv = v_vel
-  local up = u_prev
-  local vp = v_prev
-  local ct = cell_type
-  local cny = CELL_NUM_Y
-  local h = SPACING
-  local h1 = invert_spacing
-  local h2 = 0.5 * h
-  local x_max = CELL_NUM_X - 2
-  local y_max = CELL_NUM_Y - 2
-
-  for i = 1, NUMBER_OF_PARTICLES do
-    local x = px_arr[i]
-    local y = py_arr[i]
-
-    local x0 = math_floor(x * h1)
-    local y0 = math_floor((y - h2) * h1)
-    if x0 < 0 then x0 = 0 elseif x0 > x_max then x0 = x_max end
-    if y0 < 0 then y0 = 0 elseif y0 > y_max then y0 = y_max end
-    local tx = (x - x0 * h) * h1
-    local ty = ((y - h2) - y0 * h) * h1
-    local sx = 1.0 - tx
-    local sy = 1.0 - ty
-    local d0 = sx * sy
-    local d1 = tx * sy
-    local d2 = tx * ty
-    local d3 = sx * ty
-    local nr0 = x0 * cny + y0 + 1
-    local nr1 = nr0 + cny
-    local nr2 = nr1 + 1
-    local nr3 = nr0 + 1
-    local valid0 = (ct[nr0] ~= AIR_CELL or (nr0 > cny and ct[nr0 - cny] ~= AIR_CELL)) and 1 or 0
-    local valid1 = (ct[nr1] ~= AIR_CELL or (nr1 > cny and ct[nr1 - cny] ~= AIR_CELL)) and 1 or 0
-    local valid2 = (ct[nr2] ~= AIR_CELL or (nr2 > cny and ct[nr2 - cny] ~= AIR_CELL)) and 1 or 0
-    local valid3 = (ct[nr3] ~= AIR_CELL or (nr3 > cny and ct[nr3 - cny] ~= AIR_CELL)) and 1 or 0
-    local d = valid0 * d0 + valid1 * d1 + valid2 * d2 + valid3 * d3
-
-    if d > 0 then
-      local pic_v = (
-        valid0 * d0 * uv[nr0] +
-        valid1 * d1 * uv[nr1] +
-        valid2 * d2 * uv[nr2] +
-        valid3 * d3 * uv[nr3]
-      ) / d
-      local corr = (
-        valid0 * d0 * (uv[nr0] - up[nr0]) +
-        valid1 * d1 * (uv[nr1] - up[nr1]) +
-        valid2 * d2 * (uv[nr2] - up[nr2]) +
-        valid3 * d3 * (uv[nr3] - up[nr3])
-      ) / d
-      local old_v = pvx_arr[i]
-      pvx_arr[i] = (1.0 - FLIP_RATIO) * pic_v + FLIP_RATIO * (old_v + corr)
-    end
-
-    x0 = math_floor((x - h2) * h1)
-    y0 = math_floor(y * h1)
-    if x0 < 0 then x0 = 0 elseif x0 > x_max then x0 = x_max end
-    if y0 < 0 then y0 = 0 elseif y0 > y_max then y0 = y_max end
-    tx = ((x - h2) - x0 * h) * h1
-    ty = (y - y0 * h) * h1
-    sx = 1.0 - tx
-    sy = 1.0 - ty
-    d0 = sx * sy
-    d1 = tx * sy
-    d2 = tx * ty
-    d3 = sx * ty
-    nr0 = x0 * cny + y0 + 1
-    nr1 = nr0 + cny
-    nr2 = nr1 + 1
-    nr3 = nr0 + 1
-    valid0 = (ct[nr0] ~= AIR_CELL or (nr0 > 1 and ct[nr0 - 1] ~= AIR_CELL)) and 1 or 0
-    valid1 = (ct[nr1] ~= AIR_CELL or (nr1 > 1 and ct[nr1 - 1] ~= AIR_CELL)) and 1 or 0
-    valid2 = (ct[nr2] ~= AIR_CELL or (nr2 > 1 and ct[nr2 - 1] ~= AIR_CELL)) and 1 or 0
-    valid3 = (ct[nr3] ~= AIR_CELL or (nr3 > 1 and ct[nr3 - 1] ~= AIR_CELL)) and 1 or 0
-    d = valid0 * d0 + valid1 * d1 + valid2 * d2 + valid3 * d3
-
-    if d > 0 then
-      local pic_v = (
-        valid0 * d0 * vv[nr0] +
-        valid1 * d1 * vv[nr1] +
-        valid2 * d2 * vv[nr2] +
-        valid3 * d3 * vv[nr3]
-      ) / d
-      local corr = (
-        valid0 * d0 * (vv[nr0] - vp[nr0]) +
-        valid1 * d1 * (vv[nr1] - vp[nr1]) +
-        valid2 * d2 * (vv[nr2] - vp[nr2]) +
-        valid3 * d3 * (vv[nr3] - vp[nr3])
-      ) / d
-      local old_v = pvy_arr[i]
-      pvy_arr[i] = (1.0 - FLIP_RATIO) * pic_v + FLIP_RATIO * (old_v + corr)
-    end
-  end
 end
 
 local function frame_begin()
@@ -1846,80 +1332,32 @@ local function redraw()
     api_us = api_us + elapsed_us(api_start_us, now_us())
   end
 
-  local edge_on_threshold = DISPLAY_ON_THRESHOLD + DISPLAY_EDGE_MARGIN
-  local edge_off_threshold = DISPLAY_OFF_THRESHOLD - DISPLAY_EDGE_MARGIN
-  local edge_confirm_frames = DISPLAY_EDGE_CONFIRM_FRAMES
+  local ctx = APP.viper_ctx
+  ctx.display_scan(
+    ctx.g,
+    ctx.display_level,
+    ctx.display_lit,
+    ctx.display_edge,
+    ctx.display_changed,
+    ctx.display_stats,
+    ctx.cfg,
+    ctx.display_cfg,
+    full_redraw and 1 or 0
+  )
 
-  for i = 1, display_count do
-    local cell = display_cell[i]
-    local density = particle_density[cell]
-    if APP.viper_ctx then
-      density = (APP.viper_ctx.g:get32(CELL_COUNT * 6 + cell - 1) or 0) / FX_Q
-    end
-    local level = display_density[cell] * (1.0 - DISPLAY_DENSITY_BLEND) + density * DISPLAY_DENSITY_BLEND
-    local prev_lit = display_lit[cell]
-    local lit = prev_lit
-    local edge_count = display_edge_count[cell] or 0
-
-    display_density[cell] = level
-
-    if level >= edge_on_threshold then
-      lit = true
-      edge_count = 0
-    elseif level <= edge_off_threshold then
-      lit = false
-      edge_count = 0
-    elseif level >= DISPLAY_ON_THRESHOLD then
-      if prev_lit then
-        edge_count = 0
-      else
-        if edge_count > 0 then
-          edge_count = edge_count + 1
-        else
-          edge_count = 1
-        end
-        if edge_count >= edge_confirm_frames then
-          lit = true
-          edge_count = 0
-        end
-      end
-    elseif level <= DISPLAY_OFF_THRESHOLD then
-      if prev_lit then
-        if edge_count < 0 then
-          edge_count = edge_count - 1
-        else
-          edge_count = -1
-        end
-        if -edge_count >= edge_confirm_frames then
-          lit = false
-          edge_count = 0
-        end
-      else
-        edge_count = 0
-      end
+  local changed_count = ctx.display_stats:get32(0) or 0
+  for command_index = 0, changed_count - 1 do
+    local command = ctx.display_changed:get16(command_index) or 0
+    local lit = command >= 32768
+    local display_index = (lit and (command - 32768) or command) + 1
+    api_start_us = now_us()
+    if lit then
+      draw_rect(display_x[display_index], display_y[display_index], DOT_SIZE, DOT_SIZE, C.fluid, 255, 4)
+      draw_rect(display_x[display_index] + 3, display_y[display_index] + 2, DOT_SIZE - 6, 2, C.fluid_core, 115, 1)
     else
-      edge_count = 0
+      draw_rect(display_x[display_index], display_y[display_index], DOT_SIZE, DOT_SIZE, C.bg, 255, 0)
     end
-    display_lit[cell] = lit
-    display_edge_count[cell] = edge_count
-
-    if full_redraw then
-      if lit then
-        api_start_us = now_us()
-        draw_rect(display_x[i], display_y[i], DOT_SIZE, DOT_SIZE, C.fluid, 255, 4)
-        draw_rect(display_x[i] + 3, display_y[i] + 2, DOT_SIZE - 6, 2, C.fluid_core, 115, 1)
-        api_us = api_us + elapsed_us(api_start_us, now_us())
-      end
-    elseif lit ~= prev_lit then
-      api_start_us = now_us()
-      if lit then
-        draw_rect(display_x[i], display_y[i], DOT_SIZE, DOT_SIZE, C.fluid, 255, 4)
-        draw_rect(display_x[i] + 3, display_y[i] + 2, DOT_SIZE - 6, 2, C.fluid_core, 115, 1)
-      else
-        draw_rect(display_x[i], display_y[i], DOT_SIZE, DOT_SIZE, C.bg, 255, 0)
-      end
-      api_us = api_us + elapsed_us(api_start_us, now_us())
-    end
+    api_us = api_us + elapsed_us(api_start_us, now_us())
   end
 
   api_start_us = now_us()
@@ -1955,15 +1393,7 @@ end
 
 local function simulation_step()
   update_accel()
-  if APP.viper_ctx then
-    APP.viper_simulation_step(APP.viper_ctx, accel_x, accel_y)
-  else
-    integrate_particles(accel_x, accel_y)
-    push_particles_apart(PUSH_ITER)
-    particles_to_grid()
-    compute_grid_forces(GRID_ITER)
-    grid_to_particles()
-  end
+  APP.viper_simulation_step(APP.viper_ctx, accel_x, accel_y)
 end
 
 local function init_root()
@@ -2109,10 +1539,9 @@ if app_on_fn then
   imu_registered = true
 end
 
-if APP.init_viper_engine() then
-  init_display_state()
-else
-  init_particles()
+local viper_ok, viper_err = APP.init_viper_engine()
+if not viper_ok then
+  error("FluidPendant requires viper: " .. tostring(viper_err))
 end
 build_display_lookup()
 init_root()
@@ -2120,14 +1549,8 @@ init_time_module()
 
 if init_canvas() then
   detect_rect_mode()
-  if APP.viper_ctx then
-    APP.viper_particles_to_grid(APP.viper_ctx)
-    APP.viper_ctx.cfg:set32(APP.CFG.REST_DENSITY_Q, 0)
-    particle_rest_density = 0
-  else
-    particles_to_grid()
-    particle_rest_density = 0
-  end
+  APP.viper_particles_to_grid(APP.viper_ctx)
+  APP.viper_ctx.cfg:set32(APP.CFG.REST_DENSITY_Q, 0)
   redraw()
   init_time_label()
   init_time_timer()
