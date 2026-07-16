@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BB Boy Clock — 320×240</title>
+  <style>
+    :root { --phosphor:#86ffe5; --bright:#c5fff2; --mid:#48cdb7; --dim:#247c72; --panel:#0a2725; --black:#020b0b; }
+    * { box-sizing:border-box; }
+    html,body { width:320px; height:240px; margin:0; overflow:hidden; background:#000; }
+    body { font-family:"Cascadia Mono","Roboto Mono","Microsoft YaHei",monospace; }
+    .face { position:relative; width:320px; height:240px; overflow:hidden; color:var(--phosphor); background:radial-gradient(ellipse at 52% 45%,#0b2b28 0%,#061918 52%,var(--black) 100%); }
+    .face::before { content:""; position:absolute; inset:0; z-index:30; pointer-events:none; opacity:.16; background:repeating-linear-gradient(180deg,transparent 0 2px,#000 3px); }
+    .face::after { content:""; position:absolute; inset:0; z-index:31; pointer-events:none; box-shadow:inset 0 0 18px 5px #000; }
+    .txt { position:absolute; font-weight:700; line-height:1; text-transform:uppercase; text-shadow:0 0 5px #3ac4b0aa; }
+    .micro { font-size:7px; letter-spacing:1.1px; color:var(--mid); }
+    .rule { position:absolute; height:1px; background:var(--dim); }
+    .top-mark { left:12px; top:10px; width:5px; height:5px; border:1px solid var(--phosphor); }
+    .title { left:23px; top:9px; font-size:10px; letter-spacing:1.4px; color:var(--bright); }
+    .online { left:124px; top:9px; padding:2px 6px 3px; border:1px solid var(--dim); font-size:6px; letter-spacing:1px; color:var(--mid); }
+    .weather { right:12px; top:8px; font-size:12px; color:var(--bright); }
+    .top-rule { left:12px; top:27px; width:296px; background:var(--phosphor); box-shadow:0 0 5px var(--dim); }
+    .date { left:12px; top:34px; font-size:8px; letter-spacing:.7px; }
+    .city { right:12px; top:34px; width:122px; text-align:right; }
+
+    .stats { position:absolute; left:12px; top:54px; width:101px; height:124px; }
+    .stat { position:absolute; left:0; width:101px; height:32px; }
+    .stat:nth-child(1) { top:0; } .stat:nth-child(2) { top:42px; } .stat:nth-child(3) { top:84px; }
+    .stat-name { left:0; top:0; }
+    .stat-value { left:0; top:11px; width:31px; color:var(--bright); font-size:16px; letter-spacing:-1px; }
+    .bar { position:absolute; left:35px; top:15px; width:66px; height:7px; border:1px solid var(--dim); }
+    .bar::after { content:""; display:block; width:var(--value); height:100%; background:var(--phosphor); box-shadow:0 0 5px var(--mid); }
+    .stat-note { right:0; top:25px; font-size:6px; color:var(--dim); }
+
+    .mascot-wrap { position:absolute; left:119px; top:55px; width:88px; height:126px; }
+    .mascot-tag { left:9px; top:0; width:70px; text-align:center; }
+    .mascot { position:absolute; left:1px; top:12px; width:86px; height:108px; filter:drop-shadow(0 0 4px #4ad5c0aa); }
+    .mascot .body { fill:var(--phosphor); stroke:var(--phosphor); stroke-width:2; stroke-linejoin:round; }
+    .mascot .cut { fill:var(--panel); stroke:var(--panel); stroke-width:2.3; stroke-linecap:round; stroke-linejoin:round; }
+    .mascot .line { fill:none; stroke:var(--panel); stroke-width:2.3; stroke-linecap:round; stroke-linejoin:round; }
+    .mascot-base { left:9px; bottom:0; width:70px; height:1px; background:var(--dim); }
+
+    .clock { position:absolute; left:217px; top:52px; width:91px; height:129px; border-left:1px solid var(--phosphor); }
+    .clock::before,.clock::after { content:""; position:absolute; left:0; width:13px; height:1px; background:var(--phosphor); }
+    .clock::before { top:0; } .clock::after { bottom:0; }
+    .digits { position:absolute; right:1px; width:82px; color:var(--bright); font:800 58px/.78 "Arial Narrow","Bahnschrift Condensed",Impact,sans-serif; letter-spacing:-3px; text-align:right; font-variant-numeric:tabular-nums; text-shadow:0 0 7px #49d8c0aa; }
+    .hh { top:5px; } .mm { top:69px; }
+    .clock-label { left:9px; top:57px; writing-mode:vertical-rl; font-size:6px; letter-spacing:2px; color:var(--dim); }
+    .seconds { right:2px; bottom:3px; font-size:7px; letter-spacing:1.5px; color:var(--mid); }
+
+    .bottom-rule { left:12px; top:190px; width:296px; }
+    .battery { position:absolute; left:12px; top:199px; width:93px; height:28px; border:1px solid var(--phosphor); }
+    .battery-label { left:7px; top:5px; }
+    .battery-value { right:6px; top:13px; font-size:10px; color:var(--bright); }
+    .battery-fill { position:absolute; left:7px; bottom:5px; width:44px; height:3px; background:linear-gradient(90deg,var(--phosphor) 0 94%,var(--dim) 94%); }
+    .activity { left:119px; top:199px; width:83px; text-align:center; }
+    .activity-value { left:119px; top:211px; width:83px; color:var(--bright); font-size:12px; text-align:center; }
+    .activity-dots { position:absolute; left:133px; top:225px; display:flex; gap:5px; }
+    .activity-dots i { width:4px; height:4px; border:1px solid var(--dim); }
+    .activity-dots i.on { border-color:var(--phosphor); background:var(--phosphor); }
+    .system { right:12px; top:201px; width:96px; text-align:right; line-height:1.55; }
+    .system strong { display:block; color:var(--bright); font-size:8px; letter-spacing:.8px; }
+  </style>
+</head>
+<body>
+  <main class="face" aria-label="BB Boy 复古终端数字时钟表盘">
+    <div class="top-mark"></div><div class="txt title">BB BOY // CLOCK</div><div class="txt online">SYSTEM ONLINE</div><div class="txt weather">☁ 21°</div>
+    <div class="rule top-rule"></div><div class="txt date" id="date">2026.07.16 THU</div><div class="txt micro city">NINGBO · CN</div>
+
+    <section class="stats" aria-label="状态数据">
+      <div class="stat"><div class="txt micro stat-name">FOCUS</div><div class="txt stat-value">78</div><div class="bar" style="--value:78%"></div><div class="txt stat-note">STABLE</div></div>
+      <div class="stat"><div class="txt micro stat-name">ENERGY</div><div class="txt stat-value">85</div><div class="bar" style="--value:85%"></div><div class="txt stat-note">OPTIMAL</div></div>
+      <div class="stat"><div class="txt micro stat-name">SIGNAL</div><div class="txt stat-value">64</div><div class="bar" style="--value:64%"></div><div class="txt stat-note">LINKED</div></div>
+    </section>
+
+    <section class="mascot-wrap" aria-label="原创 BB 小子吉祥物">
+      <div class="txt micro mascot-tag">ALL SYSTEMS GO</div>
+      <svg class="mascot" viewBox="0 0 86 108" role="img" aria-label="竖起拇指的原创复古小子">
+        <path class="body" d="M33 7c9-7 25-2 28 9 3 12-4 25-16 26-11 1-20-7-20-18 0-7 3-13 8-17Z"/>
+        <path class="body" d="M29 40c8-5 24-5 32 1l5 34-13 5H34l-13-5 5-33Z"/>
+        <path class="body" d="m28 45-10 7-7-9-6 5 11 19 15-8Zm31 1 10 8 7-12 6 4-9 22-17-9Z"/>
+        <path class="body" d="m35 76-6 23H17v6h18l9-20 8 20h18v-6H58l-6-23Z"/>
+        <path class="body" d="M8 45 3 37l3-3 5 7 1-8 4 1-1 10Z"/>
+        <path class="cut" d="M25 20c8-1 11-5 14-11 5 5 12 8 20 8-2-9-10-15-20-15-9 0-15 7-16 15Z"/>
+        <circle class="cut" cx="35" cy="24" r="1.7"/><circle class="cut" cx="50" cy="24" r="1.7"/>
+        <path class="line" d="M35 31c5 4 10 4 15 0M31 48h24v17H31zM38 48v10h10V48M29 77h27"/>
+      </svg>
+      <div class="rule mascot-base"></div>
+    </section>
+
+    <section class="clock" aria-label="当前时间"><div class="digits hh" id="hour">21</div><div class="txt clock-label">LOCAL TIME</div><div class="digits mm" id="minute">30</div><div class="txt seconds" id="seconds">03 SEC</div></section>
+
+    <div class="rule bottom-rule"></div>
+    <section class="battery"><div class="txt micro battery-label">BATTERY</div><div class="battery-fill"></div><div class="txt battery-value">94%</div></section>
+    <div class="txt micro activity">DAILY STEPS</div><div class="txt activity-value">6,842</div><div class="activity-dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    <div class="txt micro system"><strong>HOLO CLOCK OS</strong>BB-01 TERMINAL<br>STATUS · READY</div>
+  </main>
+  <script>
+    const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0'),days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+    function tick(){const d=new Date();$('hour').textContent=pad(d.getHours());$('minute').textContent=pad(d.getMinutes());$('seconds').textContent=pad(d.getSeconds())+' SEC';$('date').textContent=`${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${days[d.getDay()]}`}
+    tick();setInterval(tick,1000);
+  </script>
+</body>
+</html>
