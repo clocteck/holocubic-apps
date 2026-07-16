@@ -3,4 +3,4 @@ kind = app
 entry = main.lua
 icon = main.png
 description = AIDA64 电脑硬件实时监控仪表盘
-version = 1.0.0
+version = 1.0.1
