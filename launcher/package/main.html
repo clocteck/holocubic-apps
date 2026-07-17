@@ -3499,20 +3499,26 @@ function setAutoSleepControl(seconds){
   if(select) select.value = String(normalized);
 }
 
-const DISPLAY_SETTINGS_UPGRADE_ERROR = "固件需要更新到1.200以上版本";
+const DISPLAY_SETTINGS_UNAVAILABLE_ERROR = "显示设置接口不可用，请确认固件为 1.200 及以上版本";
 
 async function parseDisplaySettingsResponse(response){
+  let responseText = "";
   let data = null;
   try{
-    data = await response.json();
+    responseText = await response.text();
+    data = responseText ? JSON.parse(responseText) : null;
   }catch(err){
     data = null;
   }
-  if(response.status === 404 || response.status === 405 || !data){
-    throw new Error(DISPLAY_SETTINGS_UPGRADE_ERROR);
+  if(!response.ok || (data && data.ok === false)){
+    throw new Error(data && data.error
+      ? data.error
+      : ("显示设置接口请求失败（HTTP " + response.status + "）"));
   }
-  if(!response.ok || data.ok === false){
-    throw new Error(data && data.error ? data.error : ("HTTP " + response.status));
+  if(!data){
+    throw new Error(responseText
+      ? "显示设置接口返回格式异常"
+      : "显示设置接口未返回数据");
   }
   return data;
 }
@@ -6759,7 +6765,7 @@ async function saveSettings(ev){
     }
     latestDeviceSettings = Object.assign({}, payload);
     if(brightnessError){
-      showToast(brightnessError.message || DISPLAY_SETTINGS_UPGRADE_ERROR, true);
+      showToast(brightnessError.message || DISPLAY_SETTINGS_UNAVAILABLE_ERROR, true);
     }else{
       showToast("已保存到设备", false);
     }
@@ -6962,7 +6968,7 @@ qs("#wifiForm").addEventListener("submit", handleWifiSubmit);
 initAppManageView();
 loadStoredSettings();
 loadDeviceSettings().finally(() => {
-  loadDisplaySettingsControls().catch((err) => showToast(err.message || DISPLAY_SETTINGS_UPGRADE_ERROR, true));
+  loadDisplaySettingsControls().catch((err) => showToast(err.message || DISPLAY_SETTINGS_UNAVAILABLE_ERROR, true));
 });
 renderMediaLibrary();
 setWifiPasswordVisibility(false);
