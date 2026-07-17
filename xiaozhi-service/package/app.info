@@ -3,5 +3,5 @@ kind = service
 entry = main.lua
 allow_webui = true
 autostart_service = true
-description = Always-on XiaoZhi voice service with WakeNet and dialog overlay
-version = 1.0.1
+description = 随时可以唤醒的小智后台服务
+version = 1.0.3

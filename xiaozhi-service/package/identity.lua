@@ -142,6 +142,30 @@ function M.device_id()
   return nil
 end
 
+function M.set_device_id(mac)
+  local hex = tostring(mac or ""):lower():gsub("[^0-9a-f]", "")
+  if #hex ~= 12 then
+    return nil, "MAC 地址格式无效"
+  end
+  mac = normalize_mac(mac)
+  if not mac then
+    return nil, "MAC 地址格式无效"
+  end
+  if not file or not file.putcontents then
+    return nil, "设备身份存储接口不可用"
+  end
+  if file.mkdir then
+    pcall(file.mkdir, DEVICE_MAC_DIR)
+  end
+  local body = '{"mac":"' .. mac .. '"}\n'
+  local ok, saved = pcall(file.putcontents, DEVICE_MAC_PATH, body)
+  if not ok or not saved then
+    return nil, "设备 MAC 保存失败"
+  end
+  cached_mac = mac
+  return mac
+end
+
 function M.client_id(mac)
   mac = normalize_mac(mac or M.device_id())
   if not mac then

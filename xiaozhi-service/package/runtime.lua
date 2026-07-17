@@ -6,6 +6,7 @@ function M.new(cfg, load_module)
   local Audio = load_module("audio")
   local Protocol = load_module("protocol")
   local Activation = load_module("activation")
+  local Identity = load_module("identity")
   local Mcp = load_module("mcp")
   local XIAOZHI_WAKE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
   local XIAOZHI_WAKE_CONFIG_EXAMPLE_PATH = "/sd/apps/xiaozhi-service/service.example.json"
@@ -517,13 +518,37 @@ end
     self.ui:alert(status or "错误", message or "", emotion or "circle_xmark")
   end
 
+  local start_activation
+
+  local function show_pairing_code()
+    local code = self.pairing_code or ""
+    if self.activation and type(self.activation.code) == "string" and self.activation.code ~= "" then
+      code = self.activation.code
+    end
+    if not self.activation or not self.activation.active then
+      start_activation()
+    end
+    set_state(State.ACTIVATING)
+    self.ui:set_emotion("thinking")
+    if code ~= "" then
+      self.ui:set_status("验证码 " .. code)
+      self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
+      self.ui:show_notification("验证码 " .. code, 3000)
+    else
+      self.ui:set_status("获取验证码")
+      self.ui:set_chat_message("system", "正在向小智服务端申请验证码")
+      self.ui:show_notification("正在获取配对码", 1800)
+    end
+    return true
+  end
+
   local function open_audio_channel_now()
+    if not cfg.websocket or not cfg.websocket.url or cfg.websocket.url == "" then
+      return show_pairing_code()
+    end
     local ok = self.protocol:open_audio_channel()
     if not ok then
       local msg = self.protocol.last_error or "server not connected"
-      if msg == "websocket config missing" then
-        msg = "未配置 websocket"
-      end
       alert("连接失败", msg, "cloud_slash")
       set_state(State.IDLE)
       return false
@@ -613,6 +638,9 @@ end
       self.startup_wake_from_service = false
     end
     self.pending_wake_word = wake_word or cfg.WAKE_WORD
+    if not cfg.websocket or not cfg.websocket.url or cfg.websocket.url == "" then
+      return show_pairing_code()
+    end
     if s == State.IDLE then
       self.ui:show_notification("你好小智", 1200)
       -- Make the service overlay visible before touching I2S/network state.
@@ -905,7 +933,7 @@ end
     end
   end
 
-  local function start_activation()
+  start_activation = function()
     if self.activation then
       self.activation:stop()
       self.activation = nil
@@ -949,10 +977,23 @@ end
         else
           self.ui:set_status("等待绑定")
         end
+      elseif event == "retrying" then
+        set_state(State.ACTIVATING)
+        local code = self.activation and self.activation.code or self.pairing_code or ""
+        if code ~= "" then
+          self.activation_message = "网络暂时繁忙，仍在等待后台绑定"
+          self.ui:set_status("验证码 " .. code)
+          self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
+        else
+          self.activation_message = "网络暂时繁忙，正在重新获取配对信息"
+          self.ui:set_status("正在重试")
+          self.ui:set_chat_message("system", self.activation_message)
+        end
       elseif event == "activated" then
         self.ui:show_notification("绑定成功", 1600)
         self.ui:set_chat_message("system", "绑定成功，正在读取服务配置")
       elseif event == "done" then
+        self.pairing_code = ""
         self.protocol:start()
         self.ui:show_notification("小智已就绪", 1600)
         set_state(State.IDLE)
@@ -1136,6 +1177,29 @@ end
   self.stop_listening = stop_listening
   self.wake_word_invoke = wake_word_invoke
 
+  local function update_saved_config(mutator)
+    local codec = rawget(_G, "json") or rawget(_G, "sjson")
+    if not codec or not codec.decode or not codec.encode or not file
+        or not file.getcontents or not file.putcontents then
+      return false, "配置存储接口不可用"
+    end
+    local ok_read, raw = pcall(file.getcontents, cfg.CONFIG_PATH)
+    local ok_decode, doc = pcall(codec.decode, ok_read and raw or "{}")
+    if not ok_decode or type(doc) ~= "table" then
+      return false, "配置读取失败"
+    end
+    mutator(doc)
+    local ok_encode, encoded = pcall(codec.encode, doc)
+    if not ok_encode or type(encoded) ~= "string" then
+      return false, "配置编码失败"
+    end
+    local ok_write, saved = pcall(file.putcontents, cfg.CONFIG_PATH, encoded .. "\n")
+    if not ok_write or not saved then
+      return false, "配置保存失败"
+    end
+    return true
+  end
+
   function self:snapshot()
     local p = self.protocol and self.protocol:info() or {}
     local code = self.pairing_code
@@ -1150,11 +1214,108 @@ end
       activation_status = self.activation_status,
       message = self.activation_message,
       websocket_url = cfg.websocket and cfg.websocket.url or "",
+      websocket_version = cfg.websocket and cfg.websocket.version or 1,
+      websocket_token_set = cfg.websocket and type(cfg.websocket.token) == "string"
+        and cfg.websocket.token ~= "" or false,
+      device_mac = Identity.device_id() or "",
       last_error = p.last_error or "",
+      volume = math.max(0, math.min(100, math.floor(tonumber(cfg.AUDIO.volume) or 100))),
       transparent_color = rawget(_G, "SERVICE_UI_TRANSPARENT_COLOR")
         or (service_ui and service_ui.TRANSPARENT_COLOR) or nil,
       ui_diagnostics = self.ui and self.ui.diagnostics and self.ui:diagnostics() or nil,
     }
+  end
+
+  function self:set_volume(value)
+    value = tonumber(value)
+    if not value then
+      return false, "音量值无效"
+    end
+    value = math.max(0, math.min(100, math.floor(value)))
+    local saved, save_err = update_saved_config(function(doc)
+      doc.audio = type(doc.audio) == "table" and doc.audio or {}
+      doc.audio.volume = value
+    end)
+    if not saved then return false, save_err end
+    if self.audio and self.audio.set_volume then
+      self.audio:set_volume(value)
+    else
+      cfg.AUDIO.volume = value
+    end
+    return true, value
+  end
+
+  function self:set_server(url, token, version)
+    url = type(url) == "string" and url:match("^%s*(.-)%s*$") or ""
+    token = type(token) == "string" and token:match("^%s*(.-)%s*$") or ""
+    version = math.floor(tonumber(version) or 1)
+    if not url:match("^wss?://") then
+      return false, "服务器地址必须以 ws:// 或 wss:// 开头"
+    end
+    if version < 1 or version > 3 then
+      return false, "协议版本仅支持 1 到 3"
+    end
+    local saved, save_err = update_saved_config(function(doc)
+      doc.websocket = type(doc.websocket) == "table" and doc.websocket or {}
+      doc.websocket.url = url
+      doc.websocket.token = token
+      doc.websocket.version = version
+      doc.ota = type(doc.ota) == "table" and doc.ota or {}
+      doc.ota.force = false
+    end)
+    if not saved then return false, save_err end
+    if self.activation then self.activation:stop() end
+    if self.protocol then self.protocol:close_audio_channel(false) end
+    cfg.websocket.url = url
+    cfg.websocket.token = token
+    cfg.websocket.version = version
+    cfg.ota.force = false
+    self.pairing_code = ""
+    self.activation_status = "custom"
+    self.activation_message = "已切换自定义服务"
+    set_state(State.IDLE)
+    self.ui:set_status("自定义服务")
+    self.ui:set_chat_message("system", "自定义服务已保存，唤醒后连接")
+    self.ui:show_notification("自定义服务已保存", 1800)
+    return true, { url = url, version = version, token_set = token ~= "" }
+  end
+
+  function self:set_device_mac(value)
+    local old_mac = Identity.device_id()
+    local mac, mac_err = Identity.set_device_id(value)
+    if not mac then return false, mac_err end
+    if old_mac == mac then
+      return true, { mac = mac, restarting = false, pairing_required = false, unchanged = true }
+    end
+    local official = type(cfg.websocket.url) ~= "string" or cfg.websocket.url == ""
+      or cfg.websocket.url:find("api.tenclass.net", 1, true) ~= nil
+    if official then
+      local saved, save_err = update_saved_config(function(doc)
+        doc.websocket = type(doc.websocket) == "table" and doc.websocket or {}
+        doc.websocket.url = ""
+        doc.websocket.token = ""
+        doc.websocket.version = 1
+        doc.ota = type(doc.ota) == "table" and doc.ota or {}
+        doc.ota.enabled = true
+        doc.ota.force = false
+      end)
+      if not saved then
+        if old_mac then Identity.set_device_id(old_mac) end
+        return false, save_err
+      end
+    end
+    self.pairing_code = ""
+    self.activation_status = "restarting"
+    self.activation_message = official and "设备身份已修改，正在重新获取配对码"
+      or "设备身份已修改，正在重启服务"
+    local timer = tmr and tmr.create and tmr.create() or nil
+    if timer then
+      timer:alarm(400, tmr.ALARM_SINGLE, function(t)
+        pcall(function() t:unregister() end)
+        app.start_service("xiaozhi-service")
+      end)
+    end
+    return true, { mac = mac, restarting = timer ~= nil, pairing_required = official }
   end
 
   return self

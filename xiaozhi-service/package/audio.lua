@@ -39,6 +39,32 @@ local function clip_s16(v)
   return v
 end
 
+local function scale_pcm_s16(pcm, volume)
+  volume = math.max(0, math.min(100, math.floor(tonumber(volume) or 100)))
+  if volume >= 100 then
+    return pcm
+  end
+  if volume <= 0 then
+    return string.rep("\0", #pcm)
+  end
+  local out = {}
+  local n = 0
+  for i = 1, #pcm - 1, 2 do
+    local lo, hi = string_byte(pcm, i, i + 1)
+    local v = lo + hi * 256
+    if v >= 32768 then
+      v = v - 65536
+    end
+    v = math.floor(v * volume / 100)
+    if v < 0 then
+      v = v + 65536
+    end
+    n = n + 1
+    out[n] = string_char(v % 256, math.floor(v / 256) % 256)
+  end
+  return table_concat(out)
+end
+
 local function pack_offsets(pack)
   if pack == "b01" then
     return 0, 1
@@ -361,7 +387,14 @@ function M.new(cfg)
       level = self.level,
       bridge_bytes = self.bridge_raw_bytes,
       last_error = self.last_error,
+      volume = math.max(0, math.min(100, math.floor(tonumber(cfg.AUDIO.volume) or 100))),
     }
+  end
+
+  function self:set_volume(value)
+    value = math.max(0, math.min(100, math.floor(tonumber(value) or 100)))
+    cfg.AUDIO.volume = value
+    return value
   end
 
   function self:begin_wake_bridge()
@@ -1226,6 +1259,7 @@ function M.new(cfg)
       set_error(tostring(pcm_or_err or "voice.decode failed"))
       return false
     end
+    pcm_or_err = scale_pcm_s16(pcm_or_err, cfg.AUDIO.volume)
     local write_ok, write_err = pcall(i2s.write, cfg.AUDIO.i2s_id, pcm_or_err)
     if not write_ok then
       set_error(tostring(write_err or "i2s.write failed"))

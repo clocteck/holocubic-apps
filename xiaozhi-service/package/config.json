@@ -15,7 +15,8 @@
       "sample_rate": 16000,
       "channels": 1,
       "frame_duration": 60,
-      "bitrate": 12000
+      "bitrate": 12000,
+      "volume": 100
     },
     "wake_word": "你好小智",
     "timezone": "CST-8",

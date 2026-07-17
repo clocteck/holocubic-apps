@@ -67,6 +67,16 @@ local function normalize_activate_url(url)
   return url .. "/activate"
 end
 
+local function is_transient_http_failure(code, body)
+  code = tonumber(code)
+  body = tostring(body or "")
+  if code == -1 and (body:find("ESP_ERR_HTTP_EAGAIN", 1, true)
+      or body:find("timeout", 1, true)) then
+    return true
+  end
+  return code == 408 or code == 425 or code == 429 or (code and code >= 500 and code <= 599)
+end
+
 local function encode_body(cfg, id)
   local _ = id
   return identity(cfg).system_info_json(cfg)
@@ -136,6 +146,7 @@ local function default_runtime_config(cfg)
       channels = cfg.AUDIO and cfg.AUDIO.channels or 1,
       frame_duration = cfg.AUDIO and cfg.AUDIO.frame_ms or 60,
       bitrate = cfg.AUDIO and cfg.AUDIO.bitrate or 12000,
+      volume = cfg.AUDIO and cfg.AUDIO.volume or 100,
     },
     wake_word = cfg.WAKE_WORD or "你好小智",
     timezone = cfg.TIMEZONE or "CST-8",
@@ -194,7 +205,8 @@ local function write_runtime_config(cfg)
     '    "sample_rate": ' .. tostring(cfg.AUDIO.rate or 16000) .. ',\n' ..
     '    "channels": ' .. tostring(cfg.AUDIO.channels or 1) .. ',\n' ..
     '    "frame_duration": ' .. tostring(cfg.AUDIO.frame_ms or 60) .. ',\n' ..
-    '    "bitrate": ' .. tostring(cfg.AUDIO.bitrate or 12000) .. "\n" ..
+    '    "bitrate": ' .. tostring(cfg.AUDIO.bitrate or 12000) .. ',\n' ..
+    '    "volume": ' .. tostring(cfg.AUDIO.volume or 100) .. "\n" ..
     "  },\n" ..
     '  "wake_word": "' .. json_escape(cfg.WAKE_WORD or "你好小智") .. '",\n' ..
     '  "default_ui_style": "' .. json_escape(cfg.DEFAULT_UI_STYLE or "default") .. '"\n' ..
@@ -302,7 +314,8 @@ function M.new(cfg)
     }, body_text)
     print("[xiaozhi] ota status", tostring(code), "bytes=" .. tostring(body and #body or 0))
     if tonumber(code) ~= 200 then
-      return nil, "ota status " .. tostring(code) .. " " .. tostring(body or "")
+      return nil, "ota status " .. tostring(code) .. " " .. tostring(body or ""), false,
+          is_transient_http_failure(code, body)
     end
     return parse_response(body or ""), nil
   end
@@ -328,12 +341,19 @@ function M.new(cfg)
     if code == 202 then
       return "pending"
     end
+    if is_transient_http_failure(code, body) then
+      return "retry", "activate status " .. tostring(code) .. " " .. tostring(body or "")
+    end
     return nil, "activate status " .. tostring(code) .. " " .. tostring(body or "")
   end
 
   local function finish(ok, data)
     self.active = false
     stop_timer()
+    if ok then
+      self.code = ""
+      self.challenge = ""
+    end
     emit(ok and "done" or "failed", data)
   end
 
@@ -364,11 +384,16 @@ function M.new(cfg)
       return
     end
     emit("checking", nil)
-    local res, err, waiting_mac = request_ota()
+    local res, err, waiting_mac, retryable = request_ota()
     if not res then
       if waiting_mac then
         emit("waiting_mac", err)
         schedule(1000, check_again)
+        return
+      end
+      if retryable then
+        emit("retrying", err)
+        schedule(self.cfg.ota.interval_ms or 3000, check_again)
         return
       end
       finish(false, err)
@@ -430,6 +455,15 @@ function M.new(cfg)
       if self.poll_count >= (self.cfg.ota.max_polls or 80) then
         finish(false, "activation timeout")
       else
+        schedule(self.cfg.ota.interval_ms or 3000, poll_activate)
+      end
+      return
+    end
+    if status == "retry" then
+      if self.poll_count >= (self.cfg.ota.max_polls or 80) then
+        finish(false, "activation timeout")
+      else
+        emit("retrying", err)
         schedule(self.cfg.ota.interval_ms or 3000, poll_activate)
       end
       return

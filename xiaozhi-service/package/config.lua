@@ -26,6 +26,7 @@ M.AUDIO = {
   channels = 1,
   frame_ms = 60,
   bitrate = 12000,
+  volume = 100,
   complexity = 0,
   mic_bits = 32,
   mic_pack = "b23",
@@ -184,6 +185,7 @@ local function apply_audio(audio)
   local channels = tonumber(audio.channels)
   local frame_ms = tonumber(audio.frame_duration or audio.frame_ms)
   local bitrate = tonumber(audio.bitrate)
+  local volume = tonumber(audio.volume)
   if rate and rate > 0 then
     M.AUDIO.rate = math.floor(rate)
   end
@@ -195,6 +197,9 @@ local function apply_audio(audio)
   end
   if bitrate and bitrate > 0 then
     M.AUDIO.bitrate = math.floor(bitrate)
+  end
+  if volume then
+    M.AUDIO.volume = math.max(0, math.min(100, math.floor(volume)))
   end
 end
 
@@ -311,6 +316,7 @@ function M.load()
       channels = pick_number(audio_block, "channels"),
       frame_duration = pick_number(audio_block, "frame_duration") or pick_number(audio_block, "frame_ms"),
       bitrate = pick_number(audio_block, "bitrate"),
+      volume = pick_number(audio_block, "volume"),
     })
   end
   local wake_cfg = read_wake_service_config()
