@@ -157,6 +157,7 @@ return {
 
 - `assets/emojis/gif/*.gif`：`gif/noto-emoji_64`
 - `assets/emojis/png/*.png`：`png/twemoji_64`
+- `assets/fonts/xiaozhi_common3500_16.bin`：服务浮层默认加载的 LVGL 16px 字体；为兼容旧部署保留文件名，实际包含完整 3755 个 GB2312 一级汉字及 ASCII
 - `assets/fonts/font_puhui_common_20_4.bin`：官方普惠字体，当前仅预留，不默认加载
 
 Lua UI 会优先查找 GIF，再查找 PNG，最后退回文字表情。表情文件名与官方 emotion 名保持一致，例如 `neutral.gif`、`happy.gif`、`thinking.gif`。

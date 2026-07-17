@@ -69,14 +69,8 @@ function M.new(cfg)
     notice = "",
     stopped = false,
     character_rgb565 = nil,
-    cjk_font_path = nil,
-    cjk_font_size = 0,
-    cjk_font_fd = nil,
     native_font = nil,
     native_font_path = nil,
-    glyph_cache = {},
-    glyph_cache_order = {},
-    bubble_cache_text = nil,
     bubble_cache_data = nil,
     render_timer = nil,
     bubble_timer = nil,
@@ -149,86 +143,13 @@ function M.new(cfg)
     rect(12, 70, 36, 28, ACCENT, 12)
   end
 
-  local function utf8_chars(value, limit)
-    local out, pos = {}, 1
-    value = tostring(value or ""):gsub("[%c]+", " ")
-    while pos <= #value and #out < (limit or 32) do
-      local b1 = value:byte(pos)
-      local width = b1 < 0x80 and 1 or (b1 < 0xE0 and 2 or (b1 < 0xF0 and 3 or 4))
-      local cp
-      if width == 1 then cp = b1
-      elseif width == 2 then cp = (b1 - 0xC0) * 64 + (value:byte(pos + 1) or 0) - 0x80
-      elseif width == 3 then cp = (b1 - 0xE0) * 4096 + ((value:byte(pos + 1) or 0) - 0x80) * 64 + (value:byte(pos + 2) or 0) - 0x80
-      else cp = (b1 - 0xF0) * 262144 + ((value:byte(pos + 1) or 0) - 0x80) * 4096 + ((value:byte(pos + 2) or 0) - 0x80) * 64 + (value:byte(pos + 3) or 0) - 0x80 end
-      out[#out + 1] = cp
-      pos = pos + width
-    end
-    return out
-  end
-
-  local function glyph(cp)
-    local cached = self.glyph_cache[cp]
-    if cached ~= nil then return cached or nil end
-    if not self.cjk_font_fd and file and file.open and self.cjk_font_path then
-      self.cjk_font_fd = file.open(self.cjk_font_path, "r")
-    end
-    local fd = self.cjk_font_fd
-    if not fd then return nil end
-    local lo, hi = 0, math.floor(self.cjk_font_size / 36) - 1
-    local found = nil
-    while lo <= hi do
-      local mid = math.floor((lo + hi) / 2)
-      local p = mid * 36
-      if fd:seek("set", p) == nil then break end
-      local data = fd:read(36)
-      if type(data) ~= "string" or #data < 36 then break end
-      local a,b,c,d = data:byte(1, 4)
-      local value = a + b * 256 + c * 65536 + d * 16777216
-      if value == cp then found = data:sub(5, 36); break
-      elseif value < cp then lo = mid + 1 else hi = mid - 1 end
-    end
-    self.glyph_cache[cp] = found or false
-    self.glyph_cache_order[#self.glyph_cache_order + 1] = cp
-    if #self.glyph_cache_order > 64 then
-      local old = table.remove(self.glyph_cache_order, 1)
-      self.glyph_cache[old] = nil
-    end
-    return found
-  end
-
-  local function bubble_rgb565(value)
-    value = tostring(value or "")
-    if self.bubble_cache_text == value and self.bubble_cache_data then
+  local function bubble_rgb565()
+    if self.bubble_cache_data then
       return self.bubble_cache_data
-    end
-    local cps, masks = utf8_chars(value, 32), {}
-    for i, cp in ipairs(cps) do masks[i] = glyph(cp) end
-    local foreground = {}
-    local cursor_x, line_no = 0, 0
-    for i, cp in ipairs(cps) do
-      local advance = cp < 128 and 8 or 16
-      if cursor_x + advance > 112 then cursor_x, line_no = 0, line_no + 1 end
-      if line_no >= 4 then break end
-      local mask = masks[i]
-      if mask then
-        local origin_x = 6 + cursor_x - (cp < 128 and 4 or 0)
-        local origin_y = 3 + line_no * 18
-        for gy = 0, 15 do
-          for gx = 0, 15 do
-            local byte = mask:byte(gy * 2 + math.floor(gx / 8) + 1) or 0
-            if (byte % (2 ^ (8 - (gx % 8)))) >= (2 ^ (7 - (gx % 8))) then
-              local px, py = origin_x + gx, origin_y + gy
-              if px >= 0 and px < 126 and py >= 0 and py < 76 then foreground[py * 126 + px] = true end
-            end
-          end
-        end
-      end
-      cursor_x = cursor_x + advance
     end
     local chunks = {}
     local transparent_px = string.char(0, 0)
     local green_px = string.char(0x6D, 0x97)
-    local white_px = string.char(0x82, 0x10)
     for y = 0, 75 do
       local row, run_pixel, run_length = {}, nil, 0
       for x = 0, 125 do
@@ -237,7 +158,6 @@ function M.new(cfg)
           or (x < 8 and y > 67 and (x-8)^2+(y-67)^2 > 64)
           or (x > 117 and y > 67 and (x-117)^2+(y-67)^2 > 64)
         local pixel = outside and transparent_px or green_px
-        if foreground[y * 126 + x] then pixel = white_px end
         if pixel == run_pixel then
           run_length = run_length + 1
         else
@@ -249,43 +169,8 @@ function M.new(cfg)
       chunks[#chunks + 1] = table.concat(row)
     end
     local data = table.concat(chunks)
-    self.bubble_cache_text = value
     self.bubble_cache_data = data
     return data
-  end
-
-  local function glyph_rgb565(mask, ascii)
-    if not mask then return nil, 0 end
-    local width, start_x = ascii and 8 or 16, ascii and 4 or 0
-    local green_px, white_px = string.char(0x6D, 0x97), string.char(0x82, 0x10)
-    local rows = {}
-    for gy = 0, 15 do
-      local row = {}
-      for x = 0, width - 1 do
-        local gx = start_x + x
-        local byte = mask:byte(gy * 2 + math.floor(gx / 8) + 1) or 0
-        local set = (byte % (2 ^ (8 - (gx % 8)))) >= (2 ^ (7 - (gx % 8)))
-        row[#row + 1] = set and white_px or green_px
-      end
-      rows[#rows + 1] = table.concat(row)
-    end
-    return table.concat(rows), width
-  end
-
-  local function draw_reply(value)
-    if not lv_canvas_blit_rgb565 then return end
-    local x, y = 78, 15
-    for _, cp in ipairs(utf8_chars(value, 32)) do
-      local ascii = cp < 128
-      local data, width = glyph_rgb565(glyph(cp), ascii)
-      if x + width > 194 then x, y = 78, y + 18 end
-      if y + 16 > 86 then break end
-      if data then
-        pcall(lv_canvas_blit_rgb565, self.canvas, x, y, width, 16, data,
-          { byte_order = "little" })
-      end
-      x = x + width
-    end
   end
 
   local function render_now()
@@ -301,18 +186,13 @@ function M.new(cfg)
       reply = self.bubble_pages[self.bubble_page_index] or self.bubble_pages[1] or reply
     end
     if lv_canvas_blit_rgb565 then
-      local rendered_text = self.native_font and "" or reply
-      local data = self.bubble_visible and bubble_rgb565(rendered_text) or string.rep("\0", 126 * 76 * 2)
+      local data = self.bubble_visible and bubble_rgb565() or string.rep("\0", 126 * 76 * 2)
       pcall(lv_canvas_blit_rgb565, self.canvas, 72, 12, 126, 76, data, { byte_order = "little" })
-      if self.bubble_visible then
-        if self.native_font and lv_canvas_draw_text then
-          pcall(lv_canvas_draw_text, self.canvas, 78, 15, 114, reply, {
-            color = 0x111111, opa = 255, align = LV_TEXT_ALIGN_LEFT,
-            font_size = 16, font_handle = self.native_font,
-          })
-        else
-          draw_reply(reply)
-        end
+      if self.bubble_visible and self.native_font and lv_canvas_draw_text then
+        pcall(lv_canvas_draw_text, self.canvas, 78, 15, 114, reply, {
+          color = 0x111111, opa = 255, align = LV_TEXT_ALIGN_LEFT,
+          font_size = 16, font_handle = self.native_font,
+        })
       end
     end
     if lv_canvas_frame_end then pcall(lv_canvas_frame_end, self.canvas) end
@@ -371,11 +251,6 @@ function M.new(cfg)
       self.bubble_page_timer = nil
     end
     self.bubble_visible = false
-    if self.cjk_font_fd then pcall(function() self.cjk_font_fd:close() end) end
-    self.cjk_font_fd = nil
-    self.glyph_cache = {}
-    self.glyph_cache_order = {}
-    self.bubble_cache_text = nil
     self.bubble_cache_data = nil
     self.character_rgb565 = nil
     if collectgarbage then pcall(collectgarbage, "collect") end
@@ -486,11 +361,8 @@ function M.new(cfg)
 
   function self:setup()
     self.stopped = false
-    self.cjk_font_path = (cfg.APP_DIR or "/sd/apps/xiaozhi-service") .. "/assets/fonts/cjk16_1bpp.bin"
     self.native_font_path = (cfg.APP_DIR or "/sd/apps/xiaozhi-service")
       .. "/assets/fonts/xiaozhi_common3500_16.bin"
-    local stat = file and file.stat and file.stat(self.cjk_font_path) or nil
-    self.cjk_font_size = stat and tonumber(stat.size) or 0
     -- A successful acquire grants the service its restricted Canvas/font API.
     ensure_canvas()
     if not self.native_font and type(rawget(_G, "lv_font_load")) == "function" then
@@ -500,21 +372,11 @@ function M.new(cfg)
   end
 
   function self:diagnostics()
-    local sample = glyph(0x4E2D)
-    local bits = 0
-    if sample then
-      for i = 1, #sample do
-        local byte = sample:byte(i)
-        for _ = 1, 8 do bits = bits + (byte % 2); byte = math.floor(byte / 2) end
-      end
-    end
     return {
-      font_size = self.cjk_font_size,
-      sample_bytes = sample and #sample or 0,
-      sample_bits = bits,
       lv_font_load = type(rawget(_G, "lv_font_load")),
       lv_font_free = type(rawget(_G, "lv_font_free")),
       native_font = self.native_font,
+      native_font_path = self.native_font_path,
     }
   end
 
@@ -527,8 +389,6 @@ function M.new(cfg)
     end
     self.native_font = nil
     self.native_font_path = nil
-    self.cjk_font_path = nil
-    self.cjk_font_size = 0
   end
 
   return self
