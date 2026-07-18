@@ -81,7 +81,7 @@ local PAGE = [=[<!doctype html>
     <label class="field">界面类型
       <select id="appUiType"></select>
     </label>
-    <p class="hint">保存后立即生效。选项来自 /sd/apps/xiaozhi/ui 。</p>
+    <p class="hint">保存后重新打开前台生效。选项来自 /sd/apps/xiaozhi/ui 。</p>
   </section>
 
   <section class="card">
