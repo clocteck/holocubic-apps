@@ -1,5 +1,6 @@
 name = XiaoZhi AI
 kind = app
 entry = main.lua
-description = XiaoZhi voice core and wake module
-version = 1.0.3
+allow_webui = true
+description = XiaoZhi standalone app or service-backed UI
+version = 1.1.0
