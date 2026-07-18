@@ -232,3 +232,16 @@ return {
 前台 UI 模式由 `xiaozhi/ui_ipc.lua` 通过 `xiaozhi-service` IPC endpoint
 订阅服务快照并发送控制命令；`_G.XIAOZHI_SERVICE` 仅作为同状态机快速路径。
 UI 同步不使用 HTTP。
+
+其他后台应用临时需要 I2S 时，可以向 `xiaozhi-service` 发送临时唤醒退避事件：
+
+```lua
+ipc.send("xiaozhi-service", "temporary_wake_backoff", json.encode({
+  source = "ntfy-service",
+  duration_ms = 1500
+}))
+```
+
+`duration_ms` 会被限制在 `1000` 到 `10000` 毫秒；也可以传 `seconds`，范围等价于
+`1` 到 `10` 秒。退避只临时关闭空闲状态下的后台唤醒 I2S，不会修改
+`service.json` 的 `enabled`，并且优先级高于 Launcher 或前台 App 变化触发的唤醒恢复。

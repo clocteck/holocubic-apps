@@ -31,6 +31,9 @@ function M.new(cfg, load_module)
     current_app_id = "launcher",
     audio_suspended_by_app = false,
     audio_suspended_app_id = nil,
+    temporary_wake_backoff = false,
+    temporary_wake_backoff_timer = nil,
+    temporary_wake_backoff_source = nil,
     activation_status = "启动中",
     activation_message = "",
     pairing_code = "",
@@ -587,13 +590,15 @@ function M.new(cfg, load_module)
   end
 
   local on_app_change
+  local temporary_wake_backoff_active
+  local clear_temporary_wake_backoff_timer
 
   local function launch_app_from_ui(app_id, allow_wake_service, reason)
     print("[xiaozhi] app launch request", tostring(reason or ""), tostring(app_id or ""))
     if type(app_id) ~= "string" or app_id == "" or app_id == "launcher" then
       if cfg.SERVICE_MODE then
         if self.ui and self.ui.on_state then self.ui:on_state(State.IDLE) end
-        if self.audio then self.audio:set_mode("wake") end
+        if self.audio and not temporary_wake_backoff_active() then self.audio:set_mode("wake") end
       else
         notify_wake_service_for_app("launcher", nil, 800)
       end
@@ -623,7 +628,8 @@ function M.new(cfg, load_module)
       local ok, err = app and app.launch and app.launch(app_id)
       print("[xiaozhi] app launch", tostring(reason or ""), tostring(app_id), tostring(ok), tostring(err or ""))
       if cfg.SERVICE_MODE and ok then
-        if allow_wake_service ~= false and self.audio and not self.audio_suspended_by_app then
+        if allow_wake_service ~= false and self.audio and not self.audio_suspended_by_app
+            and not temporary_wake_backoff_active() then
           self.audio:set_mode("wake")
         end
       end
@@ -686,6 +692,16 @@ function M.new(cfg, load_module)
       notify_ipc()
       return
     end
+    if temporary_wake_backoff_active() and new_state == State.IDLE then
+      if self.audio then pcall(function() self.audio:set_mode("off") end) end
+      refresh_metrics()
+      notify_ipc()
+      if self.external_wake_active
+          and (old_state == State.CONNECTING or old_state == State.LISTENING or old_state == State.SPEAKING) then
+        return_to_origin()
+      end
+      return
+    end
     if new_state == State.IDLE then
       self.ui:clear_chat_messages()
       -- Release the WebSocket task/queues before asking I2S for contiguous DMA RAM.
@@ -732,6 +748,82 @@ function M.new(cfg, load_module)
     end
   end
 
+  temporary_wake_backoff_active = function()
+    return self.temporary_wake_backoff == true
+  end
+
+  clear_temporary_wake_backoff_timer = function()
+    if self.temporary_wake_backoff_timer then
+      pcall(function() self.temporary_wake_backoff_timer:stop() end)
+      pcall(function() self.temporary_wake_backoff_timer:unregister() end)
+      self.temporary_wake_backoff_timer = nil
+    end
+  end
+
+  local resume_audio_for_app
+
+  local function restore_after_temporary_wake_backoff(source)
+    clear_temporary_wake_backoff_timer()
+    if not temporary_wake_backoff_active() then return true end
+    self.temporary_wake_backoff = false
+    self.temporary_wake_backoff_source = nil
+    if self.stopped then return true end
+    if self.audio_suspended_by_app then
+      refresh_metrics()
+      notify_ipc()
+      return true
+    end
+    if self.audio and self.state.state == State.IDLE and service_wake_enabled() then
+      pcall(function() self.audio:set_mode("wake") end)
+    end
+    refresh_metrics()
+    notify_ipc()
+    print("[xiaozhi] temporary wake backoff restored", tostring(source or ""))
+    return true
+  end
+
+  local function temporary_wake_backoff(duration_ms, source)
+    if not cfg.SERVICE_MODE then return false, "service mode required" end
+    duration_ms = math.floor(tonumber(duration_ms) or 0)
+    if duration_ms <= 0 then
+      return false, "duration required"
+    end
+    duration_ms = math.max(1000, math.min(60000, duration_ms))
+    source = type(source) == "string" and source ~= "" and source or "ipc"
+    if not service_wake_enabled() then
+      return true, { active = false, duration_ms = duration_ms, reason = "wake disabled" }
+    end
+    self.temporary_wake_backoff = true
+    self.temporary_wake_backoff_source = source
+    clear_temporary_wake_backoff_timer()
+    if self.wake_open_timer then
+      pcall(function() self.wake_open_timer:stop() end)
+      pcall(function() self.wake_open_timer:unregister() end)
+      self.wake_open_timer = nil
+    end
+    if self.audio and not self.audio_suspended_by_app and self.state.state == State.IDLE then
+      pcall(function() self.audio:set_mode("off") end)
+    end
+    if tmr and tmr.create then
+      local timer = tmr.create()
+      self.temporary_wake_backoff_timer = timer
+      timer:alarm(duration_ms, tmr.ALARM_SINGLE, function(instance)
+        pcall(function() instance:unregister() end)
+        if self.temporary_wake_backoff_timer ~= timer then return end
+        self.temporary_wake_backoff_timer = nil
+        restore_after_temporary_wake_backoff(source)
+      end)
+    else
+      self.temporary_wake_backoff = false
+      self.temporary_wake_backoff_source = nil
+      return false, "timer unavailable"
+    end
+    refresh_metrics()
+    notify_ipc()
+    print("[xiaozhi] temporary wake backoff", tostring(source), tostring(duration_ms) .. "ms")
+    return true, { active = true, duration_ms = duration_ms }
+  end
+
   local function suspend_audio_for_app(app_id)
     if not cfg.SERVICE_MODE then return false end
     self.current_app_id = app_id
@@ -745,6 +837,9 @@ function M.new(cfg, load_module)
       pcall(function() self.wake_open_timer:unregister() end)
       self.wake_open_timer = nil
     end
+    clear_temporary_wake_backoff_timer()
+    self.temporary_wake_backoff = false
+    self.temporary_wake_backoff_source = nil
     cancel_external_return()
     cancel_tts_audio_timer()
     self.pending_wake_word = nil
@@ -765,13 +860,19 @@ function M.new(cfg, load_module)
     return true
   end
 
-  local function resume_audio_for_app(app_id)
+  resume_audio_for_app = function(app_id)
     if not cfg.SERVICE_MODE then return false end
     self.current_app_id = app_id
     apply_service_ui_suppression()
     if not self.audio_suspended_by_app then return true end
     self.audio_suspended_by_app = false
     self.audio_suspended_app_id = nil
+    if temporary_wake_backoff_active() then
+      refresh_metrics()
+      notify_ipc()
+      print("[xiaozhi] audio resume deferred by temporary wake backoff", tostring(app_id or ""))
+      return true
+    end
     if self.audio and self.state.state == State.IDLE then
       if service_wake_enabled() then
         pcall(function() self.audio:set_mode("wake") end)
@@ -1149,6 +1250,9 @@ function M.new(cfg, load_module)
     function bridge:on_app_change(app_id, source)
       return on_app_change(app_id, source or "bridge")
     end
+    function bridge:temporary_wake_backoff(duration_ms, source)
+      return temporary_wake_backoff(duration_ms, source or "bridge")
+    end
     function bridge:subscribe(callback)
       if type(callback) ~= "function" then return nil, "callback required" end
       self.runtime.ipc_next_id = self.runtime.ipc_next_id + 1
@@ -1194,6 +1298,20 @@ function M.new(cfg, load_module)
             self:ui_control(doc.action, doc.value)
           elseif topic == "on_app_change" then
             on_app_change(doc.app_id or doc.id or doc.app, doc.source or reply_to or "ipc")
+          elseif topic == "temporary_wake_backoff" or topic == "wake_backoff" then
+            local ms = tonumber(doc.duration_ms or doc.ms)
+            if not ms and tonumber(doc.seconds or doc.sec or doc.duration) then
+              ms = tonumber(doc.seconds or doc.sec or doc.duration) * 1000
+            end
+            local ok_backoff, result = temporary_wake_backoff(ms, doc.source or reply_to or "ipc")
+            if reply_to and ipc.send and lib and lib.encode then
+              local body = ok_backoff and { ok = true, result = result }
+                or { ok = false, error = tostring(result or "temporary wake backoff failed") }
+              local ok_encode, raw = pcall(lib.encode, body)
+              if ok_encode and type(raw) == "string" then
+                pcall(function() ipc.send(reply_to, "temporary_wake_backoff_result", raw) end)
+              end
+            end
           end
         end)
       end)
@@ -1251,6 +1369,9 @@ function M.new(cfg, load_module)
       pcall(function() self.wake_open_timer:unregister() end)
       self.wake_open_timer = nil
     end
+    clear_temporary_wake_backoff_timer()
+    self.temporary_wake_backoff = false
+    self.temporary_wake_backoff_source = nil
     cancel_external_return()
     cancel_tts_audio_timer()
     self.tts_audio_queue = {}
@@ -1567,6 +1688,8 @@ function M.new(cfg, load_module)
       current_app_id = self.current_app_id or "",
       audio_suspended = self.audio_suspended_by_app == true,
       audio_suspended_app_id = self.audio_suspended_app_id or "",
+      temporary_wake_backoff = self.temporary_wake_backoff == true,
+      temporary_wake_backoff_source = self.temporary_wake_backoff_source or "",
     }
   end
 
@@ -1747,6 +1870,8 @@ function M.new(cfg, load_module)
     else
       if self.audio_suspended_by_app then
         -- Keep the app-specific suspension in force until the foreground app changes.
+      elseif temporary_wake_backoff_active() then
+        -- Keep temporary I2S backoff ahead of launcher/app-driven wake recovery.
       elseif self.audio and self.state.state == State.IDLE then
         pcall(function() self.audio:set_mode("wake") end)
       end
