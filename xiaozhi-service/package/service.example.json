@@ -1,9 +1,13 @@
 {
-  "enabled": false,
+  "enabled": true,
+  "ui_mode": "app",
+  "ui_type": "window",
+  "ui_character": "xiaozhi_chibi",
   "deny_apps": {
+    "videos": true,
     "holo-retro-go": true,
     "mp3_player": true,
     "Spectrum": true,
-    "videos": true
+    "2048": true
   }
 }

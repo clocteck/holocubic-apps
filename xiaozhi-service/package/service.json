@@ -1,5 +1,8 @@
 {
   "enabled": true,
+  "ui_mode": "app",
+  "ui_type": "window",
+  "ui_character": "xiaozhi_chibi",
   "deny_apps": {
     "videos": true,
     "holo-retro-go": true,

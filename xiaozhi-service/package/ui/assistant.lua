@@ -69,6 +69,7 @@ function M.new(cfg)
     notice = "",
     stopped = false,
     character_rgb565 = nil,
+    character_name = nil,
     native_font = nil,
     native_font_path = nil,
     bubble_cache_data = nil,
@@ -86,6 +87,12 @@ function M.new(cfg)
       if ok and type(raw) == "string" then return raw end
     end
     return nil
+  end
+
+  local function safe_name(value)
+    value = type(value) == "string" and value:match("^%s*(.-)%s*$"):lower() or ""
+    if value ~= "" and #value <= 48 and value:match("^[%w_.%-]+$") then return value end
+    return "xiaozhi_chibi"
   end
 
   local function rect(x, y, w, h, color, radius, opa)
@@ -219,8 +226,9 @@ function M.new(cfg)
     if self.canvas then return true end
     if not service_ui or not service_ui.acquire then return false end
     if not self.character_rgb565 then
-      self.character_rgb565 = read_binary((cfg.APP_DIR or "/sd/apps/xiaozhi-service")
-        .. "/assets/character/xiaozhi_chibi.rgb565")
+      self.character_name = safe_name((cfg.UI and cfg.UI.character) or cfg.UI_CHARACTER)
+      self.character_rgb565 = read_binary((cfg.SERVICE_DIR or "/sd/apps/xiaozhi-service")
+        .. "/ui/character/" .. self.character_name .. ".rgb565")
     end
     local id, err = service_ui.acquire(X, Y, W, H)
     if not id then
@@ -253,6 +261,7 @@ function M.new(cfg)
     self.bubble_visible = false
     self.bubble_cache_data = nil
     self.character_rgb565 = nil
+    self.character_name = nil
     if collectgarbage then pcall(collectgarbage, "collect") end
   end
 
@@ -260,6 +269,10 @@ function M.new(cfg)
     if ensure_canvas() then
       render()
     end
+  end
+
+  local function silent_activation()
+    return self.state == "starting" or self.state == "activating"
   end
 
   local function show_bubble_temporarily()
@@ -300,12 +313,14 @@ function M.new(cfg)
 
   function self:set_status(value)
     self.status = tostring(value or "")
+    if silent_activation() and not self.status:find("验证码", 1, true) then return end
     show_bubble_temporarily()
     show()
   end
 
   function self:show_notification(value)
     self.notice = tostring(value or "")
+    if silent_activation() and not self.notice:find("验证码", 1, true) then return end
     show_bubble_temporarily()
     show()
   end
@@ -323,6 +338,7 @@ function M.new(cfg)
       self.bubble_pages = split_bubble_pages(content)
       self.bubble_page_index = 1
     else self.notice = content end
+    if silent_activation() and not content:find("验证码", 1, true) then return end
     show_bubble_temporarily()
     -- Chat text is latency-sensitive: commit it before the first queued TTS
     -- audio frame instead of waiting for the normal 120 ms render coalescer.
@@ -343,6 +359,8 @@ function M.new(cfg)
     self.status = labels[self.state] or self.status
     if self.state == "idle" then
       release_canvas()
+    elseif self.state == "starting" or self.state == "activating" then
+      if self.canvas then release_canvas() end
     else
       show()
     end
@@ -361,10 +379,8 @@ function M.new(cfg)
 
   function self:setup()
     self.stopped = false
-    self.native_font_path = (cfg.APP_DIR or "/sd/apps/xiaozhi-service")
+    self.native_font_path = (cfg.UI_APP_DIR or cfg.APP_DIR or "/sd/apps/xiaozhi")
       .. "/assets/fonts/xiaozhi_common3500_16.bin"
-    -- A successful acquire grants the service its restricted Canvas/font API.
-    ensure_canvas()
     if not self.native_font and type(rawget(_G, "lv_font_load")) == "function" then
       local ok, handle = pcall(lv_font_load, self.native_font_path)
       if ok and type(handle) == "number" and handle > 0 then self.native_font = handle end
@@ -377,6 +393,7 @@ function M.new(cfg)
       lv_font_free = type(rawget(_G, "lv_font_free")),
       native_font = self.native_font,
       native_font_path = self.native_font_path,
+      character = self.character_name,
     }
   end
 

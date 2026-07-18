@@ -4,18 +4,22 @@ M.VERSION = "2026-06-24-xiaozhi-lua-port-v2"
 M.FIRMWARE_VERSION = "1.7.5"
 M.BOARD_TYPE = "bread-compact-wifi-lcd"
 M.BOARD_NAME = "bread-compact-wifi-lcd"
-M.APP_DIR = "/sd/apps/xiaozhi-service"
-M.XZ_MODULE = M.APP_DIR .. "/xiaozhi.so"
-M.WAKE_MODULE = M.APP_DIR .. "/wake.so"
-M.CONFIG_PATH = M.APP_DIR .. "/config.json"
-M.MCP_DIR = M.APP_DIR .. "/mcp"
-M.WAKE_MODEL_DIR = M.APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
+M.SERVICE_DIR = "/sd/apps/xiaozhi-service"
+M.UI_APP_DIR = "/sd/apps/xiaozhi"
+M.APP_DIR = M.UI_APP_DIR
+M.XZ_MODULE = M.UI_APP_DIR .. "/xiaozhi.so"
+M.WAKE_MODULE = M.UI_APP_DIR .. "/wake.so"
+M.CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
+M.MCP_DIR = M.UI_APP_DIR .. "/mcp"
+M.WAKE_MODEL_DIR = M.UI_APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
 M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
 M.TIMEZONE = "CST-8"
-M.DEFAULT_UI_STYLE = "default"
-M.ASSET_DIR = M.APP_DIR .. "/assets"
+M.UI_TYPE = nil
+M.APP_UI_TYPE = nil
+M.UI_CHARACTER = nil
+M.ASSET_DIR = M.UI_APP_DIR .. "/assets"
 M.EMOJI_GIF_DIR = M.ASSET_DIR .. "/emojis/gif"
 M.EMOJI_PNG_DIR = M.ASSET_DIR .. "/emojis/png"
 M.TEXT_FONT_PATH = M.ASSET_DIR .. "/fonts/noto_sans_sc_medium_16_2bpp_common4000.bin"
@@ -94,10 +98,14 @@ M.ota = {
 M.wake_service = {
   enabled = false,
 }
+M.UI_MODE = "app"
 
 M.UI = {
   gif_enabled = true,
   emotion_min_ms = 1000,
+}
+M.app_ui = {
+  type = nil,
 }
 
 local function read_text(path)
@@ -152,12 +160,9 @@ end
 
 local function read_wake_service_config()
   local raw = read_text("/sd/apps/xiaozhi-service/service.json")
-  if not raw then
-    raw = read_text("/sd/apps/xiaozhi-service/service.example.json")
-  end
   local obj = raw and decode_json(raw) or nil
   if type(obj) ~= "table" then
-    return nil
+    return { enabled = true, ui_mode = "app", deny_apps = {} }
   end
   return obj
 end
@@ -227,19 +232,48 @@ local function apply_ota(ota)
   end
 end
 
+local apply_ui_config
+
 local function apply_wake_service(wake_service)
   if type(wake_service) == "table" and wake_service.enabled ~= nil then
     M.wake_service.enabled = wake_service.enabled and true or false
   end
+  local mode = type(wake_service) == "table" and wake_service.ui_mode or nil
+  if mode == "floating" or mode == "service_ui" then
+    M.UI_MODE = "floating"
+  elseif mode == "app" or mode == "foreground" then
+    M.UI_MODE = "app"
+  end
+  if type(wake_service) == "table" then
+    local ui_type = wake_service.ui_type
+    if type(ui_type) == "string" then
+      apply_ui_config({ type = ui_type })
+    end
+    local character = wake_service.ui_character or wake_service.character
+    if type(character) == "string" then
+      character = character:match("^%s*(.-)%s*$"):lower()
+      if character ~= "" and #character <= 48 and character:match("^[%w_.%-]+$") then
+        M.UI_CHARACTER = character
+        M.UI.character = character
+      end
+    end
+  end
 end
 
-local function apply_default_ui_style(value)
+apply_ui_config = function(ui, target)
+  if type(ui) ~= "table" then return end
+  local value = ui.type
   if type(value) == "string" then
     value = value:match("^%s*(.-)%s*$"):lower()
   end
-  if value == "default" or value == "wechat" then
-    M.DEFAULT_UI_STYLE = value
-    M.default_ui_style = value
+  if type(value) == "string" and value ~= "" and #value <= 48 and value:match("^[%w_.%-]+$") then
+    if target == "app" then
+      M.APP_UI_TYPE = value
+      M.app_ui.type = value
+    else
+      M.UI_TYPE = value
+      M.UI.type = value
+    end
   end
 end
 
@@ -255,9 +289,9 @@ function M.load()
     apply_websocket(obj.websocket)
     apply_ota(obj.ota)
     apply_audio(obj.audio or obj.audio_params)
+    apply_ui_config(obj.ui, "app")
+    apply_ui_config({ type = obj.ui_type }, "app")
     apply_wake_service(read_wake_service_config())
-    apply_default_ui_style(obj.default_ui_style)
-    print("[xiaozhi] default ui style", tostring(M.DEFAULT_UI_STYLE))
     if type(obj.wake_word) == "string" and obj.wake_word ~= "" then
       M.WAKE_WORD = obj.wake_word
     end
@@ -275,7 +309,7 @@ function M.load()
   local version = pick_number(ws_block, "version")
   local wake_word = pick_string(raw, "wake_word")
   local timezone = pick_string(raw, "timezone")
-  local default_ui_style = pick_string(raw, "default_ui_style")
+  local ui_type = pick_string(raw, "ui_type")
 
   if url and url:match("^wss?://") then
     M.websocket.url = url
@@ -292,8 +326,7 @@ function M.load()
   if timezone and timezone ~= "" then
     M.TIMEZONE = timezone
   end
-  apply_default_ui_style(default_ui_style)
-  print("[xiaozhi] default ui style", tostring(M.DEFAULT_UI_STYLE))
+  apply_ui_config({ type = ui_type }, "app")
   if ota_block ~= "" then
     local ota_url = pick_string(ota_block, "url")
     local enabled = pick_bool(ota_block, "enabled")
