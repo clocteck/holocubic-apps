@@ -139,7 +139,9 @@ local function default_runtime_config(cfg)
     },
     wake_word = cfg.WAKE_WORD or "你好小智",
     timezone = cfg.TIMEZONE or "CST-8",
-    default_ui_style = cfg.DEFAULT_UI_STYLE or "default",
+    ui = {
+      type = cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "subtitle",
+    },
   }
 end
 
@@ -197,7 +199,9 @@ local function write_runtime_config(cfg)
     '    "bitrate": ' .. tostring(cfg.AUDIO.bitrate or 12000) .. "\n" ..
     "  },\n" ..
     '  "wake_word": "' .. json_escape(cfg.WAKE_WORD or "你好小智") .. '",\n' ..
-    '  "default_ui_style": "' .. json_escape(cfg.DEFAULT_UI_STYLE or "default") .. '"\n' ..
+    '  "ui": {\n' ..
+    '    "type": "' .. json_escape(cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "subtitle") .. '"\n' ..
+    "  }\n" ..
     "}\n"
   if file.putcontents then
     local ok, err = pcall(function()
