@@ -5,7 +5,11 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.1.0",
+  VERSION = "1.2.0",
+  APP_DIR = "/sd/apps/display_schedule",
+  PAGE_PATH = "/sd/apps/display_schedule/main.html",
+  FIXED_ROUTE_BASE = "/display-schedule",
+  ROUTE_BASE = "/display-schedule",
   SETTINGS_PATH = "/sd/apps/settings.json",
   AUDIO_MODULE_PATH = "/sd/apps/mp3_player/modules/audio.so",
   DIM_BRIGHTNESS = 5,
@@ -38,6 +42,19 @@ DISPLAY_SCHEDULE_SERVICE = {
 
 local APP = DISPLAY_SCHEDULE_SERVICE
 local wake_display
+
+if app and app.current then
+  local current = app.current()
+  local entry = current and current.entry
+  local dir = type(entry) == "string" and entry:gsub("\\", "/"):match("^(.*)/[^/]+$") or nil
+  if dir and dir ~= "" then
+    APP.APP_DIR = dir
+    APP.PAGE_PATH = dir .. "/main.html"
+  end
+end
+if app and app.route_base then
+  APP.ROUTE_BASE = app.route_base() or APP.ROUTE_BASE
+end
 
 local function write_status(stage)
   if not file or not file.putcontents then return end
@@ -87,6 +104,39 @@ local function json_response(value)
     headers = { ["cache-control"] = "no-store", ["connection"] = "close" },
     body = body,
   }
+end
+
+local function html_response(body)
+  return {
+    status = "200 OK",
+    type = "text/html; charset=utf-8",
+    headers = { ["cache-control"] = "no-store", ["connection"] = "close" },
+    body = body or "",
+  }
+end
+
+local function read_body(req, limit)
+  if not req or not req.getbody then return "", nil end
+  local parts, total = {}, 0
+  while true do
+    local chunk = req.getbody()
+    if not chunk then break end
+    total = total + #chunk
+    if total > limit then return nil, "request too large" end
+    parts[#parts + 1] = chunk
+  end
+  return table.concat(parts), nil
+end
+
+local function write_settings(settings)
+  if not file or not file.putcontents then return false, "file.putcontents missing" end
+  local codec = rawget(_G, "json") or rawget(_G, "sjson")
+  if not codec or not codec.encode then return false, "json.encode missing" end
+  local ok, raw = pcall(function() return codec.encode(settings) end)
+  if not ok or type(raw) ~= "string" then return false, tostring(raw or "json encode failed") end
+  local wrote, result = pcall(function() return file.putcontents(APP.SETTINGS_PATH, raw) end)
+  if not wrote or result == false then return false, tostring(result or "write failed") end
+  return true
 end
 
 local function read_settings()
@@ -399,16 +449,56 @@ local function check_alarms(clock)
   end
 end
 
+local function list_mp3_files()
+  local output, seen = {}, {}
+  if not file or not file.listdir then return output end
+  for _, dir in ipairs({ "/sd/mp3", "/sd/MP3" }) do
+    local ok, entries = pcall(function() return file.listdir(dir) end)
+    if ok and type(entries) == "table" then
+      for _, entry in ipairs(entries) do
+        local name = tostring(type(entry) == "table" and entry.name or entry or "")
+        local is_dir = type(entry) == "table" and entry.is_dir == true
+        if not is_dir and name:lower():match("%.mp3$") then
+          local path = type(entry) == "table" and tostring(entry.path or "") or ""
+          if path == "" then path = dir .. "/" .. name end
+          path = normalize_alarm_sound(path)
+          if path ~= "builtin" and not seen[path] then
+            seen[path] = true
+            output[#output + 1] = { name = name, path = path }
+          end
+        end
+      end
+    end
+  end
+  table.sort(output, function(a, b) return a.name:lower() < b.name:lower() end)
+  return output
+end
+
 local function api_info()
   local clock = local_clock()
+  local settings = read_settings()
   local current_brightness = nil
   if sys and sys.getbrightness then
     local ok, value = pcall(function() return sys.getbrightness() end)
     if ok then current_brightness = tonumber(value) end
   end
+  local alarms = {}
+  for index, alarm in ipairs(APP.alarms) do
+    alarms[index] = {
+      enabled = alarm.enabled,
+      hour = alarm.hour,
+      minute = alarm.minute,
+      ["repeat"] = alarm.repeat_rule,
+    }
+  end
   return json_response({
     ok = true,
     version = APP.VERSION,
+    language = tostring(settings.language or settings.locale or settings.lang or "zh-CN"),
+    route_base = APP.ROUTE_BASE,
+    fixed_route_base = APP.FIXED_ROUTE_BASE,
+    auto_sleep_enabled = bool_value(settings.auto_sleep_enabled, false),
+    auto_sleep_seconds = clamp(settings.auto_sleep_seconds, 1, 86400, 1800),
     scheduled_sleep_enabled = APP.enabled,
     scheduled_sleep_mode = APP.mode,
     scheduled_sleep_hour = APP.sleep_hour,
@@ -421,6 +511,8 @@ local function api_info()
     alarm_sound = APP.alarm_sound,
     alarm_audio_mode = APP.alarm_audio_mode,
     alarm_count = #APP.alarms,
+    alarms = alarms,
+    mp3_files = list_mp3_files(),
     clock = clock,
     imu_registered = APP.imu_registered,
     current_brightness = current_brightness,
@@ -514,6 +606,77 @@ local function sync_settings()
   APP.window_active = active
 end
 
+local function api_settings(req)
+  local raw, body_err = read_body(req, 32768)
+  if not raw then return json_response({ ok = false, error = body_err }) end
+  local codec = rawget(_G, "json") or rawget(_G, "sjson")
+  if not codec or not codec.decode then
+    return json_response({ ok = false, error = "json.decode missing" })
+  end
+  local decoded, input = pcall(function() return codec.decode(raw) end)
+  if not decoded or type(input) ~= "table" then
+    return json_response({ ok = false, error = "invalid json" })
+  end
+
+  local settings = read_settings()
+  settings.auto_sleep_enabled = bool_value(input.auto_sleep_enabled, false)
+  settings.auto_sleep_seconds = clamp(input.auto_sleep_seconds, 1, 86400, 1800)
+  settings.scheduled_sleep_enabled = bool_value(input.scheduled_sleep_enabled, false)
+  settings.scheduled_sleep_mode = tostring(input.scheduled_sleep_mode or "off") == "dim" and "dim" or "off"
+  settings.scheduled_sleep_hour = clamp(input.scheduled_sleep_hour, 0, 23, 0)
+  settings.scheduled_sleep_minute = clamp(input.scheduled_sleep_minute, 0, 59, 0)
+  settings.scheduled_wake_hour = clamp(input.scheduled_wake_hour, 0, 23, 7)
+  settings.scheduled_wake_minute = clamp(input.scheduled_wake_minute, 0, 59, 0)
+  settings.alarm_sound = normalize_alarm_sound(input.alarm_sound)
+  settings.alarms = {}
+  for index, alarm in ipairs(normalize_alarms(input.alarms)) do
+    settings.alarms[index] = {
+      enabled = alarm.enabled,
+      hour = alarm.hour,
+      minute = alarm.minute,
+      ["repeat"] = alarm.repeat_rule,
+    }
+  end
+
+  if settings.scheduled_sleep_enabled
+      and settings.scheduled_sleep_hour == settings.scheduled_wake_hour
+      and settings.scheduled_sleep_minute == settings.scheduled_wake_minute then
+    return json_response({ ok = false, error = "screen-off and screen-on times must differ" })
+  end
+
+  local was_ringing = APP.alarm_ringing
+  if was_ringing then stop_alarm() end
+  local saved, save_err = write_settings(settings)
+  if not saved then return json_response({ ok = false, error = save_err }) end
+  sync_settings()
+  if was_ringing then start_alarm() end
+  return api_info()
+end
+
+local function api_alarm_test()
+  stop_alarm()
+  sync_settings()
+  start_alarm()
+  return api_info()
+end
+
+local function api_alarm_stop()
+  stop_alarm()
+  return api_info()
+end
+
+local function web_page()
+  local body = ""
+  if file and file.getcontents then
+    local ok, raw = pcall(function() return file.getcontents(APP.PAGE_PATH) end)
+    if ok and type(raw) == "string" then body = raw end
+  end
+  if body == "" then
+    body = "<!doctype html><meta charset=\"utf-8\"><title>Screen & Alarms</title><p>Control page unavailable.</p>"
+  end
+  return html_response(body)
+end
+
 local function tick()
   APP.tick_count = (APP.tick_count + 1) % 5
   if APP.tick_count == 0 then sync_settings() end
@@ -590,19 +753,33 @@ end
 
 sync_settings()
 
-if httpd and httpd.dynamic then
-  local route = "/display-schedule/api/info"
-  local ok, err = pcall(function() return httpd.dynamic(httpd.GET, route, api_info) end)
+local function register_route(method, route, handler)
+  if not httpd or not httpd.dynamic then return false end
+  local ok, err = pcall(function() return httpd.dynamic(method, route, handler) end)
   if ok and not err then
-    APP.routes[#APP.routes + 1] = { method = httpd.GET, route = route }
+    APP.routes[#APP.routes + 1] = { method = method, route = route }
+    return true
   end
-  local wake_route = "/display-schedule/api/wake"
-  for _, method in ipairs({ httpd.GET, httpd.POST }) do
-    local wake_ok, wake_err = pcall(function() return httpd.dynamic(method, wake_route, api_wake) end)
-    if wake_ok and not wake_err then
-      APP.routes[#APP.routes + 1] = { method = method, route = wake_route }
-    end
-  end
+  return false
+end
+
+local function register_route_set(base)
+  if type(base) ~= "string" or base == "" then return end
+  base = base:gsub("/+$", "")
+  local get, post = httpd.GET or "GET", httpd.POST or "POST"
+  register_route(get, base, web_page)
+  register_route(get, base .. "/", web_page)
+  register_route(get, base .. "/api/info", api_info)
+  register_route(post, base .. "/api/settings", api_settings)
+  register_route(post, base .. "/api/alarm/test", api_alarm_test)
+  register_route(post, base .. "/api/alarm/stop", api_alarm_stop)
+  register_route(get, base .. "/api/wake", api_wake)
+  register_route(post, base .. "/api/wake", api_wake)
+end
+
+if httpd then
+  register_route_set(APP.ROUTE_BASE)
+  if APP.ROUTE_BASE ~= APP.FIXED_ROUTE_BASE then register_route_set(APP.FIXED_ROUTE_BASE) end
 end
 
 if key and key.on then

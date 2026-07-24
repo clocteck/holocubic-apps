@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>息屏与闹钟</title>
+<style>
+:root{color-scheme:dark;--bg:#07090d;--card:#11151c;--line:#252c37;--text:#f3f6fa;--muted:#9ba7b7;--accent:#31d27c;--danger:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#153b2b 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(920px,calc(100% - 28px));margin:0 auto;padding:28px 0 48px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:20px}h1{font-size:28px;margin:0 0 6px}p{margin:0;color:var(--muted)}
+.status{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:99px;background:#0c1016}.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:color-mix(in srgb,var(--card) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px}.wide{grid-column:1/-1}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}h2{font-size:18px;margin:0}.hint{font-size:13px;color:var(--muted)}
+label{display:grid;gap:7px;color:var(--muted);font-size:13px}select,button{font:inherit}select{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;background-color:#090c11;color:var(--text);padding:0 34px 0 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#8996a8 50%),linear-gradient(135deg,#8996a8 50%,transparent 50%);background-position:calc(100% - 16px) 18px,calc(100% - 11px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;transform:none;transition:border-color .15s,box-shadow .15s}
+select:hover{border-color:#3b4655;transform:none}select:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent);transform:none}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.time{display:grid;grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr);align-items:center;gap:7px;min-width:0}.time select{min-width:0}.time b{color:var(--muted);text-align:center}
+.alarms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.alarm{border:1px solid var(--line);border-radius:14px;padding:14px;background:#0b0e13}.alarm-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.alarm-title strong{font-size:15px}
+.sound-row{display:grid;grid-template-columns:1fr auto auto;gap:9px;align-items:end}.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+button{border:1px solid var(--line);border-radius:11px;background:#171d26;color:var(--text);padding:10px 16px;cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:#04130b;font-weight:700}button.danger{color:#ffc4c4}button:disabled{opacity:.5;cursor:wait}
+#message{min-height:22px;margin-top:12px;text-align:right;color:var(--muted)}#message.good{color:var(--accent)}#message.bad{color:var(--danger)}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.alarms{grid-template-columns:1fr}.sound-row{grid-template-columns:1fr 1fr}.sound-row label{grid-column:1/-1}header{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1 data-i18n="title">息屏与闹钟</h1><p data-i18n="subtitle">管理自动息屏、定时亮屏和三组闹钟。</p></div>
+    <div class="status"><span class="dot"></span><span id="serviceStatus" data-i18n="online">服务运行中</span></div>
+  </header>
+  <div class="grid">
+    <section class="card">
+      <div class="head"><h2 data-i18n="auto">自动息屏</h2></div>
+      <label><span data-i18n="idle">无操作后</span>
+        <select id="autoSleep"><option value="0">关闭</option><option value="60">1 分钟</option><option value="600">10 分钟</option><option value="1800">30 分钟</option><option value="3600">1 小时</option><option value="7200">2 小时</option></select>
+      </label>
+    </section>
+    <section class="card">
+      <div class="head"><h2 data-i18n="schedule">定时息屏</h2><span class="hint" data-i18n="timezone">按设备当前时区执行</span></div>
+      <div class="fields">
+        <label><span data-i18n="enabled">状态</span><select id="scheduleEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label>
+        <label><span data-i18n="mode">息屏模式</span><select id="scheduleMode"><option value="off">关闭屏幕</option><option value="dim">降低亮度</option></select></label>
+        <label><span data-i18n="sleepTime">息屏时间</span><span class="time"><select id="sleepHour"></select><b>:</b><select id="sleepMinute"></select></span></label>
+        <label><span data-i18n="wakeTime">亮屏时间</span><span class="time"><select id="wakeHour"></select><b>:</b><select id="wakeMinute"></select></span></label>
+      </div>
+    </section>
+    <section class="card wide">
+      <div class="head"><div><h2 data-i18n="alarms">闹钟</h2><span class="hint" data-i18n="stopHint">响铃后按 HOME 或摇动设备停止</span></div></div>
+      <div class="sound-row">
+        <label><span data-i18n="sound">闹钟声音</span><select id="alarmSound"><option value="builtin">嘀嘀嘀 · 内置提示音</option></select></label>
+        <button id="testSound" type="button" data-i18n="test">试听</button>
+        <button id="stopSound" class="danger" type="button" data-i18n="stop">停止</button>
+      </div>
+      <div class="alarms" id="alarmList"></div>
+    </section>
+  </div>
+  <div class="actions"><button class="primary" id="save" type="button" data-i18n="save">保存设置</button></div>
+  <div id="message" role="status"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const base=location.pathname.replace(/\/+$/,"");
+const defaults=[{enabled:false,hour:7,minute:0,repeat:"daily"},{enabled:false,hour:8,minute:0,repeat:"weekdays"},{enabled:false,hour:9,minute:0,repeat:"weekend"}];
+const words={
+"zh-CN":{title:"息屏与闹钟",subtitle:"管理自动息屏、定时亮屏和三组闹钟。",online:"服务运行中",auto:"自动息屏",idle:"无操作后",schedule:"定时息屏",timezone:"按设备当前时区执行",enabled:"状态",mode:"息屏模式",sleepTime:"息屏时间",wakeTime:"亮屏时间",alarms:"闹钟",stopHint:"响铃后按 HOME 或摇动设备停止",sound:"闹钟声音",test:"试听",stop:"停止",save:"保存设置",off:"关闭",on:"开启",screenOff:"关闭屏幕",dim:"降低亮度",builtin:"嘀嘀嘀 · 内置提示音",noMp3:"未找到 MP3 音乐",alarm:"闹钟",time:"时间",repeat:"重复",daily:"每日",weekdays:"工作日",weekend:"周末",mon:"每周一",tue:"每周二",wed:"每周三",thu:"每周四",fri:"每周五",sat:"每周六",sun:"每周日",saved:"设置已保存",testing:"正在试听；按 HOME、摇动设备或点击停止可结束",stopped:"已停止",failed:"操作失败"},
+en:{title:"Screen & Alarms",subtitle:"Manage automatic screen off, schedules, and three alarms.",online:"Service online",auto:"Automatic screen off",idle:"After inactivity",schedule:"Scheduled screen off",timezone:"Uses the device time zone",enabled:"Status",mode:"Screen-off mode",sleepTime:"Screen-off time",wakeTime:"Screen-on time",alarms:"Alarms",stopHint:"Press HOME or shake the device to stop",sound:"Alarm sound",test:"Preview",stop:"Stop",save:"Save settings",off:"Off",on:"On",screenOff:"Turn screen off",dim:"Dim screen",builtin:"Triple beep · Built in",noMp3:"No MP3 music found",alarm:"Alarm",time:"Time",repeat:"Repeat",daily:"Daily",weekdays:"Weekdays",weekend:"Weekends",mon:"Every Monday",tue:"Every Tuesday",wed:"Every Wednesday",thu:"Every Thursday",fri:"Every Friday",sat:"Every Saturday",sun:"Every Sunday",saved:"Settings saved",testing:"Previewing; press HOME, shake the device, or click Stop",stopped:"Stopped",failed:"Operation failed"},
+ja:{title:"画面オフとアラーム",subtitle:"自動画面オフ、スケジュール、3件のアラームを管理します。",online:"サービス動作中",auto:"自動画面オフ",idle:"無操作時間",schedule:"画面オフ予約",timezone:"デバイスのタイムゾーンで実行",enabled:"状態",mode:"画面オフモード",sleepTime:"画面オフ時刻",wakeTime:"画面オン時刻",alarms:"アラーム",stopHint:"HOME または本体を振って停止",sound:"アラーム音",test:"試聴",stop:"停止",save:"設定を保存",off:"オフ",on:"オン",screenOff:"画面を消す",dim:"暗くする",builtin:"ビープ3回 · 内蔵",noMp3:"MP3 音楽が見つかりません",alarm:"アラーム",time:"時刻",repeat:"繰り返し",daily:"毎日",weekdays:"平日",weekend:"週末",mon:"毎週月曜日",tue:"毎週火曜日",wed:"毎週水曜日",thu:"毎週木曜日",fri:"毎週金曜日",sat:"毎週土曜日",sun:"毎週日曜日",saved:"保存しました",testing:"試聴中。HOME、振動、または停止ボタンで終了",stopped:"停止しました",failed:"操作に失敗しました"},
+"zh-TW":{title:"關閉螢幕與鬧鐘",subtitle:"管理自動關閉螢幕、定時開關與三組鬧鐘。",online:"服務運作中",auto:"自動關閉螢幕",idle:"閒置後",schedule:"定時關閉螢幕",timezone:"依裝置目前時區執行",enabled:"狀態",mode:"關閉螢幕模式",sleepTime:"關閉螢幕時間",wakeTime:"開啟螢幕時間",alarms:"鬧鐘",stopHint:"響鈴後按 HOME 或搖動裝置停止",sound:"鬧鐘聲音",test:"試聽",stop:"停止",save:"儲存設定",off:"關閉",on:"開啟",screenOff:"關閉螢幕",dim:"降低亮度",builtin:"嘀嘀嘀 · 內建提示音",noMp3:"找不到 MP3 音樂",alarm:"鬧鐘",time:"時間",repeat:"重複",daily:"每日",weekdays:"平日",weekend:"週末",mon:"每週一",tue:"每週二",wed:"每週三",thu:"每週四",fri:"每週五",sat:"每週六",sun:"每週日",saved:"設定已儲存",testing:"正在試聽；按 HOME、搖動裝置或點擊停止可結束",stopped:"已停止",failed:"操作失敗"}};
+let lang="zh-CN",state=null;const tr=k=>(words[lang]||words["zh-CN"])[k]||k;
+function language(v){v=String(v||"").replace("_","-");if(v==="en"||v.startsWith("en-"))return"en";if(v==="ja"||v.startsWith("ja-"))return"ja";if(v==="zh-TW"||v.includes("Hant")||v.includes("HK"))return"zh-TW";return"zh-CN"}
+function msg(text,tone=""){const el=$("message");el.textContent=text||"";el.className=tone}
+function fill(id,max){const el=$(id);for(let i=0;i<=max;i++){const o=document.createElement("option");o.value=i;o.textContent=String(i).padStart(2,"0");el.appendChild(o)}}
+function translate(){document.documentElement.lang=lang;document.title=tr("title");document.querySelectorAll("[data-i18n]").forEach(x=>x.textContent=tr(x.dataset.i18n));$("autoSleep").options[0].textContent=tr("off");$("scheduleEnabled").options[0].textContent=tr("off");$("scheduleEnabled").options[1].textContent=tr("on");$("scheduleMode").options[0].textContent=tr("screenOff");$("scheduleMode").options[1].textContent=tr("dim")}
+function renderAlarms(items){const list=$("alarmList");list.innerHTML="";(items||defaults).slice(0,3).forEach((a,i)=>{const el=document.createElement("div");el.className="alarm";el.innerHTML=`<div class="alarm-title"><strong>${tr("alarm")} ${i+1}</strong><select class="a-enabled"><option value="false">${tr("off")}</option><option value="true">${tr("on")}</option></select></div><label>${tr("time")}<span class="time"><select class="a-hour"></select><b>:</b><select class="a-minute"></select></span></label><label style="margin-top:10px">${tr("repeat")}<select class="a-repeat">${["daily","weekdays","weekend","mon","tue","wed","thu","fri","sat","sun"].map(x=>`<option value="${x}">${tr(x)}</option>`).join("")}</select></label>`;list.appendChild(el);const fillLocal=(q,max)=>{const s=el.querySelector(q);for(let n=0;n<=max;n++)s.add(new Option(String(n).padStart(2,"0"),n))};fillLocal(".a-hour",23);fillLocal(".a-minute",59);el.querySelector(".a-enabled").value=String(!!a.enabled);el.querySelector(".a-hour").value=Number(a.hour)||0;el.querySelector(".a-minute").value=Number(a.minute)||0;el.querySelector(".a-repeat").value=a.repeat||a.repeat_rule||"daily"})}
+function renderSounds(files,selected){files=Array.isArray(files)?files:[];const el=$("alarmSound");el.innerHTML="";el.add(new Option(tr("builtin"),"builtin"));files.forEach(x=>el.add(new Option(x.name,x.path)));if(selected!=="builtin"&&![...el.options].some(x=>x.value===selected))el.add(new Option((selected.split("/").pop()||selected)+" · !",selected));if(!files.length){const o=new Option(tr("noMp3"),"");o.disabled=true;el.add(o)}el.value=selected||"builtin"}
+function alarms(){return[...document.querySelectorAll(".alarm")].map(el=>({enabled:el.querySelector(".a-enabled").value==="true",hour:Number(el.querySelector(".a-hour").value),minute:Number(el.querySelector(".a-minute").value),repeat:el.querySelector(".a-repeat").value}))}
+async function request(path,opt){const r=await fetch(base+path,Object.assign({cache:"no-store"},opt||{}));let d={};try{d=await r.json()}catch(e){}if(!r.ok||d.ok===false)throw Error(d.error||`HTTP ${r.status}`);return d}
+async function load(){state=await request("/api/info");lang=language(state.language);translate();$("autoSleep").value=String(state.auto_sleep_enabled?(state.auto_sleep_seconds||1800):0);$("scheduleEnabled").value=String(!!state.scheduled_sleep_enabled);$("scheduleMode").value=state.scheduled_sleep_mode==="dim"?"dim":"off";$("sleepHour").value=state.scheduled_sleep_hour;$("sleepMinute").value=state.scheduled_sleep_minute;$("wakeHour").value=state.scheduled_wake_hour;$("wakeMinute").value=state.scheduled_wake_minute;renderSounds(state.mp3_files,state.alarm_sound);renderAlarms(state.alarms)}
+function payload(){const idle=Number($("autoSleep").value)||0;return{auto_sleep_enabled:idle>0,auto_sleep_seconds:idle||1800,scheduled_sleep_enabled:$("scheduleEnabled").value==="true",scheduled_sleep_mode:$("scheduleMode").value,scheduled_sleep_hour:Number($("sleepHour").value),scheduled_sleep_minute:Number($("sleepMinute").value),scheduled_wake_hour:Number($("wakeHour").value),scheduled_wake_minute:Number($("wakeMinute").value),alarm_sound:$("alarmSound").value||"builtin",alarms:alarms()}}
+async function run(button,job){button.disabled=true;try{return await job()}finally{button.disabled=false}}
+$("save").onclick=e=>run(e.currentTarget,async()=>{const p=payload();if(p.scheduled_sleep_enabled&&p.scheduled_sleep_hour===p.scheduled_wake_hour&&p.scheduled_sleep_minute===p.scheduled_wake_minute)throw Error(tr("sleepTime")+" = "+tr("wakeTime"));await request("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});try{const q=new URLSearchParams({brightness:String(state.current_brightness||state.normal_brightness||80),auto_sleep_enabled:String(p.auto_sleep_enabled),auto_sleep_seconds:String(p.auto_sleep_seconds)});await fetch("/display/api/settings?"+q,{method:"POST"})}catch(e){}msg(tr("saved"),"good")}).catch(e=>msg(e.message||tr("failed"),"bad"));
+$("testSound").onclick=e=>run(e.currentTarget,async()=>{await request("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload())});await request("/api/alarm/test",{method:"POST"});msg(tr("testing"),"good")}).catch(e=>msg(e.message||tr("failed"),"bad"));
+$("stopSound").onclick=e=>run(e.currentTarget,()=>request("/api/alarm/stop",{method:"POST"})).then(()=>msg(tr("stopped"),"good")).catch(e=>msg(e.message||tr("failed"),"bad"));
+fill("sleepHour",23);fill("wakeHour",23);fill("sleepMinute",59);fill("wakeMinute",59);load().catch(e=>{msg(e.message||tr("failed"),"bad");$("serviceStatus").textContent=tr("failed");document.querySelector(".dot").style.background="var(--danger)"});
+</script>
+</body>
+</html>

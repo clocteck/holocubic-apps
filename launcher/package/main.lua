@@ -29,7 +29,7 @@ local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.1.0"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.2.0"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -102,6 +102,7 @@ local function ensure_display_schedule_service()
 
   local current_version = read_info_value(DISPLAY_SCHEDULE_APP_DIR .. "/app.info", "version")
   if file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
+      and file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.html")
       and current_version ~= ""
       and not version_lt(current_version, DISPLAY_SCHEDULE_BUNDLE_VERSION) then
     return false
@@ -110,10 +111,11 @@ local function ensure_display_schedule_service()
   if file.mkdir then pcall(function() file.mkdir(DISPLAY_SCHEDULE_APP_DIR) end) end
   local ok_info = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/app.info", DISPLAY_SCHEDULE_APP_DIR .. "/app.info")
   local ok_main = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.lua", DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
-  if ok_info and ok_main and app and app.rescan then
+  local ok_page = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.html", DISPLAY_SCHEDULE_APP_DIR .. "/main.html")
+  if ok_info and ok_main and ok_page and app and app.rescan then
     pcall(function() app.rescan() end)
   end
-  return ok_info and ok_main
+  return ok_info and ok_main and ok_page
 end
 
 local function start_display_schedule_service()

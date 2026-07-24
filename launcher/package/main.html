@@ -2882,79 +2882,6 @@ button,input,select,textarea{font:inherit;color:inherit}
         <button class="store-tab" type="button" data-filter="time" aria-pressed="false">时间</button>
       </div>
 
-      <section class="card service-settings-panel is-hidden" id="displayAlarmServiceSettings">
-        <div class="card-head">
-          <div>
-            <span class="section-kicker">服务设置</span>
-            <h2>息屏与闹钟</h2>
-          </div>
-          <button class="store-btn store-btn-primary store-btn-compact" id="saveDisplayAlarmSettings" type="button">保存</button>
-        </div>
-        <div class="settings-grid">
-          <label class="field" for="autoSleepSelect">
-            <span id="autoSleepLabel">自动息屏</span>
-            <select id="autoSleepSelect" name="autoSleep">
-              <option value="0">关闭</option>
-              <option value="60">1min</option>
-              <option value="600">10min</option>
-              <option value="1800">30min</option>
-              <option value="3600">1h</option>
-              <option value="7200">2h</option>
-            </select>
-            <small id="autoSleepHelp">选择无操作多久后自动息屏，按键后恢复亮度。</small>
-          </label>
-          <section class="schedule-panel" id="scheduledSleepPanel">
-            <div class="schedule-panel-head">
-              <span class="schedule-panel-title" id="scheduledSleepLabel">定时息屏</span>
-              <select id="scheduledSleepEnabled" name="scheduledSleepEnabled" aria-label="定时息屏">
-                <option value="false">关闭</option>
-                <option value="true">开启</option>
-              </select>
-            </div>
-            <label class="field schedule-config" for="scheduledSleepMode">
-              <span id="scheduledSleepModeLabel">息屏模式</span>
-              <select id="scheduledSleepMode" name="scheduledSleepMode">
-                <option value="off">关闭屏幕</option>
-                <option value="dim">降低亮度</option>
-              </select>
-            </label>
-            <div class="schedule-time-grid schedule-config">
-              <label class="time-field">
-                <span id="scheduledSleepTimeLabel">息屏时间</span>
-                <span class="time-select-row">
-                  <select id="scheduledSleepHour" name="scheduledSleepHour" aria-label="息屏小时"></select>
-                  <span class="time-colon">:</span>
-                  <select id="scheduledSleepMinute" name="scheduledSleepMinute" aria-label="息屏分钟"></select>
-                </span>
-              </label>
-              <label class="time-field">
-                <span id="scheduledWakeTimeLabel">亮屏时间</span>
-                <span class="time-select-row">
-                  <select id="scheduledWakeHour" name="scheduledWakeHour" aria-label="亮屏小时"></select>
-                  <span class="time-colon">:</span>
-                  <select id="scheduledWakeMinute" name="scheduledWakeMinute" aria-label="亮屏分钟"></select>
-                </span>
-              </label>
-            </div>
-            <small class="schedule-config" id="scheduledSleepHelp">每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。</small>
-          </section>
-          <section class="schedule-panel">
-            <div class="schedule-panel-head">
-              <span class="schedule-panel-title" id="alarmSettingsLabel">闹钟</span>
-              <small id="alarmSettingsHelp">最多 3 组；响铃后按 HOME 或摇动设备停止。</small>
-            </div>
-            <label class="field" for="alarmSoundSelect">
-              <span id="alarmSoundLabel">闹钟声音</span>
-              <select id="alarmSoundSelect" name="alarmSound">
-                <option value="builtin">嘀嘀嘀 · 内置提示音</option>
-              </select>
-              <small id="alarmSoundHelp">可选择 MP3 文件夹中的音乐；播放失败时自动使用内置提示音。</small>
-            </label>
-            <div class="alarm-list" id="alarmList"></div>
-          </section>
-        </div>
-      </section>
-
       <section aria-labelledby="storeAppsTitle">
         <div class="store-section-head">
           <div>
@@ -4040,6 +3967,7 @@ function fillClockSelect(select, max){
 }
 
 function setScheduledSleepControl(values){
+  if(!qs("#scheduledSleepEnabled")) return;
   const input = values || {};
   qs("#scheduledSleepEnabled").value = normalizeBool(input.enabled, DEFAULT_SCHEDULED_SLEEP_ENABLED) ? "true" : "false";
   qs("#scheduledSleepMode").value = String(input.mode || DEFAULT_SCHEDULED_SLEEP_MODE) === "dim" ? "dim" : "off";
@@ -4051,6 +3979,7 @@ function setScheduledSleepControl(values){
 }
 
 function updateScheduledSleepDisabledState(){
+  if(!qs("#scheduledSleepEnabled")) return;
   const enabled = qs("#scheduledSleepEnabled").value === "true";
   const panel = qs("#scheduledSleepPanel");
   if(panel) panel.classList.toggle("is-disabled", !enabled);
@@ -4188,6 +4117,7 @@ async function loadAlarmSoundOptions(){
 }
 
 function initializeScheduleControls(){
+  if(!qs("#scheduledSleepEnabled")) return;
   ["#scheduledSleepHour", "#scheduledWakeHour"].forEach((selector) => fillClockSelect(qs(selector), 23));
   ["#scheduledSleepMinute", "#scheduledWakeMinute"].forEach((selector) => fillClockSelect(qs(selector), 59));
   setScheduledSleepControl({});
@@ -6551,7 +6481,7 @@ function buildServiceCard(service){
 function serviceRouteHref(service){
   const id = String(service && service.id || "").trim();
   if(id === "display_schedule"){
-    return "/main?view=service#displayAlarmServiceSettings";
+    return "/display-schedule/";
   }
   const route = String(service && service.route_base || "").trim();
   if(route){
@@ -7543,9 +7473,19 @@ function currentSettingsPayload(){
   const weatherAddress = qs("#weatherAddress").value.trim();
   const autostartAppId = qs("#autostartAppSelect").value || "";
   const brightness = normalizeBrightness(qs("#brightnessRange").value, DEFAULT_BRIGHTNESS);
-  const autoSleepSeconds = normalizeAutoSleepSeconds(qs("#autoSleepSelect").value, 0);
+  const autoSleepControl = qs("#autoSleepSelect");
+  const autoSleepSeconds = normalizeAutoSleepSeconds(
+    autoSleepControl
+      ? autoSleepControl.value
+      : (normalizeBool(latestDeviceSettings.auto_sleep_enabled, false)
+        ? latestDeviceSettings.auto_sleep_seconds
+        : 0),
+    0
+  );
   const autoSleepEnabled = autoSleepSeconds > 0;
-  const scheduledSleepEnabled = qs("#scheduledSleepEnabled").value === "true";
+  const scheduledSleepEnabled = qs("#scheduledSleepEnabled")
+    ? qs("#scheduledSleepEnabled").value === "true"
+    : normalizeBool(latestDeviceSettings.scheduled_sleep_enabled, false);
   const previousAddress = String(latestDeviceSettings.weather_address || latestDeviceSettings.weatherAddress || "").trim();
   const payload = Object.assign({}, latestDeviceSettings, {
     timezone: qs("#timezoneSelect").value || DEFAULT_TIMEZONE,
@@ -7556,13 +7496,15 @@ function currentSettingsPayload(){
     auto_sleep_enabled: autoSleepEnabled,
     auto_sleep_seconds: autoSleepEnabled ? autoSleepSeconds : DEFAULT_AUTO_SLEEP_SECONDS,
     scheduled_sleep_enabled: scheduledSleepEnabled,
-    scheduled_sleep_mode: qs("#scheduledSleepMode").value === "dim" ? "dim" : "off",
-    scheduled_sleep_hour: normalizeClockPart(qs("#scheduledSleepHour").value, 23, DEFAULT_SCHEDULED_SLEEP_HOUR),
-    scheduled_sleep_minute: normalizeClockPart(qs("#scheduledSleepMinute").value, 59, DEFAULT_SCHEDULED_SLEEP_MINUTE),
-    scheduled_wake_hour: normalizeClockPart(qs("#scheduledWakeHour").value, 23, DEFAULT_SCHEDULED_WAKE_HOUR),
-    scheduled_wake_minute: normalizeClockPart(qs("#scheduledWakeMinute").value, 59, DEFAULT_SCHEDULED_WAKE_MINUTE),
-    alarms: collectAlarmControls(),
-    alarm_sound: normalizeAlarmSound(qs("#alarmSoundSelect").value),
+    scheduled_sleep_mode: qs("#scheduledSleepMode")
+      ? (qs("#scheduledSleepMode").value === "dim" ? "dim" : "off")
+      : (latestDeviceSettings.scheduled_sleep_mode === "dim" ? "dim" : "off"),
+    scheduled_sleep_hour: normalizeClockPart(qs("#scheduledSleepHour") ? qs("#scheduledSleepHour").value : latestDeviceSettings.scheduled_sleep_hour, 23, DEFAULT_SCHEDULED_SLEEP_HOUR),
+    scheduled_sleep_minute: normalizeClockPart(qs("#scheduledSleepMinute") ? qs("#scheduledSleepMinute").value : latestDeviceSettings.scheduled_sleep_minute, 59, DEFAULT_SCHEDULED_SLEEP_MINUTE),
+    scheduled_wake_hour: normalizeClockPart(qs("#scheduledWakeHour") ? qs("#scheduledWakeHour").value : latestDeviceSettings.scheduled_wake_hour, 23, DEFAULT_SCHEDULED_WAKE_HOUR),
+    scheduled_wake_minute: normalizeClockPart(qs("#scheduledWakeMinute") ? qs("#scheduledWakeMinute").value : latestDeviceSettings.scheduled_wake_minute, 59, DEFAULT_SCHEDULED_WAKE_MINUTE),
+    alarms: qs("#alarmList") ? collectAlarmControls() : normalizeAlarms(latestDeviceSettings.alarms),
+    alarm_sound: normalizeAlarmSound(qs("#alarmSoundSelect") ? qs("#alarmSoundSelect").value : latestDeviceSettings.alarm_sound),
     autostart_enabled: autostartAppId !== "",
     autostart_app_id: autostartAppId,
     saved_at: new Date().toISOString()
@@ -7797,15 +7739,17 @@ qs("#brightnessRange").addEventListener("input", (ev) => {
   setBrightnessControl(ev.target.value);
   scheduleBrightnessApply(ev.target.value);
 });
-qs("#autoSleepSelect").addEventListener("change", (ev) => {
-  const seconds = normalizeAutoSleepSeconds(ev.target.value, 0);
-  applyDisplaySettingsNow({
-    auto_sleep_enabled: seconds > 0,
-    auto_sleep_seconds: seconds > 0 ? seconds : DEFAULT_AUTO_SLEEP_SECONDS
-  }).catch((err) => showToast(err.message || String(err), true));
-});
-qs("#scheduledSleepEnabled").addEventListener("change", updateScheduledSleepDisabledState);
-qs("#saveDisplayAlarmSettings").addEventListener("click", () => qs("#settingsForm").requestSubmit());
+if(qs("#autoSleepSelect")){
+  qs("#autoSleepSelect").addEventListener("change", (ev) => {
+    const seconds = normalizeAutoSleepSeconds(ev.target.value, 0);
+    applyDisplaySettingsNow({
+      auto_sleep_enabled: seconds > 0,
+      auto_sleep_seconds: seconds > 0 ? seconds : DEFAULT_AUTO_SLEEP_SECONDS
+    }).catch((err) => showToast(err.message || String(err), true));
+  });
+}
+if(qs("#scheduledSleepEnabled")) qs("#scheduledSleepEnabled").addEventListener("change", updateScheduledSleepDisabledState);
+if(qs("#saveDisplayAlarmSettings")) qs("#saveDisplayAlarmSettings").addEventListener("click", () => qs("#settingsForm").requestSubmit());
 qs("#installAppBtn").addEventListener("click", openAppManageView);
 qs("#openServiceManageBtn").addEventListener("click", () => openAppManageView("service"));
 qs("#backFromAppManageBtn").addEventListener("click", returnToStartView);
@@ -7840,13 +7784,8 @@ qs("#wifiPasswordToggle").addEventListener("click", toggleWifiPasswordVisibility
 qs("#wifiForm").addEventListener("submit", handleWifiSubmit);
 
 initAppManageView();
-initializeScheduleControls();
 loadStoredSettings();
-if(new URLSearchParams(window.location.search).get("view") === "service"){
-  openAppManageView("service");
-}
 loadDeviceSettings().finally(() => {
-  loadAlarmSoundOptions().catch(() => {});
   loadDisplaySettingsControls().catch((err) => showToast(err.message || DISPLAY_SETTINGS_UNAVAILABLE_ERROR, true));
 });
 renderMediaLibrary();
