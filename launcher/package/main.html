@@ -2657,15 +2657,15 @@ button,input,select,textarea{font:inherit;color:inherit}
                 <small>下次启动 Launcher 时生效；关闭偏好下等待约 5 秒，无 IP 会恢复热点。</small>
               </label>
               <label class="field" for="brightnessRange">
-                <span>屏幕亮度</span>
+                <span id="brightnessLabel">屏幕亮度</span>
                 <div class="range-row">
                   <input id="brightnessRange" name="brightness" type="range" min="1" max="100" step="1">
                   <output class="range-value" id="brightnessValue" for="brightnessRange">80%</output>
                 </div>
-                <small>全局亮度，拖动时立即应用到设备。</small>
+                <small id="brightnessHelp">全局亮度，拖动时立即应用到设备。</small>
               </label>
               <label class="field" for="autoSleepSelect">
-                <span>自动休眠</span>
+                <span id="autoSleepLabel">自动休眠</span>
                 <select id="autoSleepSelect" name="autoSleep">
                   <option value="0">关闭</option>
                   <option value="60">1min</option>
@@ -2674,7 +2674,7 @@ button,input,select,textarea{font:inherit;color:inherit}
                   <option value="3600">1h</option>
                   <option value="7200">2h</option>
                 </select>
-                <small>选择无操作多久后自动息屏，按键后恢复亮度。</small>
+                <small id="autoSleepHelp">选择无操作多久后自动息屏，按键后恢复亮度。</small>
               </label>
               <label class="field" for="autostartAppSelect">
                 <span>开机自启动应用</span>
@@ -3221,7 +3221,9 @@ const I18N_ROWS = [
   ["开机自启动应用", "App to launch at startup", "起動時に開くアプリ", "開機自動啟動應用程式"],
   ["仅设备开机约 5 秒内启动 Launcher 时触发；返回 Launcher 不会重复启动。", "Runs only when Launcher starts within about 5 seconds after boot; returning to Launcher will not launch it again.", "起動後約 5 秒以内に Launcher が開始した場合のみ実行され、Launcher に戻っても再実行されません。", "僅在裝置開機約 5 秒內啟動 Launcher 時觸發；返回 Launcher 不會重複啟動。"],
   ["未在列表中", "not listed", "一覧にありません", "不在清單中"],
-  ["返回", "Back", "戻る", "返回"]
+  ["返回", "Back", "戻る", "返回"],
+  ["3 秒后跳转。", "Redirecting in 3 seconds.", "3 秒後に移動します。", "3 秒後跳轉。"],
+  ["3 秒后跳转", "Redirecting in 3 seconds", "3 秒後に移動します", "3 秒後跳轉"]
 ];
 const I18N_PREFIX_ROWS = [
   ["页面已保存，写入设备失败：", "Saved in the page, but device write failed: ", "ページには保存しましたが、デバイスへの書き込みに失敗しました: ", "頁面已儲存，但寫入裝置失敗："],
@@ -3424,11 +3426,26 @@ function localizeTree(root, preserveSource){
   Array.from(root.childNodes || []).forEach((child) => localizeTree(child, preserveSource));
 }
 
+function renderDirectLanguageControls(){
+  [
+    ["#brightnessLabel", "屏幕亮度"],
+    ["#brightnessHelp", "全局亮度，拖动时立即应用到设备。"],
+    ["#autoSleepLabel", "自动休眠"],
+    ["#autoSleepHelp", "选择无操作多久后自动息屏，按键后恢复亮度。"]
+  ].forEach(([selector, source]) => {
+    const node = qs(selector);
+    if(node) node.textContent = translateCore(source);
+  });
+  const sleepOff = qs('#autoSleepSelect option[value="0"]');
+  if(sleepOff) sleepOff.textContent = translateCore("关闭");
+}
+
 function applyLanguage(value, persist){
   currentLanguage = normalizeLanguage(value);
   document.documentElement.lang = currentLanguage;
   document.title = currentLanguage === "ja" ? "Cubic ランチャー" : (currentLanguage === "zh-TW" ? "Cubic 啟動器" : (currentLanguage === "zh-CN" ? "Cubic 启动器" : "Cubic Launcher"));
   localizeTree(document.body, true);
+  renderDirectLanguageControls();
   const select = qs("#languageSelect");
   if(select) select.value = currentLanguage;
   if(persist) storageSet(STORAGE_KEYS.language, currentLanguage);
@@ -3909,7 +3926,7 @@ function setBadgeState(sel, tone, text){
   const badge = qs(sel);
   const content = String(text || "");
   badge.className = "badge " + tone + (content ? "" : " hidden");
-  badge.textContent = content;
+  badge.textContent = translateCore(content);
 }
 
 function escapeAttr(text){
@@ -3939,7 +3956,7 @@ function formatBytes(size){
 }
 
 function mediaKindLabel(kind){
-  return kind === "gif" ? "GIF" : "图片";
+  return kind === "gif" ? "GIF" : translateCore("图片");
 }
 
 function mediaTypeLabel(entry){
@@ -4141,7 +4158,7 @@ function updateMediaCounters(){
   }, 0);
   qs("#imageAssetCount").textContent = String(images);
   qs("#gifAssetCount").textContent = String(gifs);
-  qs("#mediaUsageSize").textContent = "已占用 " + formatBytes(totalBytes);
+  qs("#mediaUsageSize").textContent = translateCore("已占用 ") + formatBytes(totalBytes);
 }
 
 function updateMediaLibrarySwitch(){
@@ -4152,8 +4169,8 @@ function updateMediaLibrarySwitch(){
   gifBtn.classList.toggle("active", !imageActive);
   imageBtn.setAttribute("aria-selected", imageActive ? "true" : "false");
   gifBtn.setAttribute("aria-selected", imageActive ? "false" : "true");
-  qs("#mediaLibraryKicker").textContent = imageActive ? "图片" : "动画";
-  qs("#mediaLibraryTitle").textContent = imageActive ? "静态图片" : "GIF 动画";
+  qs("#mediaLibraryKicker").textContent = translateCore(imageActive ? "图片" : "动画");
+  qs("#mediaLibraryTitle").textContent = translateCore(imageActive ? "静态图片" : "GIF 动画");
 }
 
 function setActiveMediaKind(kind){
@@ -4166,9 +4183,9 @@ function buildMediaEmptyState(title, note){
   const empty = document.createElement("div");
   empty.className = "empty media-empty";
   empty.innerHTML = "<div><strong></strong><span></span></div>";
-  empty.querySelector("strong").textContent = title;
+  empty.querySelector("strong").textContent = translateCore(title);
   if(note){
-    empty.querySelector("span").textContent = note;
+    empty.querySelector("span").textContent = translateCore(note);
   }else{
     empty.querySelector("span").remove();
   }
@@ -4188,7 +4205,7 @@ function buildMediaCard(entry){
   image.addEventListener("error", () => {
     preview.innerHTML = "";
     const fallback = document.createElement("span");
-    fallback.textContent = "当前无法预览";
+    fallback.textContent = translateCore("当前无法预览");
     preview.appendChild(fallback);
   });
   preview.appendChild(image);
@@ -4197,7 +4214,7 @@ function buildMediaCard(entry){
   copy.className = "media-copy";
 
   const title = document.createElement("h3");
-  title.textContent = entry && entry.name ? entry.name : "未命名资源";
+  title.textContent = entry && entry.name ? entry.name : translateCore("未命名资源");
 
   const meta = document.createElement("div");
   meta.className = "media-meta";
@@ -4226,12 +4243,12 @@ function buildMediaCard(entry){
   openBtn.href = mediaPreviewUrl(entry && entry.path);
   openBtn.target = "_blank";
   openBtn.rel = "noreferrer";
-  openBtn.textContent = "查看";
+  openBtn.textContent = translateCore("查看");
 
   const removeBtn = document.createElement("button");
   removeBtn.className = "btn danger";
   removeBtn.type = "button";
-  removeBtn.textContent = "删除";
+  removeBtn.textContent = translateCore("删除");
   removeBtn.addEventListener("click", () => handleRemoveMedia(entry, removeBtn));
 
   actions.appendChild(openBtn);
@@ -4398,7 +4415,7 @@ async function handleRemoveMedia(entry, button){
   }
   const prevText = button.textContent;
   button.disabled = true;
-  button.textContent = "删除中...";
+  button.textContent = translateCore("删除中...");
   try{
     setMediaStatus("正在删除。", false);
     await removeFsMediaFile(entry.path);
@@ -4779,13 +4796,13 @@ function initAppManageView(){
     const visible = !!open;
     advancedPanel.hidden = !visible;
     advancedBtn.setAttribute("aria-expanded", visible ? "true" : "false");
-    advancedBtn.textContent = visible ? "收起高级" : "高级选项";
+    advancedBtn.textContent = translateCore(visible ? "收起高级" : "高级选项");
   }
 
   function setStoreBusy(isBusy){
     if(refreshBtn){
       refreshBtn.disabled = !!isBusy;
-      refreshBtn.textContent = isBusy ? "刷新中..." : "刷新目录";
+      refreshBtn.textContent = translateCore(isBusy ? "刷新中..." : "刷新目录");
     }
     if(serverInput){
       serverInput.disabled = !!isBusy;
@@ -4907,7 +4924,7 @@ function initAppManageView(){
       detailTitle.textContent = detailPageTitle;
     }
     if(detailSubtitle){
-      detailSubtitle.textContent = "正在打开应用介绍。";
+      detailSubtitle.textContent = translateCore("正在打开应用介绍。");
     }
     if(detailOpenLink){
       detailOpenLink.href = detailPageUrl;
@@ -4959,7 +4976,7 @@ function initAppManageView(){
       detailTitle.textContent = detailPageTitle;
     }
     if(detailSubtitle){
-      detailSubtitle.textContent = String(subtitle || "本地应用介绍。");
+      detailSubtitle.textContent = translateCore(String(subtitle || "本地应用介绍。"));
     }
     if(detailOpenLink){
       detailOpenLink.removeAttribute("href");
@@ -4992,7 +5009,7 @@ function initAppManageView(){
     const prevText = trigger ? trigger.textContent : "";
     if(trigger){
       trigger.disabled = true;
-      trigger.textContent = "读取中...";
+      trigger.textContent = translateCore("读取中...");
     }
     try{
       try{
@@ -5193,7 +5210,7 @@ function initAppManageView(){
     button.classList.remove("is-installing", "store-btn-soft");
     button.disabled = false;
     button.removeAttribute("aria-label");
-    button.textContent = "安装";
+    button.textContent = translateCore("安装");
   }
 
   function setStoreUpdateButtonIdle(button){
@@ -5204,7 +5221,7 @@ function initAppManageView(){
     button.classList.remove("is-installing", "store-btn-soft", "store-btn-danger");
     button.disabled = false;
     button.removeAttribute("aria-label");
-    button.textContent = "更新";
+    button.textContent = translateCore("更新");
   }
 
   function setStoreUpdateButtonUnavailable(button){
@@ -5215,7 +5232,7 @@ function initAppManageView(){
     button.classList.add("store-btn-soft", "store-btn-install");
     button.disabled = true;
     button.removeAttribute("aria-label");
-    button.textContent = "不可更新";
+    button.textContent = translateCore("不可更新");
   }
 
   function setStoreInstallButtonProgress(button, percent, actionText){
@@ -5226,7 +5243,7 @@ function initAppManageView(){
     button.classList.add("store-btn-primary", "store-btn-install", "is-installing");
     button.classList.remove("store-btn-soft", "store-btn-danger");
     button.disabled = true;
-    button.setAttribute("aria-label", (actionText || "处理中") + " " + value + "%");
+    button.setAttribute("aria-label", translateCore(actionText || "处理中") + " " + value + "%");
     button.innerHTML = '<span class="store-install-meter" aria-hidden="true"><span class="store-install-fill"></span><span class="store-install-label"></span></span>';
     const fill = button.querySelector(".store-install-fill");
     if(fill){
@@ -5246,7 +5263,7 @@ function initAppManageView(){
     button.classList.add("store-btn-soft", "store-btn-install");
     button.disabled = true;
     button.removeAttribute("aria-label");
-    button.textContent = "已安装";
+    button.textContent = translateCore("已安装");
   }
 
   async function startStoreInstallJob(item, button, actionName){
@@ -5410,7 +5427,7 @@ function initAppManageView(){
     const title = document.createElement("h3");
       title.textContent = localizedAppName(item, item.id);
     const desc = document.createElement("p");
-    desc.textContent = storeDescriptionText(item) || ("版本 " + (item.version || "--"));
+    desc.textContent = storeDescriptionText(item) || (translateCore("版本") + " " + (item.version || "--"));
     copy.appendChild(title);
     copy.appendChild(desc);
 
@@ -5424,9 +5441,9 @@ function initAppManageView(){
     const tag = document.createElement("span");
     tag.className = "store-tag";
     if(item.installed && item.installedInfo && item.installedInfo.source && item.installedInfo.source !== "sd"){
-      tag.textContent = "内置";
+      tag.textContent = translateCore("内置");
     }else if(item.installed){
-      tag.textContent = "已安装";
+      tag.textContent = translateCore("已安装");
     }else{
       tag.textContent = item.channel || "stable";
     }
@@ -5445,7 +5462,7 @@ function initAppManageView(){
       const detailBtn = document.createElement("button");
       detailBtn.className = "store-btn store-btn-detail store-btn-compact";
       detailBtn.type = "button";
-      detailBtn.textContent = "介绍";
+      detailBtn.textContent = translateCore("介绍");
       detailBtn.addEventListener("click", () => {
         openStoreDetailModal(infoUrl, localizedAppName(item, item.id), detailBtn);
       });
@@ -5454,7 +5471,7 @@ function initAppManageView(){
       const detailBtn = document.createElement("button");
       detailBtn.className = "store-btn store-btn-detail store-btn-compact";
       detailBtn.type = "button";
-      detailBtn.textContent = "介绍";
+      detailBtn.textContent = translateCore("介绍");
       detailBtn.addEventListener("click", () => {
         openLocalStoreDetail(item, detailBtn);
       });
@@ -5482,11 +5499,11 @@ function initAppManageView(){
       removeBtn.className = "store-btn store-btn-compact";
       if(removable){
         removeBtn.classList.add("store-btn-danger");
-        removeBtn.textContent = "卸载";
+        removeBtn.textContent = translateCore("卸载");
         removeBtn.addEventListener("click", async () => {
           const prevText = removeBtn.textContent;
           removeBtn.disabled = true;
-          removeBtn.textContent = "卸载中...";
+          removeBtn.textContent = translateCore("卸载中...");
           try{
             await api("/api/system/apps?id=" + encodeURIComponent(item.id), { method: "DELETE" });
             showToast("已卸载 " + localizedAppName(item, item.id), false);
@@ -5528,7 +5545,7 @@ function initAppManageView(){
       grid.appendChild(buildStoreCard(item, index));
     });
     if(count){
-      count.textContent = String(visibleItems.length) + " 个项目";
+      count.textContent = translateText(String(visibleItems.length) + " 个项目");
     }
     if(emptyState){
       emptyState.classList.toggle("is-hidden", visibleItems.length !== 0);
@@ -5886,7 +5903,7 @@ function currentAppWebUiRoute(data){
 async function launchApp(app, button){
   const prevText = button.textContent;
   button.disabled = true;
-  button.textContent = "打开中...";
+  button.textContent = translateCore("打开中...");
   try{
     try{
       await wakeDisplayNow();
@@ -5905,7 +5922,7 @@ async function launchApp(app, button){
 async function exitCurrentApp(button, busyText){
   const prevText = button.textContent;
   button.disabled = true;
-  button.textContent = busyText || "退出中...";
+  button.textContent = translateCore(busyText || "退出中...");
   try{
     await api("/api/system/exit", { method: "POST" });
     showToast("正在返回启动器", false);
@@ -5925,14 +5942,14 @@ function renderAppCardActions(host, app, current, routeHref){
       const enterLink = document.createElement("a");
       enterLink.className = "btn secondary";
       enterLink.href = routeHref;
-      enterLink.textContent = "进入 app 页面";
+      enterLink.textContent = translateCore("进入 app 页面");
       host.appendChild(enterLink);
     }
 
     const exitBtn = document.createElement("button");
     exitBtn.className = "btn danger";
     exitBtn.type = "button";
-    exitBtn.textContent = "退出";
+    exitBtn.textContent = translateCore("退出");
     exitBtn.addEventListener("click", () => {
       exitCurrentApp(exitBtn, "退出中...");
     });
@@ -5943,7 +5960,7 @@ function renderAppCardActions(host, app, current, routeHref){
   const openBtn = document.createElement("button");
   openBtn.className = "btn primary";
   openBtn.type = "button";
-  openBtn.textContent = "打开";
+  openBtn.textContent = translateCore("打开");
   openBtn.addEventListener("click", () => {
     launchApp(app, openBtn);
   });
@@ -5960,7 +5977,7 @@ function updateAppCard(card, app, data){
   const statusTag = card.querySelector(".app-status");
   statusTag.classList.toggle("current", current);
   statusTag.classList.toggle("hidden", !current);
-  statusTag.textContent = current ? "运行中" : "";
+  statusTag.textContent = current ? translateCore("运行中") : "";
 
   renderAppCardActions(card.querySelector(".app-actions"), app, current, routeHref);
 }
@@ -6012,7 +6029,7 @@ function buildServiceCard(service){
       '</div>' +
     '</div>' +
     '<div class="app-meta">' +
-      '<span class="tag">服务</span>' +
+      '<span class="tag service-kind"></span>' +
       '<div class="toolbar service-actions"></div>' +
     '</div>';
   renderAppIcon(card.querySelector(".app-icon"), service);
@@ -6031,7 +6048,10 @@ function serviceRouteHref(service){
 
 function updateServiceCard(card, service){
   card.querySelector(".app-name").textContent = localizedAppName(service, translateCore("设备服务"));
-  card.querySelector(".app-note").textContent = service.version ? ("版本 " + service.version) : "已添加到设备";
+  card.querySelector(".service-kind").textContent = translateCore("服务");
+  card.querySelector(".app-note").textContent = service.version
+    ? (translateCore("版本") + " " + service.version)
+    : translateCore("已添加到设备");
   const actions = card.querySelector(".service-actions");
   const href = serviceRouteHref(service);
   if(!actions){
@@ -6047,7 +6067,7 @@ function updateServiceCard(card, service){
     const link = document.createElement("a");
     link.className = "btn secondary";
     link.href = href;
-    link.textContent = "进入服务页面";
+    link.textContent = translateCore("进入服务页面");
     actions.appendChild(link);
   }
 }
@@ -6056,10 +6076,10 @@ function renderServices(data){
   const wrap = qs("#services");
   const services = serviceItemsFromState(data);
   const nextSignature = services.map((service) => String(service && service.id || "")).join("\n");
-  qs("#serviceCount").textContent = String(services.length) + " 个";
+  qs("#serviceCount").textContent = translateText(String(services.length) + " 个");
   if(!services.length){
     if(!wrap.querySelector(".empty") || wrap.children.length !== 1){
-      wrap.innerHTML = '<div class="empty"><strong>暂无设备服务</strong></div>';
+      wrap.innerHTML = '<div class="empty"><strong>' + escapeHtml(translateCore("暂无设备服务")) + '</strong></div>';
     }
     serviceCardsSignature = "";
     return;
@@ -6123,9 +6143,9 @@ function maybeHandleWifiSuccessRedirect(data){
     return;
   }
 
-  const message = "连接成功，IP: " + ip;
-  setWifiFormStatus(message + "，3 秒后跳转。", false);
-  showToast(message + "，3 秒后跳转", false, WIFI_SUCCESS_REDIRECT_DELAY_MS);
+  const message = translateCore("连接成功，IP: ") + ip;
+  setWifiFormStatus(message + " " + translateCore("3 秒后跳转。"), false);
+  showToast(message + " " + translateCore("3 秒后跳转"), false, WIFI_SUCCESS_REDIRECT_DELAY_MS);
 
   wifiSuccessRedirectTimer = window.setTimeout(() => {
     wifiSuccessRedirectTimer = 0;
@@ -6314,7 +6334,7 @@ function updateWifiSignalIndicator(choice){
   wrap.title = title;
   select.title = title;
   trigger.title = title;
-  text.textContent = choice && choice.ssid ? choice.ssid : "等待扫描附近热点";
+  text.textContent = choice && choice.ssid ? choice.ssid : translateCore("等待扫描附近热点");
 }
 
 function wifiSignalSvgMarkup(level, className){
@@ -6328,7 +6348,7 @@ function wifiSignalSvgMarkup(level, className){
 }
 
 function wifiLockSvgMarkup(){
-  return '<svg class="wifi-choice-lock" viewBox="0 0 24 24" fill="none" aria-label="需要密码">' +
+  return '<svg class="wifi-choice-lock" viewBox="0 0 24 24" fill="none" aria-label="' + escapeAttr(translateCore("需要密码")) + '">' +
     '<rect x="5.5" y="10.2" width="13" height="10" rx="2.2" stroke="currentColor" stroke-width="1.8"/>' +
     '<path d="M8.4 10.2V7.7a3.6 3.6 0 0 1 7.2 0v2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
     '</svg>';
@@ -6371,7 +6391,7 @@ function renderWifiChoiceMenu(choices, selectedChoice, locked, emptyText){
   trigger.disabled = locked || !choices.length;
   menu.innerHTML = "";
   if(!choices.length){
-    qs("#wifiChoiceText").textContent = emptyText || "暂无可用热点";
+    qs("#wifiChoiceText").textContent = translateCore(emptyText || "暂无可用热点");
     closeWifiChoiceMenu();
     return;
   }
@@ -6418,7 +6438,7 @@ function renderWifiSelect(data, locked){
   if(!choices.length){
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = wifi.scan_running ? "正在扫描附近热点..." : "暂无可用热点";
+    option.textContent = translateCore(wifi.scan_running ? "正在扫描附近热点..." : "暂无可用热点");
     select.appendChild(option);
     select.disabled = true;
     updateWifiSignalIndicator(null);
@@ -6457,7 +6477,7 @@ function updateWifiPasswordField(choice, locked){
   input.disabled = locked || !hasSsid;
   input.required = hasSsid && !openNetwork;
   input.minLength = openNetwork ? 0 : 8;
-  input.placeholder = "输入密码";
+  input.placeholder = translateCore("输入密码");
   toggle.disabled = locked || !hasSsid;
   if(locked || !hasSsid){
     setWifiPasswordVisibility(false);
@@ -6494,7 +6514,7 @@ function updateWifiSetupView(data){
   const connectedSsid = currentConnectedWifiSsid(data);
   const sameAsConnected = phase === "connected" && activeSsid && activeSsid === connectedSsid;
   const passwordLocked = phase === "connecting" || sameAsConnected;
-  const displaySsid = activeSsid || "等待可用热点";
+  const displaySsid = activeSsid || translateCore("等待可用热点");
   let hint = "请输入密码";
   if(phase === "connecting"){
     hint = "正在连接中";
@@ -6512,14 +6532,14 @@ function updateWifiSetupView(data){
 
   qs("#wifiPortalPill").textContent = portalSsid;
   qs("#wifiSigninTitle").textContent = displaySsid;
-  qs("#wifiSigninHint").textContent = hint;
+  qs("#wifiSigninHint").textContent = languageSafeText(hint, "WiFi status");
   qs("#wifiNetworkName").textContent = displaySsid;
 
   updateWifiPasswordField(activeChoice, passwordLocked);
   qs("#wifiSubmit").disabled = passwordLocked || !activeSsid;
-  qs("#wifiSubmit").textContent = sameAsConnected ? "已连接" : (phase === "connecting" ? "连接中..." : "连接");
+  qs("#wifiSubmit").textContent = translateCore(sameAsConnected ? "已连接" : (phase === "connecting" ? "连接中..." : "连接"));
   qs("#wifiScanBtn").disabled = selectionLocked || wifi.scan_running || wifiScanRequested;
-  qs("#wifiScanBtn").textContent = (wifi.scan_running || wifiScanRequested) ? "扫描中..." : "扫描";
+  qs("#wifiScanBtn").textContent = translateCore((wifi.scan_running || wifiScanRequested) ? "扫描中..." : "扫描");
 }
 
 function uniqueScannedSsidCount(data){
@@ -6671,7 +6691,7 @@ function renderApps(data){
   qs("#appCount").textContent = String(apps.length);
   if(!apps.length){
     if(!wrap.querySelector(".empty") || wrap.children.length !== 1){
-      wrap.innerHTML = '<div class="empty"><strong>暂无应用</strong></div>';
+      wrap.innerHTML = '<div class="empty"><strong>' + escapeHtml(translateCore("暂无应用")) + '</strong></div>';
     }
     appCardsSignature = "";
     return;
@@ -6771,24 +6791,24 @@ function handleAppInstallState(data){
 function firmwarePhaseText(phase, active, available){
   const value = String(phase || "idle");
   if(value === "check"){
-    return "检查中";
+    return translateCore("检查中");
   }
   if(value === "download"){
-    return "下载中";
+    return translateCore("下载中");
   }
   if(value === "install"){
-    return "安装中";
+    return translateCore("安装中");
   }
   if(value === "rebooting"){
-    return "即将重启";
+    return translateCore("即将重启");
   }
   if(value === "error"){
-    return "更新失败";
+    return translateCore("更新失败");
   }
   if(active){
-    return "更新中";
+    return translateCore("更新中");
   }
-  return available ? "有新版本" : "已是最新";
+  return translateCore(available ? "有新版本" : "已是最新");
 }
 
 function renderFirmwareUpdate(data){
@@ -6813,17 +6833,17 @@ function renderFirmwareUpdate(data){
 
   const note = qs("#firmwareUpdateNote");
   if(phase === "error"){
-    note.textContent = "更新失败：" + String(fw.error || "请稍后重试");
+    note.textContent = languageSafeText("更新失败：" + String(fw.error || "请稍后重试"), "Firmware update failed.");
   }else if(phase === "rebooting"){
-    note.textContent = "固件已写入，设备正在重启。";
+    note.textContent = translateCore("固件已写入，设备正在重启。");
   }else if(active && phase === "download"){
-    note.textContent = "正在下载 " + percent + "%";
+    note.textContent = translateCore("正在下载 ") + percent + "%";
   }else if(active){
-    note.textContent = badgeText;
+    note.textContent = translateCore(badgeText);
   }else if(available){
-    note.textContent = String(fw.notes || "发现可安装的新固件。");
+    note.textContent = languageSafeText(fw.notes || "发现可安装的新固件。", "A firmware update is available.");
   }else{
-    note.textContent = "当前固件无需更新。";
+    note.textContent = translateCore("当前固件无需更新。");
   }
 
   qs("#firmwareProgressFill").style.width = String(active || phase === "rebooting" ? percent : 0) + "%";
@@ -6831,9 +6851,9 @@ function renderFirmwareUpdate(data){
   const checkBtn = qs("#checkFirmwareBtn");
   const updateBtn = qs("#startFirmwareUpdateBtn");
   checkBtn.disabled = !!active;
-  checkBtn.textContent = firmwareCheckBusy ? "检查中..." : "检查更新";
+  checkBtn.textContent = translateCore(firmwareCheckBusy ? "检查中..." : "检查更新");
   updateBtn.disabled = !!active || !available;
-  updateBtn.textContent = phase === "rebooting" ? "即将重启" : (firmwareUpdateBusy || active ? "安装中..." : "安装更新");
+  updateBtn.textContent = translateCore(phase === "rebooting" ? "即将重启" : (firmwareUpdateBusy || active ? "安装中..." : "安装更新"));
 }
 
 async function checkFirmwareUpdate(){
@@ -6894,10 +6914,10 @@ function renderState(data){
   const networkInfo = deriveNetworkInfo(data);
   qs("#runningApp").textContent = currentName;
   qs("#routeBase").textContent = routeText;
-  qs("#currentWebui").textContent = networkInfo.webuiText;
-  qs("#wifiIp").textContent = networkInfo.connectionSummary;
+  qs("#currentWebui").textContent = translateCore(networkInfo.webuiText);
+  qs("#wifiIp").textContent = translateText(networkInfo.connectionSummary);
   qs("#wifiMdns").textContent = networkInfo.mdns;
-  qs("#wifiStateText").textContent = networkInfo.wifiName;
+  qs("#wifiStateText").textContent = translateCore(networkInfo.wifiName);
   qs("#settingsRoute").textContent = routeText;
   setAutostartSelectValue(qs("#autostartAppSelect").value, data);
   setBadgeState("#wifiStateBadge", networkInfo.tone, networkInfo.badge);
@@ -6914,9 +6934,9 @@ function renderState(data){
 
 function renderOfflineState(message){
   const networkInfo = deriveNetworkInfo({ __offline: message || "当前无法读取系统状态" });
-  qs("#wifiIp").textContent = networkInfo.connectionSummary;
+  qs("#wifiIp").textContent = translateText(networkInfo.connectionSummary);
   qs("#wifiMdns").textContent = networkInfo.mdns;
-  qs("#wifiStateText").textContent = networkInfo.wifiName;
+  qs("#wifiStateText").textContent = translateCore(networkInfo.wifiName);
   setBadgeState("#wifiStateBadge", networkInfo.tone, networkInfo.badge);
 }
 
@@ -7052,7 +7072,7 @@ async function saveSettings(ev){
   storageSet(STORAGE_KEYS.autostartAppId, payload.autostart_app_id || "");
   applyLanguage(payload.language, false);
   button.disabled = true;
-  button.textContent = "保存中...";
+  button.textContent = translateCore("保存中...");
   try{
     await uploadJsonFile(SETTINGS_JSON_PATH, payload);
     let brightnessError = null;
@@ -7092,7 +7112,7 @@ async function resetSettings(){
   const button = qs("#resetSettings");
   const prevText = button.textContent;
   button.disabled = true;
-  button.textContent = "恢复中...";
+  button.textContent = translateCore("恢复中...");
   try{
     const payload = currentSettingsPayload();
     await uploadJsonFile(SETTINGS_JSON_PATH, payload);
@@ -7189,7 +7209,7 @@ function handleWifiSubmit(ev){
   }
 
   submit.disabled = true;
-  submit.textContent = "连接中...";
+  submit.textContent = translateCore("连接中...");
   sessionRemove(WIFI_SKIP_KEY);
   setWifiFormStatus("正在保存并连接 " + ssid + "。", false);
   api("/api/system/wifi/connect", {
