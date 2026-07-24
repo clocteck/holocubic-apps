@@ -1,0 +1,5 @@
+name = Display Schedule
+version = 1.0.2
+kind = service
+entry = main.lua
+description = Scheduled screen off and wake service

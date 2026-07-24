@@ -555,6 +555,42 @@ button,input,select,textarea{font:inherit;color:inherit}
 .range-row{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:12px;align-items:center}
 .range-row input[type="range"]{padding:0;min-height:28px}
 .range-value{font-weight:700;text-align:right;color:var(--accent-strong)}
+.schedule-panel,.alarm-panel{
+  display:grid;
+  gap:14px;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--surface-soft);
+}
+.schedule-panel-head,.alarm-panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.schedule-panel-title,.alarm-panel-title{font-weight:750}
+.schedule-panel-head select,.alarm-panel-head select{
+  width:auto;
+  min-width:112px;
+  min-height:40px;
+  padding:0 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface);
+}
+.schedule-time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.time-field{display:grid;gap:8px}
+.time-select-row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.time-select-row select{min-width:0}
+.time-colon{font-size:20px;font-weight:700;color:var(--muted)}
+.schedule-panel.is-disabled .schedule-config,.alarm-panel.is-disabled .alarm-config{opacity:.5}
+.alarm-list{display:grid;gap:12px}
+.alarm-panel{padding:14px}
+.alarm-config{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(190px,1fr);gap:12px}
+@media(max-width:560px){
+  .schedule-time-grid,.alarm-config{grid-template-columns:1fr}
+}
 .settings-grid{grid-template-columns:1fr}
 .settings-actions{margin-top:12px}
 .empty{
@@ -2706,7 +2742,7 @@ button,input,select,textarea{font:inherit;color:inherit}
                 <small id="brightnessHelp">全局亮度，拖动时立即应用到设备。</small>
               </label>
               <label class="field" for="autoSleepSelect">
-                <span id="autoSleepLabel">自动休眠</span>
+                <span id="autoSleepLabel">自动息屏</span>
                 <select id="autoSleepSelect" name="autoSleep">
                   <option value="0">关闭</option>
                   <option value="60">1min</option>
@@ -2717,6 +2753,48 @@ button,input,select,textarea{font:inherit;color:inherit}
                 </select>
                 <small id="autoSleepHelp">选择无操作多久后自动息屏，按键后恢复亮度。</small>
               </label>
+              <section class="schedule-panel" id="scheduledSleepPanel">
+                <div class="schedule-panel-head">
+                  <span class="schedule-panel-title" id="scheduledSleepLabel">定时息屏</span>
+                  <select id="scheduledSleepEnabled" name="scheduledSleepEnabled" aria-label="定时息屏">
+                    <option value="false">关闭</option>
+                    <option value="true">开启</option>
+                  </select>
+                </div>
+                <label class="field schedule-config" for="scheduledSleepMode">
+                  <span id="scheduledSleepModeLabel">息屏模式</span>
+                  <select id="scheduledSleepMode" name="scheduledSleepMode">
+                    <option value="off">关闭屏幕</option>
+                    <option value="dim">降低亮度</option>
+                  </select>
+                </label>
+                <div class="schedule-time-grid schedule-config">
+                  <label class="time-field">
+                    <span id="scheduledSleepTimeLabel">息屏时间</span>
+                    <span class="time-select-row">
+                      <select id="scheduledSleepHour" name="scheduledSleepHour" aria-label="息屏小时"></select>
+                      <span class="time-colon">:</span>
+                      <select id="scheduledSleepMinute" name="scheduledSleepMinute" aria-label="息屏分钟"></select>
+                    </span>
+                  </label>
+                  <label class="time-field">
+                    <span id="scheduledWakeTimeLabel">亮屏时间</span>
+                    <span class="time-select-row">
+                      <select id="scheduledWakeHour" name="scheduledWakeHour" aria-label="亮屏小时"></select>
+                      <span class="time-colon">:</span>
+                      <select id="scheduledWakeMinute" name="scheduledWakeMinute" aria-label="亮屏分钟"></select>
+                    </span>
+                  </label>
+                </div>
+                <small class="schedule-config" id="scheduledSleepHelp">每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。</small>
+              </section>
+              <section class="schedule-panel">
+                <div class="schedule-panel-head">
+                  <span class="schedule-panel-title" id="alarmSettingsLabel">闹钟</span>
+                  <small id="alarmSettingsHelp">最多 3 组；响铃后按 HOME 或摇动设备停止。</small>
+                </div>
+                <div class="alarm-list" id="alarmList"></div>
+              </section>
               <label class="field" for="autostartAppSelect">
                 <span>开机自启动应用</span>
                 <select id="autostartAppSelect" name="autostartApp">
@@ -2972,6 +3050,18 @@ const DEFAULT_BRIGHTNESS = 80;
 const DEFAULT_AUTO_SLEEP_ENABLED = false;
 const DEFAULT_AUTO_SLEEP_SECONDS = 1800;
 const AUTO_SLEEP_OPTIONS = [0, 60, 600, 1800, 3600, 7200];
+const DEFAULT_SCHEDULED_SLEEP_ENABLED = false;
+const DEFAULT_SCHEDULED_SLEEP_MODE = "off";
+const DEFAULT_SCHEDULED_SLEEP_HOUR = 0;
+const DEFAULT_SCHEDULED_SLEEP_MINUTE = 0;
+const DEFAULT_SCHEDULED_WAKE_HOUR = 7;
+const DEFAULT_SCHEDULED_WAKE_MINUTE = 0;
+const ALARM_COUNT = 3;
+const DEFAULT_ALARMS = [
+  { enabled: false, hour: 7, minute: 0, repeat: "daily" },
+  { enabled: false, hour: 8, minute: 0, repeat: "weekdays" },
+  { enabled: false, hour: 9, minute: 0, repeat: "weekend" }
+];
 const DEFAULT_AUTOSTART_APP_ID = "wifi_guide";
 const DEFAULT_APP_STORE_CHANNEL = "stable";
 const DEFAULT_APP_STORE_HOST_CODES = [99,117,98,105,99,46,99,108,111,99,116,101,99,107,46,99,111,109];
@@ -2991,6 +3081,13 @@ const STORAGE_KEYS = {
   brightness: "cubic.mainpage.brightness",
   autoSleepEnabled: "cubic.mainpage.autoSleepEnabled",
   autoSleepSeconds: "cubic.mainpage.autoSleepSeconds",
+  scheduledSleepEnabled: "cubic.mainpage.scheduledSleepEnabled",
+  scheduledSleepMode: "cubic.mainpage.scheduledSleepMode",
+  scheduledSleepHour: "cubic.mainpage.scheduledSleepHour",
+  scheduledSleepMinute: "cubic.mainpage.scheduledSleepMinute",
+  scheduledWakeHour: "cubic.mainpage.scheduledWakeHour",
+  scheduledWakeMinute: "cubic.mainpage.scheduledWakeMinute",
+  alarms: "cubic.mainpage.alarms",
   autostartAppId: "cubic.mainpage.autostartAppId",
   appStoreUrl: "cubic.mainpage.appStoreUrl"
 };
@@ -3260,9 +3357,35 @@ const I18N_ROWS = [
   ["繁體中文", "Traditional Chinese", "繁体字中国語", "繁體中文"],
   ["屏幕亮度", "Screen brightness", "画面の明るさ", "螢幕亮度"],
   ["全局亮度，拖动时立即应用到设备。", "Global brightness; changes apply to the device immediately.", "全体の明るさ。変更はすぐにデバイスへ反映されます。", "全域亮度，拖動時立即套用到裝置。"],
-  ["自动休眠", "Automatic sleep", "自動スリープ", "自動休眠"],
+  ["自动息屏", "Automatic screen off", "自動画面オフ", "自動關閉螢幕"],
   ["关闭", "Off", "オフ", "關閉"],
+  ["开启", "On", "オン", "開啟"],
   ["选择无操作多久后自动息屏，按键后恢复亮度。", "Choose the idle time before the screen sleeps. Press a button to wake it.", "無操作から画面を消すまでの時間を選択します。ボタンで復帰します。", "選擇閒置多久後自動關閉螢幕，按鍵後恢復亮度。"],
+  ["定时息屏", "Scheduled screen off", "画面オフ予約", "定時關閉螢幕"],
+  ["息屏模式", "Screen-off mode", "画面オフモード", "關閉螢幕模式"],
+  ["关闭屏幕", "Turn screen off", "画面を消す", "關閉螢幕"],
+  ["降低亮度", "Dim screen", "画面を暗くする", "降低亮度"],
+  ["息屏时间", "Screen-off time", "画面オフ時刻", "關閉螢幕時間"],
+  ["亮屏时间", "Screen-on time", "画面オン時刻", "開啟螢幕時間"],
+  ["每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。", "Runs daily in the device time zone. A button temporarily wakes the screen; the schedule resumes the next day.", "デバイスのタイムゾーンで毎日実行します。ボタンで一時的に点灯でき、翌日も予約どおり動作します。", "每天依裝置目前時區執行；關閉螢幕後可按鍵暫時喚醒，隔日仍依排程執行。"],
+  ["息屏时间和亮屏时间不能相同。", "Screen-off and screen-on times must be different.", "画面オフと画面オンの時刻は別々に設定してください。", "關閉螢幕與開啟螢幕時間不可相同。"],
+  ["闹钟", "Alarms", "アラーム", "鬧鐘"],
+  ["最多 3 组；响铃后按 HOME 或摇动设备停止。", "Up to 3 alarms. Press HOME or shake the device to stop ringing.", "最大3件。鳴動中は HOME を押すか本体を振ると停止します。", "最多 3 組；響鈴後按 HOME 或搖動裝置即可停止。"],
+  ["闹钟 1", "Alarm 1", "アラーム 1", "鬧鐘 1"],
+  ["闹钟 2", "Alarm 2", "アラーム 2", "鬧鐘 2"],
+  ["闹钟 3", "Alarm 3", "アラーム 3", "鬧鐘 3"],
+  ["时间", "Time", "時刻", "時間"],
+  ["重复", "Repeat", "繰り返し", "重複"],
+  ["每日", "Daily", "毎日", "每日"],
+  ["工作日", "Weekdays", "平日", "平日"],
+  ["周末", "Weekends", "週末", "週末"],
+  ["每周一", "Every Monday", "毎週月曜日", "每週一"],
+  ["每周二", "Every Tuesday", "毎週火曜日", "每週二"],
+  ["每周三", "Every Wednesday", "毎週水曜日", "每週三"],
+  ["每周四", "Every Thursday", "毎週木曜日", "每週四"],
+  ["每周五", "Every Friday", "毎週金曜日", "每週五"],
+  ["每周六", "Every Saturday", "毎週土曜日", "每週六"],
+  ["每周日", "Every Sunday", "毎週日曜日", "每週日"],
   ["开机自启动应用", "App to launch at startup", "起動時に開くアプリ", "開機自動啟動應用程式"],
   ["仅设备开机约 5 秒内启动 Launcher 时触发；返回 Launcher 不会重复启动。", "Runs only when Launcher starts within about 5 seconds after boot; returning to Launcher will not launch it again.", "起動後約 5 秒以内に Launcher が開始した場合のみ実行され、Launcher に戻っても再実行されません。", "僅在裝置開機約 5 秒內啟動 Launcher 時觸發；返回 Launcher 不會重複啟動。"],
   ["未在列表中", "not listed", "一覧にありません", "不在清單中"],
@@ -3472,18 +3595,37 @@ function localizeTree(root, preserveSource){
 }
 
 function renderDirectLanguageControls(){
+  const alarms = collectAlarmControls();
   [
     ["#timezoneHelp", "选择时区后，下方会显示该地区当前时间；保存后应用将在下次启动时使用此时区。"],
     ["#brightnessLabel", "屏幕亮度"],
     ["#brightnessHelp", "全局亮度，拖动时立即应用到设备。"],
-    ["#autoSleepLabel", "自动休眠"],
-    ["#autoSleepHelp", "选择无操作多久后自动息屏，按键后恢复亮度。"]
+    ["#autoSleepLabel", "自动息屏"],
+    ["#autoSleepHelp", "选择无操作多久后自动息屏，按键后恢复亮度。"],
+    ["#scheduledSleepLabel", "定时息屏"],
+    ["#scheduledSleepModeLabel", "息屏模式"],
+    ["#scheduledSleepTimeLabel", "息屏时间"],
+    ["#scheduledWakeTimeLabel", "亮屏时间"],
+    ["#scheduledSleepHelp", "每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。"],
+    ["#alarmSettingsLabel", "闹钟"],
+    ["#alarmSettingsHelp", "最多 3 组；响铃后按 HOME 或摇动设备停止。"]
   ].forEach(([selector, source]) => {
     const node = qs(selector);
     if(node) node.textContent = translateCore(source);
   });
   const sleepOff = qs('#autoSleepSelect option[value="0"]');
   if(sleepOff) sleepOff.textContent = translateCore("关闭");
+  const scheduleEnabled = qs("#scheduledSleepEnabled");
+  if(scheduleEnabled){
+    scheduleEnabled.options[0].textContent = translateCore("关闭");
+    scheduleEnabled.options[1].textContent = translateCore("开启");
+  }
+  const scheduleMode = qs("#scheduledSleepMode");
+  if(scheduleMode){
+    scheduleMode.options[0].textContent = translateCore("关闭屏幕");
+    scheduleMode.options[1].textContent = translateCore("降低亮度");
+  }
+  renderAlarmControls(alarms);
   updateTimezonePreview();
 }
 
@@ -3806,6 +3948,139 @@ function setAutoSleepControl(seconds){
   if(select) select.value = String(normalized);
 }
 
+function normalizeClockPart(value, max, fallback){
+  const number = Number(value);
+  if(!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(max, Math.round(number)));
+}
+
+function normalizeAlarmRepeat(value){
+  const allowed = ["daily", "weekdays", "weekend", "mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const text = String(value || "");
+  return allowed.includes(text) ? text : "daily";
+}
+
+function normalizeAlarms(value){
+  let input = value;
+  if(typeof input === "string"){
+    try{ input = JSON.parse(input); }catch(err){ input = []; }
+  }
+  return Array.from({ length: ALARM_COUNT }, (_, index) => {
+    const fallback = DEFAULT_ALARMS[index];
+    const item = Array.isArray(input) && input[index] && typeof input[index] === "object" ? input[index] : {};
+    return {
+      enabled: normalizeBool(item.enabled, fallback.enabled),
+      hour: normalizeClockPart(item.hour, 23, fallback.hour),
+      minute: normalizeClockPart(item.minute, 59, fallback.minute),
+      repeat: normalizeAlarmRepeat(item.repeat || fallback.repeat)
+    };
+  });
+}
+
+function fillClockSelect(select, max){
+  if(!select) return;
+  const selected = select.value;
+  select.replaceChildren();
+  for(let value = 0; value <= max; value += 1){
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = String(value).padStart(2, "0");
+    select.appendChild(option);
+  }
+  if(selected !== "") select.value = selected;
+}
+
+function setScheduledSleepControl(values){
+  const input = values || {};
+  qs("#scheduledSleepEnabled").value = normalizeBool(input.enabled, DEFAULT_SCHEDULED_SLEEP_ENABLED) ? "true" : "false";
+  qs("#scheduledSleepMode").value = String(input.mode || DEFAULT_SCHEDULED_SLEEP_MODE) === "dim" ? "dim" : "off";
+  qs("#scheduledSleepHour").value = String(normalizeClockPart(input.sleepHour, 23, DEFAULT_SCHEDULED_SLEEP_HOUR));
+  qs("#scheduledSleepMinute").value = String(normalizeClockPart(input.sleepMinute, 59, DEFAULT_SCHEDULED_SLEEP_MINUTE));
+  qs("#scheduledWakeHour").value = String(normalizeClockPart(input.wakeHour, 23, DEFAULT_SCHEDULED_WAKE_HOUR));
+  qs("#scheduledWakeMinute").value = String(normalizeClockPart(input.wakeMinute, 59, DEFAULT_SCHEDULED_WAKE_MINUTE));
+  updateScheduledSleepDisabledState();
+}
+
+function updateScheduledSleepDisabledState(){
+  const enabled = qs("#scheduledSleepEnabled").value === "true";
+  const panel = qs("#scheduledSleepPanel");
+  if(panel) panel.classList.toggle("is-disabled", !enabled);
+  ["#scheduledSleepMode", "#scheduledSleepHour", "#scheduledSleepMinute", "#scheduledWakeHour", "#scheduledWakeMinute"]
+    .forEach((selector) => { const node = qs(selector); if(node) node.disabled = !enabled; });
+}
+
+function alarmRepeatOptions(){
+  return [
+    ["daily", "每日"], ["weekdays", "工作日"], ["weekend", "周末"],
+    ["mon", "每周一"], ["tue", "每周二"], ["wed", "每周三"], ["thu", "每周四"],
+    ["fri", "每周五"], ["sat", "每周六"], ["sun", "每周日"]
+  ];
+}
+
+function renderAlarmControls(values){
+  const alarms = normalizeAlarms(values || collectAlarmControls());
+  const list = qs("#alarmList");
+  if(!list) return;
+  list.replaceChildren();
+  alarms.forEach((alarm, index) => {
+    const number = index + 1;
+    const panel = document.createElement("section");
+    panel.className = "alarm-panel";
+    panel.dataset.alarmIndex = String(index);
+    panel.innerHTML =
+      '<div class="alarm-panel-head">' +
+        '<span class="alarm-panel-title">' + translateCore("闹钟 " + number) + '</span>' +
+        '<select class="alarm-enabled" aria-label="' + translateCore("闹钟 " + number) + '">' +
+          '<option value="false">' + translateCore("关闭") + '</option>' +
+          '<option value="true">' + translateCore("开启") + '</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="alarm-config">' +
+        '<label class="time-field"><span>' + translateCore("时间") + '</span><span class="time-select-row">' +
+          '<select class="alarm-hour"></select><span class="time-colon">:</span><select class="alarm-minute"></select>' +
+        '</span></label>' +
+        '<label class="field"><span>' + translateCore("重复") + '</span><select class="alarm-repeat">' +
+          alarmRepeatOptions().map(([value, label]) => '<option value="' + value + '">' + translateCore(label) + '</option>').join("") +
+        '</select></label>' +
+      '</div>';
+    list.appendChild(panel);
+    fillClockSelect(panel.querySelector(".alarm-hour"), 23);
+    fillClockSelect(panel.querySelector(".alarm-minute"), 59);
+    panel.querySelector(".alarm-enabled").value = alarm.enabled ? "true" : "false";
+    panel.querySelector(".alarm-hour").value = String(alarm.hour);
+    panel.querySelector(".alarm-minute").value = String(alarm.minute);
+    panel.querySelector(".alarm-repeat").value = alarm.repeat;
+    panel.querySelector(".alarm-enabled").addEventListener("change", updateAlarmDisabledStates);
+  });
+  updateAlarmDisabledStates();
+}
+
+function updateAlarmDisabledStates(){
+  document.querySelectorAll(".alarm-panel").forEach((panel) => {
+    const enabled = panel.querySelector(".alarm-enabled").value === "true";
+    panel.classList.toggle("is-disabled", !enabled);
+    panel.querySelectorAll(".alarm-config select").forEach((node) => { node.disabled = !enabled; });
+  });
+}
+
+function collectAlarmControls(){
+  const panels = Array.from(document.querySelectorAll(".alarm-panel"));
+  if(!panels.length) return normalizeAlarms(DEFAULT_ALARMS);
+  return normalizeAlarms(panels.map((panel) => ({
+    enabled: panel.querySelector(".alarm-enabled").value === "true",
+    hour: panel.querySelector(".alarm-hour").value,
+    minute: panel.querySelector(".alarm-minute").value,
+    repeat: panel.querySelector(".alarm-repeat").value
+  })));
+}
+
+function initializeScheduleControls(){
+  ["#scheduledSleepHour", "#scheduledWakeHour"].forEach((selector) => fillClockSelect(qs(selector), 23));
+  ["#scheduledSleepMinute", "#scheduledWakeMinute"].forEach((selector) => fillClockSelect(qs(selector), 59));
+  setScheduledSleepControl({});
+  renderAlarmControls(DEFAULT_ALARMS);
+}
+
 const DISPLAY_SETTINGS_UNAVAILABLE_ERROR = "显示设置接口不可用，请确认固件为 1.200 及以上版本";
 
 async function parseDisplaySettingsResponse(response){
@@ -3945,6 +4220,13 @@ function loadStoredSettings(){
     storageGet(STORAGE_KEYS.autoSleepSeconds, storageGet(STORAGE_KEYS.autoSleepEnabled, DEFAULT_AUTO_SLEEP_ENABLED)),
     DEFAULT_AUTO_SLEEP_ENABLED ? DEFAULT_AUTO_SLEEP_SECONDS : 0
   );
+  const scheduledSleepEnabled = normalizeBool(storageGet(STORAGE_KEYS.scheduledSleepEnabled, DEFAULT_SCHEDULED_SLEEP_ENABLED), DEFAULT_SCHEDULED_SLEEP_ENABLED);
+  const scheduledSleepMode = storageGet(STORAGE_KEYS.scheduledSleepMode, DEFAULT_SCHEDULED_SLEEP_MODE);
+  const scheduledSleepHour = storageGet(STORAGE_KEYS.scheduledSleepHour, DEFAULT_SCHEDULED_SLEEP_HOUR);
+  const scheduledSleepMinute = storageGet(STORAGE_KEYS.scheduledSleepMinute, DEFAULT_SCHEDULED_SLEEP_MINUTE);
+  const scheduledWakeHour = storageGet(STORAGE_KEYS.scheduledWakeHour, DEFAULT_SCHEDULED_WAKE_HOUR);
+  const scheduledWakeMinute = storageGet(STORAGE_KEYS.scheduledWakeMinute, DEFAULT_SCHEDULED_WAKE_MINUTE);
+  const alarms = normalizeAlarms(storageGet(STORAGE_KEYS.alarms, JSON.stringify(DEFAULT_ALARMS)));
   const autostartAppId = storageGet(STORAGE_KEYS.autostartAppId, DEFAULT_AUTOSTART_APP_ID);
   ensureTimezoneOption(timezone);
   qs("#timezoneSelect").value = timezone;
@@ -3953,6 +4235,15 @@ function loadStoredSettings(){
   qs("#apEnabledSelect").value = apEnabled ? "true" : "false";
   setBrightnessControl(brightness);
   setAutoSleepControl(autoSleepSeconds);
+  setScheduledSleepControl({
+    enabled: scheduledSleepEnabled,
+    mode: scheduledSleepMode,
+    sleepHour: scheduledSleepHour,
+    sleepMinute: scheduledSleepMinute,
+    wakeHour: scheduledWakeHour,
+    wakeMinute: scheduledWakeMinute
+  });
+  renderAlarmControls(alarms);
   setAutostartSelectValue(autostartAppId, latestSystemState);
   applyLanguage(language, false);
 }
@@ -3972,6 +4263,13 @@ async function loadDeviceSettings(){
       autoSleepEnabled ? doc.auto_sleep_seconds : 0,
       autoSleepEnabled ? DEFAULT_AUTO_SLEEP_SECONDS : 0
     );
+    const scheduledSleepEnabled = normalizeBool(doc.scheduled_sleep_enabled, DEFAULT_SCHEDULED_SLEEP_ENABLED);
+    const scheduledSleepMode = String(doc.scheduled_sleep_mode || DEFAULT_SCHEDULED_SLEEP_MODE);
+    const scheduledSleepHour = normalizeClockPart(doc.scheduled_sleep_hour, 23, DEFAULT_SCHEDULED_SLEEP_HOUR);
+    const scheduledSleepMinute = normalizeClockPart(doc.scheduled_sleep_minute, 59, DEFAULT_SCHEDULED_SLEEP_MINUTE);
+    const scheduledWakeHour = normalizeClockPart(doc.scheduled_wake_hour, 23, DEFAULT_SCHEDULED_WAKE_HOUR);
+    const scheduledWakeMinute = normalizeClockPart(doc.scheduled_wake_minute, 59, DEFAULT_SCHEDULED_WAKE_MINUTE);
+    const alarms = normalizeAlarms(doc.alarms);
     const autostartEnabled = normalizeAutostartEnabled(doc.autostart_enabled, true);
     const autostartAppId = autostartEnabled ? String(doc.autostart_app_id || DEFAULT_AUTOSTART_APP_ID) : "";
     ensureTimezoneOption(timezone);
@@ -3981,6 +4279,15 @@ async function loadDeviceSettings(){
     qs("#apEnabledSelect").value = apEnabled ? "true" : "false";
     setBrightnessControl(brightness);
     setAutoSleepControl(autoSleepSeconds);
+    setScheduledSleepControl({
+      enabled: scheduledSleepEnabled,
+      mode: scheduledSleepMode,
+      sleepHour: scheduledSleepHour,
+      sleepMinute: scheduledSleepMinute,
+      wakeHour: scheduledWakeHour,
+      wakeMinute: scheduledWakeMinute
+    });
+    renderAlarmControls(alarms);
     setAutostartSelectValue(autostartAppId, latestSystemState);
     storageSet(STORAGE_KEYS.timezone, timezone);
     storageSet(STORAGE_KEYS.weatherAddress, weatherAddress);
@@ -3989,6 +4296,13 @@ async function loadDeviceSettings(){
     storageSet(STORAGE_KEYS.brightness, String(brightness));
     storageSet(STORAGE_KEYS.autoSleepEnabled, autoSleepEnabled ? "true" : "false");
     storageSet(STORAGE_KEYS.autoSleepSeconds, String(autoSleepSeconds));
+    storageSet(STORAGE_KEYS.scheduledSleepEnabled, scheduledSleepEnabled ? "true" : "false");
+    storageSet(STORAGE_KEYS.scheduledSleepMode, scheduledSleepMode);
+    storageSet(STORAGE_KEYS.scheduledSleepHour, String(scheduledSleepHour));
+    storageSet(STORAGE_KEYS.scheduledSleepMinute, String(scheduledSleepMinute));
+    storageSet(STORAGE_KEYS.scheduledWakeHour, String(scheduledWakeHour));
+    storageSet(STORAGE_KEYS.scheduledWakeMinute, String(scheduledWakeMinute));
+    storageSet(STORAGE_KEYS.alarms, JSON.stringify(alarms));
     storageSet(STORAGE_KEYS.autostartAppId, autostartAppId);
     applyLanguage(language, false);
     return doc;
@@ -7106,6 +7420,7 @@ function currentSettingsPayload(){
   const brightness = normalizeBrightness(qs("#brightnessRange").value, DEFAULT_BRIGHTNESS);
   const autoSleepSeconds = normalizeAutoSleepSeconds(qs("#autoSleepSelect").value, 0);
   const autoSleepEnabled = autoSleepSeconds > 0;
+  const scheduledSleepEnabled = qs("#scheduledSleepEnabled").value === "true";
   const previousAddress = String(latestDeviceSettings.weather_address || latestDeviceSettings.weatherAddress || "").trim();
   const payload = Object.assign({}, latestDeviceSettings, {
     timezone: qs("#timezoneSelect").value || DEFAULT_TIMEZONE,
@@ -7115,6 +7430,13 @@ function currentSettingsPayload(){
     brightness,
     auto_sleep_enabled: autoSleepEnabled,
     auto_sleep_seconds: autoSleepEnabled ? autoSleepSeconds : DEFAULT_AUTO_SLEEP_SECONDS,
+    scheduled_sleep_enabled: scheduledSleepEnabled,
+    scheduled_sleep_mode: qs("#scheduledSleepMode").value === "dim" ? "dim" : "off",
+    scheduled_sleep_hour: normalizeClockPart(qs("#scheduledSleepHour").value, 23, DEFAULT_SCHEDULED_SLEEP_HOUR),
+    scheduled_sleep_minute: normalizeClockPart(qs("#scheduledSleepMinute").value, 59, DEFAULT_SCHEDULED_SLEEP_MINUTE),
+    scheduled_wake_hour: normalizeClockPart(qs("#scheduledWakeHour").value, 23, DEFAULT_SCHEDULED_WAKE_HOUR),
+    scheduled_wake_minute: normalizeClockPart(qs("#scheduledWakeMinute").value, 59, DEFAULT_SCHEDULED_WAKE_MINUTE),
+    alarms: collectAlarmControls(),
     autostart_enabled: autostartAppId !== "",
     autostart_app_id: autostartAppId,
     saved_at: new Date().toISOString()
@@ -7137,6 +7459,12 @@ async function saveSettings(ev){
   const button = qs("#saveSettings");
   const prevText = button.textContent;
   const payload = currentSettingsPayload();
+  if(payload.scheduled_sleep_enabled
+      && payload.scheduled_sleep_hour === payload.scheduled_wake_hour
+      && payload.scheduled_sleep_minute === payload.scheduled_wake_minute){
+    showToast("息屏时间和亮屏时间不能相同。", true);
+    return;
+  }
   storageSet(STORAGE_KEYS.timezone, payload.timezone);
   storageSet(STORAGE_KEYS.weatherAddress, payload.weather_address);
   storageSet(STORAGE_KEYS.language, payload.language);
@@ -7144,6 +7472,13 @@ async function saveSettings(ev){
   storageSet(STORAGE_KEYS.brightness, String(payload.brightness));
   storageSet(STORAGE_KEYS.autoSleepEnabled, payload.auto_sleep_enabled ? "true" : "false");
   storageSet(STORAGE_KEYS.autoSleepSeconds, String(payload.auto_sleep_enabled ? payload.auto_sleep_seconds : 0));
+  storageSet(STORAGE_KEYS.scheduledSleepEnabled, payload.scheduled_sleep_enabled ? "true" : "false");
+  storageSet(STORAGE_KEYS.scheduledSleepMode, payload.scheduled_sleep_mode);
+  storageSet(STORAGE_KEYS.scheduledSleepHour, String(payload.scheduled_sleep_hour));
+  storageSet(STORAGE_KEYS.scheduledSleepMinute, String(payload.scheduled_sleep_minute));
+  storageSet(STORAGE_KEYS.scheduledWakeHour, String(payload.scheduled_wake_hour));
+  storageSet(STORAGE_KEYS.scheduledWakeMinute, String(payload.scheduled_wake_minute));
+  storageSet(STORAGE_KEYS.alarms, JSON.stringify(payload.alarms));
   storageSet(STORAGE_KEYS.autostartAppId, payload.autostart_app_id || "");
   applyLanguage(payload.language, false);
   button.disabled = true;
@@ -7182,6 +7517,13 @@ async function resetSettings(){
   storageRemove(STORAGE_KEYS.brightness);
   storageRemove(STORAGE_KEYS.autoSleepEnabled);
   storageRemove(STORAGE_KEYS.autoSleepSeconds);
+  storageRemove(STORAGE_KEYS.scheduledSleepEnabled);
+  storageRemove(STORAGE_KEYS.scheduledSleepMode);
+  storageRemove(STORAGE_KEYS.scheduledSleepHour);
+  storageRemove(STORAGE_KEYS.scheduledSleepMinute);
+  storageRemove(STORAGE_KEYS.scheduledWakeHour);
+  storageRemove(STORAGE_KEYS.scheduledWakeMinute);
+  storageRemove(STORAGE_KEYS.alarms);
   storageRemove(STORAGE_KEYS.autostartAppId);
   loadStoredSettings();
   const button = qs("#resetSettings");
@@ -7330,6 +7672,7 @@ qs("#autoSleepSelect").addEventListener("change", (ev) => {
     auto_sleep_seconds: seconds > 0 ? seconds : DEFAULT_AUTO_SLEEP_SECONDS
   }).catch((err) => showToast(err.message || String(err), true));
 });
+qs("#scheduledSleepEnabled").addEventListener("change", updateScheduledSleepDisabledState);
 qs("#installAppBtn").addEventListener("click", openAppManageView);
 qs("#openServiceManageBtn").addEventListener("click", () => openAppManageView("service"));
 qs("#backFromAppManageBtn").addEventListener("click", returnToStartView);
@@ -7364,6 +7707,7 @@ qs("#wifiPasswordToggle").addEventListener("click", toggleWifiPasswordVisibility
 qs("#wifiForm").addEventListener("submit", handleWifiSubmit);
 
 initAppManageView();
+initializeScheduleControls();
 loadStoredSettings();
 loadDeviceSettings().finally(() => {
   loadDisplaySettingsControls().catch((err) => showToast(err.message || DISPLAY_SETTINGS_UNAVAILABLE_ERROR, true));

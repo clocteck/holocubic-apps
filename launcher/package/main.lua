@@ -26,6 +26,10 @@ local AUTOSTART_DELAY_MS = 200
 local APP_LIST_POLL_MS = 1000
 local AUTOSTART_MARK_PATH = "/tmp/launcher_autostart_fired"
 local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
+local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
+local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
+local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.0.2"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -55,6 +59,67 @@ local function setting_bool(value, fallback)
   if text == "true" or text == "1" or text == "on" or text == "enabled" then return true end
   if text == "false" or text == "0" or text == "off" or text == "disabled" then return false end
   return fallback
+end
+
+local function version_parts(value)
+  local parts = {}
+  for part in tostring(value or ""):gmatch("(%d+)") do
+    parts[#parts + 1] = tonumber(part) or 0
+    if #parts >= 4 then break end
+  end
+  return parts
+end
+
+local function version_lt(a, b)
+  local av, bv = version_parts(a), version_parts(b)
+  for i = 1, 4 do
+    local ai, bi = av[i] or 0, bv[i] or 0
+    if ai < bi then return true end
+    if ai > bi then return false end
+  end
+  return false
+end
+
+local function read_info_value(path, key)
+  if not file or not file.getcontents then return "" end
+  local ok, raw = pcall(function() return file.getcontents(path) end)
+  if not ok or type(raw) ~= "string" then return "" end
+  local pattern = "\n%s*" .. key .. "%s*=%s*([^\r\n]+)"
+  return tostring(("\n" .. raw):match(pattern) or ""):match("^%s*(.-)%s*$") or ""
+end
+
+local function copy_file(src, dst)
+  if not file or not file.getcontents or not file.putcontents then return false end
+  local ok, data = pcall(function() return file.getcontents(src) end)
+  if not ok or type(data) ~= "string" then return false end
+  local wrote, result = pcall(function() return file.putcontents(dst, data) end)
+  return wrote and result ~= false
+end
+
+local function ensure_display_schedule_service()
+  if not file or not file.exists then return false end
+  if not file.exists(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.lua") then return false end
+
+  local current_version = read_info_value(DISPLAY_SCHEDULE_APP_DIR .. "/app.info", "version")
+  if file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
+      and current_version ~= ""
+      and not version_lt(current_version, DISPLAY_SCHEDULE_BUNDLE_VERSION) then
+    return false
+  end
+
+  if file.mkdir then pcall(function() file.mkdir(DISPLAY_SCHEDULE_APP_DIR) end) end
+  local ok_info = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/app.info", DISPLAY_SCHEDULE_APP_DIR .. "/app.info")
+  local ok_main = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.lua", DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
+  if ok_info and ok_main and app and app.rescan then
+    pcall(function() app.rescan() end)
+  end
+  return ok_info and ok_main
+end
+
+local function start_display_schedule_service()
+  if not app or not app.start_service then return end
+  ensure_display_schedule_service()
+  pcall(function() app.start_service(DISPLAY_SCHEDULE_SERVICE_ID) end)
 end
 
 local SETTINGS = read_settings()
@@ -853,6 +918,7 @@ load_apps()
 start_app_list_watch()
 apply_timezone()
 sync_ntp_once()
+start_display_schedule_service()
 start_ap_policy()
 schedule_autostart()
 

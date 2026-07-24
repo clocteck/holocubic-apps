@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-        <p class="summary zh">浏览、启动和管理设备上的应用。1.0.7 更新：增加全球主要时区及准确的夏令时规则，并优化中文应用名称。</p><p class="summary en">Browse, launch, and manage apps on the device. Version 1.0.7 adds major global time zones with daylight-saving rules and refines localized app names.</p>
+        <p class="summary zh">浏览、启动和管理设备上的应用。1.0.8 更新：新增定时息屏、亮屏及三组重复闹钟。</p><p class="summary en">Browse, launch, and manage apps on the device. Version 1.0.8 adds scheduled screen control and three repeating alarms.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -57,8 +57,9 @@
           <li><span class="badge">3</span><span><strong>设备管理</strong><span>Web 管理页支持 Wi-Fi、应用和媒体管理。</span></span></li>
           <li><span class="badge">4</span><span><strong>开机自启动</strong><span>可在常用设置中选择默认启动应用，设备开机后自动进入指定应用。</span></span></li>
           <li><span class="badge">5</span><span><strong>全局亮度</strong><span>亮度设置由系统服务统一处理，网页调整后实时生效，其他应用中也保持一致。</span></span></li>
-          <li><span class="badge">6</span><span><strong>自动休眠与唤醒</strong><span>支持关闭、1 分钟、10 分钟、30 分钟、1 小时、2 小时自动休眠；休眠后可通过按键、陀螺仪或网页打开应用唤醒。</span></span></li>
-          <li><span class="badge">7</span><span><strong>启动同步时间</strong><span>启动时会执行一次 NTP 对时，统一使用 ntp.aliyun.com。</span></span></li>
+          <li><span class="badge">6</span><span><strong>自动与定时息屏</strong><span>可按无操作时长自动息屏，也可设置每日息屏与亮屏时间；按键可临时唤醒。</span></span></li>
+          <li><span class="badge">7</span><span><strong>三组重复闹钟</strong><span>每组可选择每日、工作日、周末或指定星期；响铃后按 HOME 或摇动设备即可停止。</span></span></li>
+          <li><span class="badge">8</span><span><strong>启动同步时间</strong><span>启动时会执行一次 NTP 对时，统一使用 ntp.aliyun.com。</span></span></li>
         </ul>
         <ul class="list en">
           <li><span class="badge">1</span><span><strong>App launch</strong><span>Switch apps and launch the selected one.</span></span></li>
@@ -66,17 +67,18 @@
           <li><span class="badge">3</span><span><strong>Device management</strong><span>Web console supports Wi-Fi, app, and media management.</span></span></li>
           <li><span class="badge">4</span><span><strong>Autostart</strong><span>Select an app to launch automatically shortly after boot.</span></span></li>
           <li><span class="badge">5</span><span><strong>Global brightness</strong><span>Brightness is handled by the shared display service and applies in real time.</span></span></li>
-          <li><span class="badge">6</span><span><strong>Sleep and wake</strong><span>Configurable idle sleep with button, gyro, and web app launch wake support.</span></span></li>
-          <li><span class="badge">7</span><span><strong>Time sync on startup</strong><span>Launcher syncs time once at startup using ntp.aliyun.com.</span></span></li>
+          <li><span class="badge">6</span><span><strong>Automatic and scheduled screen off</strong><span>Configure idle screen-off and daily screen-off/on times.</span></span></li>
+          <li><span class="badge">7</span><span><strong>Three repeating alarms</strong><span>Each alarm supports daily, weekday, weekend, or a selected weekday. Press HOME or shake to stop it.</span></span></li>
+          <li><span class="badge">8</span><span><strong>Time sync on startup</strong><span>Launcher syncs time once at startup using ntp.aliyun.com.</span></span></li>
         </ul>
       </section>
       <section class="panel" aria-labelledby="info-title">
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 230 KB</span><span class="value en">About 230 KB</span></div>
-          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.7</span></div>
+          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.8</span></div>
         </div>
-        <p class="note zh">页面为 launcher 嵌入说明。当前版本重点更新自启动、全局亮度、自动休眠和多方式唤醒能力，图标已内嵌。</p><p class="note en">This page is embedded in launcher, with the icon bundled inline.</p>
+        <p class="note zh">页面为 launcher 嵌入说明。1.0.8 新增每日定时息屏、亮屏和三组重复闹钟，并将“自动休眠”统一更名为“自动息屏”。</p><p class="note en">Version 1.0.8 adds scheduled screen control and three repeating alarms.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
