@@ -2943,6 +2943,13 @@ button,input,select,textarea{font:inherit;color:inherit}
               <span class="schedule-panel-title" id="alarmSettingsLabel">闹钟</span>
               <small id="alarmSettingsHelp">最多 3 组；响铃后按 HOME 或摇动设备停止。</small>
             </div>
+            <label class="field" for="alarmSoundSelect">
+              <span id="alarmSoundLabel">闹钟声音</span>
+              <select id="alarmSoundSelect" name="alarmSound">
+                <option value="builtin">嘀嘀嘀 · 内置提示音</option>
+              </select>
+              <small id="alarmSoundHelp">可选择 MP3 文件夹中的音乐；播放失败时自动使用内置提示音。</small>
+            </label>
             <div class="alarm-list" id="alarmList"></div>
           </section>
         </div>
@@ -3080,6 +3087,7 @@ const DEFAULT_SCHEDULED_SLEEP_HOUR = 0;
 const DEFAULT_SCHEDULED_SLEEP_MINUTE = 0;
 const DEFAULT_SCHEDULED_WAKE_HOUR = 7;
 const DEFAULT_SCHEDULED_WAKE_MINUTE = 0;
+const DEFAULT_ALARM_SOUND = "builtin";
 const ALARM_COUNT = 3;
 const DEFAULT_ALARMS = [
   { enabled: false, hour: 7, minute: 0, repeat: "daily" },
@@ -3112,6 +3120,7 @@ const STORAGE_KEYS = {
   scheduledWakeHour: "cubic.mainpage.scheduledWakeHour",
   scheduledWakeMinute: "cubic.mainpage.scheduledWakeMinute",
   alarms: "cubic.mainpage.alarms",
+  alarmSound: "cubic.mainpage.alarmSound",
   autostartAppId: "cubic.mainpage.autostartAppId",
   appStoreUrl: "cubic.mainpage.appStoreUrl"
 };
@@ -3398,6 +3407,11 @@ const I18N_ROWS = [
   ["息屏时间和亮屏时间不能相同。", "Screen-off and screen-on times must be different.", "画面オフと画面オンの時刻は別々に設定してください。", "關閉螢幕與開啟螢幕時間不可相同。"],
   ["闹钟", "Alarms", "アラーム", "鬧鐘"],
   ["最多 3 组；响铃后按 HOME 或摇动设备停止。", "Up to 3 alarms. Press HOME or shake the device to stop ringing.", "最大3件。鳴動中は HOME を押すか本体を振ると停止します。", "最多 3 組；響鈴後按 HOME 或搖動裝置即可停止。"],
+  ["闹钟声音", "Alarm sound", "アラーム音", "鬧鐘聲音"],
+  ["嘀嘀嘀 · 内置提示音", "Beep pattern · Built in", "ビープ音 · 内蔵", "嘀嘀嘀 · 內建提示音"],
+  ["可选择 MP3 文件夹中的音乐；播放失败时自动使用内置提示音。", "Choose music from the MP3 folder. The built-in beep is used if playback fails.", "MP3 フォルダーの音楽を選択できます。再生できない場合は内蔵ビープ音を使用します。", "可選擇 MP3 資料夾中的音樂；播放失敗時自動使用內建提示音。"],
+  ["未找到 MP3 音乐", "No MP3 music found", "MP3 音楽が見つかりません", "找不到 MP3 音樂"],
+  ["（文件不存在）", " (file missing)", "（ファイルなし）", "（檔案不存在）"],
   ["闹钟 1", "Alarm 1", "アラーム 1", "鬧鐘 1"],
   ["闹钟 2", "Alarm 2", "アラーム 2", "鬧鐘 2"],
   ["闹钟 3", "Alarm 3", "アラーム 3", "鬧鐘 3"],
@@ -3636,7 +3650,9 @@ function renderDirectLanguageControls(){
     ["#scheduledWakeTimeLabel", "亮屏时间"],
     ["#scheduledSleepHelp", "每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。"],
     ["#alarmSettingsLabel", "闹钟"],
-    ["#alarmSettingsHelp", "最多 3 组；响铃后按 HOME 或摇动设备停止。"]
+    ["#alarmSettingsHelp", "最多 3 组；响铃后按 HOME 或摇动设备停止。"],
+    ["#alarmSoundLabel", "闹钟声音"],
+    ["#alarmSoundHelp", "可选择 MP3 文件夹中的音乐；播放失败时自动使用内置提示音。"]
   ].forEach(([selector, source]) => {
     const node = qs(selector);
     if(node) node.textContent = translateCore(source);
@@ -3652,6 +3668,11 @@ function renderDirectLanguageControls(){
   if(scheduleMode){
     scheduleMode.options[0].textContent = translateCore("关闭屏幕");
     scheduleMode.options[1].textContent = translateCore("降低亮度");
+  }
+  const alarmSound = qs("#alarmSoundSelect");
+  if(alarmSound && alarmSound.options.length){
+    const builtin = Array.from(alarmSound.options).find((option) => option.value === DEFAULT_ALARM_SOUND);
+    if(builtin) builtin.textContent = translateCore("嘀嘀嘀 · 内置提示音");
   }
   renderAlarmControls(alarms);
   updateTimezonePreview();
@@ -4102,6 +4123,70 @@ function collectAlarmControls(){
   })));
 }
 
+function normalizeAlarmSound(value){
+  const path = String(value || DEFAULT_ALARM_SOUND);
+  if(path === DEFAULT_ALARM_SOUND) return DEFAULT_ALARM_SOUND;
+  if(path.includes("..")
+      || !(path.startsWith("/sd/mp3/") || path.startsWith("/sd/MP3/"))
+      || !/\.mp3$/i.test(path)) return DEFAULT_ALARM_SOUND;
+  return path;
+}
+
+function setAlarmSoundValue(value){
+  const select = qs("#alarmSoundSelect");
+  if(!select) return;
+  const normalized = normalizeAlarmSound(value);
+  if(!Array.from(select.options).some((option) => option.value === normalized)){
+    const missing = document.createElement("option");
+    missing.value = normalized;
+    missing.textContent = normalized.split("/").pop() + translateCore("（文件不存在）");
+    select.appendChild(missing);
+  }
+  select.value = normalized;
+}
+
+async function loadAlarmSoundOptions(){
+  const select = qs("#alarmSoundSelect");
+  if(!select) return;
+  const selected = normalizeAlarmSound(select.value || latestDeviceSettings.alarm_sound || DEFAULT_ALARM_SOUND);
+  const found = [];
+  for(const dir of ["/sd/mp3", "/sd/MP3"]){
+    try{
+      const data = await api("/api/system/fs/list?path=" + encodeURIComponent(dir));
+      (Array.isArray(data && data.entries) ? data.entries : []).forEach((entry) => {
+        if(!entry || entry.is_dir) return;
+        const name = String(entry.name || "").trim();
+        if(!/\.mp3$/i.test(name)) return;
+        const path = normalizeAlarmSound(entry.path || (dir + "/" + name));
+        if(path !== DEFAULT_ALARM_SOUND) found.push({ path, name });
+      });
+    }catch(err){
+      // Either MP3 directory may be absent; the other remains usable.
+    }
+  }
+  const unique = Array.from(new Map(found.map((item) => [item.path, item])).values())
+    .sort((left, right) => left.name.localeCompare(right.name, currentLanguage, { numeric: true, sensitivity: "base" }));
+  select.replaceChildren();
+  const builtin = document.createElement("option");
+  builtin.value = DEFAULT_ALARM_SOUND;
+  builtin.textContent = translateCore("嘀嘀嘀 · 内置提示音");
+  select.appendChild(builtin);
+  unique.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.path;
+    option.textContent = item.name;
+    select.appendChild(option);
+  });
+  if(!unique.length){
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.disabled = true;
+    empty.textContent = translateCore("未找到 MP3 音乐");
+    select.appendChild(empty);
+  }
+  setAlarmSoundValue(selected);
+}
+
 function initializeScheduleControls(){
   ["#scheduledSleepHour", "#scheduledWakeHour"].forEach((selector) => fillClockSelect(qs(selector), 23));
   ["#scheduledSleepMinute", "#scheduledWakeMinute"].forEach((selector) => fillClockSelect(qs(selector), 59));
@@ -4255,6 +4340,7 @@ function loadStoredSettings(){
   const scheduledWakeHour = storageGet(STORAGE_KEYS.scheduledWakeHour, DEFAULT_SCHEDULED_WAKE_HOUR);
   const scheduledWakeMinute = storageGet(STORAGE_KEYS.scheduledWakeMinute, DEFAULT_SCHEDULED_WAKE_MINUTE);
   const alarms = normalizeAlarms(storageGet(STORAGE_KEYS.alarms, JSON.stringify(DEFAULT_ALARMS)));
+  const alarmSound = normalizeAlarmSound(storageGet(STORAGE_KEYS.alarmSound, DEFAULT_ALARM_SOUND));
   const autostartAppId = storageGet(STORAGE_KEYS.autostartAppId, DEFAULT_AUTOSTART_APP_ID);
   ensureTimezoneOption(timezone);
   qs("#timezoneSelect").value = timezone;
@@ -4272,6 +4358,7 @@ function loadStoredSettings(){
     wakeMinute: scheduledWakeMinute
   });
   renderAlarmControls(alarms);
+  setAlarmSoundValue(alarmSound);
   setAutostartSelectValue(autostartAppId, latestSystemState);
   applyLanguage(language, false);
 }
@@ -4298,6 +4385,7 @@ async function loadDeviceSettings(){
     const scheduledWakeHour = normalizeClockPart(doc.scheduled_wake_hour, 23, DEFAULT_SCHEDULED_WAKE_HOUR);
     const scheduledWakeMinute = normalizeClockPart(doc.scheduled_wake_minute, 59, DEFAULT_SCHEDULED_WAKE_MINUTE);
     const alarms = normalizeAlarms(doc.alarms);
+    const alarmSound = normalizeAlarmSound(doc.alarm_sound);
     const autostartEnabled = normalizeAutostartEnabled(doc.autostart_enabled, true);
     const autostartAppId = autostartEnabled ? String(doc.autostart_app_id || DEFAULT_AUTOSTART_APP_ID) : "";
     ensureTimezoneOption(timezone);
@@ -4316,6 +4404,7 @@ async function loadDeviceSettings(){
       wakeMinute: scheduledWakeMinute
     });
     renderAlarmControls(alarms);
+    setAlarmSoundValue(alarmSound);
     setAutostartSelectValue(autostartAppId, latestSystemState);
     storageSet(STORAGE_KEYS.timezone, timezone);
     storageSet(STORAGE_KEYS.weatherAddress, weatherAddress);
@@ -4331,6 +4420,7 @@ async function loadDeviceSettings(){
     storageSet(STORAGE_KEYS.scheduledWakeHour, String(scheduledWakeHour));
     storageSet(STORAGE_KEYS.scheduledWakeMinute, String(scheduledWakeMinute));
     storageSet(STORAGE_KEYS.alarms, JSON.stringify(alarms));
+    storageSet(STORAGE_KEYS.alarmSound, alarmSound);
     storageSet(STORAGE_KEYS.autostartAppId, autostartAppId);
     applyLanguage(language, false);
     return doc;
@@ -6459,11 +6549,14 @@ function buildServiceCard(service){
 }
 
 function serviceRouteHref(service){
+  const id = String(service && service.id || "").trim();
+  if(id === "display_schedule"){
+    return "/main?view=service#displayAlarmServiceSettings";
+  }
   const route = String(service && service.route_base || "").trim();
   if(route){
     return route.endsWith("/") ? route : (route + "/");
   }
-  const id = String(service && service.id || "").trim();
   return id ? ("/" + encodeURIComponent(id) + "/") : "";
 }
 
@@ -7469,6 +7562,7 @@ function currentSettingsPayload(){
     scheduled_wake_hour: normalizeClockPart(qs("#scheduledWakeHour").value, 23, DEFAULT_SCHEDULED_WAKE_HOUR),
     scheduled_wake_minute: normalizeClockPart(qs("#scheduledWakeMinute").value, 59, DEFAULT_SCHEDULED_WAKE_MINUTE),
     alarms: collectAlarmControls(),
+    alarm_sound: normalizeAlarmSound(qs("#alarmSoundSelect").value),
     autostart_enabled: autostartAppId !== "",
     autostart_app_id: autostartAppId,
     saved_at: new Date().toISOString()
@@ -7511,6 +7605,7 @@ async function saveSettings(ev){
   storageSet(STORAGE_KEYS.scheduledWakeHour, String(payload.scheduled_wake_hour));
   storageSet(STORAGE_KEYS.scheduledWakeMinute, String(payload.scheduled_wake_minute));
   storageSet(STORAGE_KEYS.alarms, JSON.stringify(payload.alarms));
+  storageSet(STORAGE_KEYS.alarmSound, payload.alarm_sound);
   storageSet(STORAGE_KEYS.autostartAppId, payload.autostart_app_id || "");
   applyLanguage(payload.language, false);
   buttons.forEach((button) => {
@@ -7560,6 +7655,7 @@ async function resetSettings(){
   storageRemove(STORAGE_KEYS.scheduledWakeHour);
   storageRemove(STORAGE_KEYS.scheduledWakeMinute);
   storageRemove(STORAGE_KEYS.alarms);
+  storageRemove(STORAGE_KEYS.alarmSound);
   storageRemove(STORAGE_KEYS.autostartAppId);
   loadStoredSettings();
   const button = qs("#resetSettings");
@@ -7746,7 +7842,11 @@ qs("#wifiForm").addEventListener("submit", handleWifiSubmit);
 initAppManageView();
 initializeScheduleControls();
 loadStoredSettings();
+if(new URLSearchParams(window.location.search).get("view") === "service"){
+  openAppManageView("service");
+}
 loadDeviceSettings().finally(() => {
+  loadAlarmSoundOptions().catch(() => {});
   loadDisplaySettingsControls().catch((err) => showToast(err.message || DISPLAY_SETTINGS_UNAVAILABLE_ERROR, true));
 });
 renderMediaLibrary();

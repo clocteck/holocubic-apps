@@ -5,8 +5,9 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.0.5",
+  VERSION = "1.1.0",
   SETTINGS_PATH = "/sd/apps/settings.json",
+  AUDIO_MODULE_PATH = "/sd/apps/mp3_player/modules/audio.so",
   DIM_BRIGHTNESS = 5,
   timers = {},
   routes = {},
@@ -26,12 +27,17 @@ DISPLAY_SCHEDULE_SERVICE = {
   alarm_started_ms = 0,
   alarm_last_trigger = {},
   alarm_audio_started = false,
+  alarm_audio_mode = "builtin",
+  alarm_sound = "builtin",
+  alarm_pattern_step = 0,
+  alarm_audio = nil,
   imu_registered = false,
   imu_sample = nil,
   tick_count = 0,
 }
 
 local APP = DISPLAY_SCHEDULE_SERVICE
+local wake_display
 
 local function write_status(stage)
   if not file or not file.putcontents then return end
@@ -225,11 +231,92 @@ local function make_tone(frequency, duration_ms)
   return table.concat(chunks)
 end
 
-local ALARM_TONE_HIGH = make_tone(880, 150)
-local ALARM_TONE_LOW = make_tone(660, 150)
-local alarm_tone_phase = false
+local ALARM_TONE = make_tone(1000, 105)
+local ALARM_PATTERN = {
+  true, true, true, false, false,
+  true, true, true, false, false, false,
+}
 
-local function start_alarm_audio()
+local function normalize_alarm_sound(value)
+  local path = tostring(value or "builtin")
+  if path == "" or path == "builtin" then return "builtin" end
+  if path:find("..", 1, true) then return "builtin" end
+  if not (path:match("^/sd/mp3/") or path:match("^/sd/MP3/")) then return "builtin" end
+  if not path:lower():match("%.mp3$") then return "builtin" end
+  return path
+end
+
+local function alarm_file_exists(path)
+  if not file or not file.stat then return false end
+  local ok, stat = pcall(function() return file.stat(path) end)
+  return ok and type(stat) == "table" and not stat.is_dir
+end
+
+local function stop_alarm_audio()
+  local audio = APP.alarm_audio
+  if audio then
+    if audio.i2s_play_stop then pcall(function() audio.i2s_play_stop() end) end
+    if audio.i2s_stop then pcall(function() audio.i2s_stop() end) end
+    if audio.close then pcall(function() audio.close() end) end
+  elseif APP.alarm_audio_started and i2s and i2s.stop then
+    pcall(function() i2s.stop(0) end)
+  end
+  APP.alarm_audio = nil
+  APP.alarm_audio_started = false
+  APP.alarm_audio_mode = "builtin"
+end
+
+local function start_mp3_alarm_audio()
+  local path = normalize_alarm_sound(APP.alarm_sound)
+  if path == "builtin" or not alarm_file_exists(path) then return false end
+  local ok, audio_or_err = pcall(require, APP.AUDIO_MODULE_PATH)
+  if not ok or type(audio_or_err) ~= "table" then return false end
+  local audio = audio_or_err
+  local started = pcall(function()
+    if audio.i2s_play_stop then pcall(function() audio.i2s_play_stop() end) end
+    if audio.i2s_stop then pcall(function() audio.i2s_stop() end) end
+    if audio.close then pcall(function() audio.close() end) end
+    if i2s and i2s.stop then pcall(function() i2s.stop(0) end) end
+    local opened, open_err = audio.open(path, { output_channels = 1 })
+    if not opened then error(open_err or "audio.open failed") end
+    local info, info_err = audio.info()
+    if type(info) ~= "table" then error(info_err or "audio.info failed") end
+    local i2s_ok, i2s_err = audio.i2s_start({
+      port = 0,
+      sample_rate = tonumber(info.sample_rate) or 44100,
+      channels = 1,
+      bits = 16,
+      buffer_count = 6,
+      buffer_len = 512,
+      data_out_pin = 48,
+    })
+    if not i2s_ok then error(i2s_err or "audio.i2s_start failed") end
+    if audio.prefetch then pcall(function() audio.prefetch(32768, 8192) end) end
+    local play_ok, play_err = audio.i2s_play_start({
+      chunk_bytes = 4096,
+      timeout_ms = 80,
+      stack_bytes = 5120,
+      priority = 9,
+      core = 1,
+      producer_stack_bytes = 7168,
+      producer_priority = 8,
+      producer_core = 1,
+    })
+    if not play_ok then error(play_err or "audio.i2s_play_start failed") end
+  end)
+  if not started then
+    if audio.i2s_play_stop then pcall(function() audio.i2s_play_stop() end) end
+    if audio.i2s_stop then pcall(function() audio.i2s_stop() end) end
+    if audio.close then pcall(function() audio.close() end) end
+    return false
+  end
+  APP.alarm_audio = audio
+  APP.alarm_audio_started = true
+  APP.alarm_audio_mode = "mp3"
+  return true
+end
+
+local function start_builtin_alarm_audio()
   if APP.alarm_audio_started then return true end
   if not i2s or not i2s.start or not i2s.write then return false end
   pcall(function() i2s.stop(0) end)
@@ -247,23 +334,26 @@ local function start_alarm_audio()
     })
   end)
   APP.alarm_audio_started = ok
+  if ok then APP.alarm_audio_mode = "builtin" end
   return ok
 end
 
 local function stop_alarm()
-  if APP.alarm_audio_started and i2s and i2s.stop then
-    pcall(function() i2s.stop(0) end)
-  end
-  APP.alarm_audio_started = false
+  stop_alarm_audio()
   APP.alarm_ringing = false
   APP.alarm_started_ms = 0
+  APP.alarm_pattern_step = 0
 end
 
 local function start_alarm()
+  stop_alarm_audio()
   APP.alarm_ringing = true
   APP.alarm_started_ms = now_ms()
+  APP.alarm_pattern_step = 0
   wake_display()
-  start_alarm_audio()
+  if not start_mp3_alarm_audio() then
+    start_builtin_alarm_audio()
+  end
 end
 
 local function ring_alarm()
@@ -272,12 +362,27 @@ local function ring_alarm()
     stop_alarm()
     return
   end
-  if not start_alarm_audio() then return end
-  alarm_tone_phase = not alarm_tone_phase
-  pcall(function()
-    i2s.write(0, alarm_tone_phase and ALARM_TONE_HIGH or ALARM_TONE_LOW)
-  end)
+  if APP.alarm_audio_mode == "mp3" and APP.alarm_audio then
+    local ok, state = pcall(function() return APP.alarm_audio.i2s_play_state() end)
+    if ok and type(state) == "table"
+        and tonumber(state.eof) == 1 and tonumber(state.running) ~= 1 then
+      stop_alarm_audio()
+      if not start_mp3_alarm_audio() then start_builtin_alarm_audio() end
+    elseif not ok or (type(state) == "table" and tonumber(state.error) == 1) then
+      stop_alarm_audio()
+      start_builtin_alarm_audio()
+    end
+    return
+  end
+  if not start_builtin_alarm_audio() then return end
+  APP.alarm_pattern_step = (APP.alarm_pattern_step % #ALARM_PATTERN) + 1
+  if ALARM_PATTERN[APP.alarm_pattern_step] then
+    pcall(function() i2s.write(0, ALARM_TONE) end)
+  end
 end
+
+APP.start_alarm = start_alarm
+APP.stop_alarm = stop_alarm
 
 local function check_alarms(clock)
   if type(clock) ~= "table" then return end
@@ -313,6 +418,8 @@ local function api_info()
     scheduled_window_active = inside_schedule(clock),
     scheduled_sleeping = APP.scheduled_sleeping,
     alarm_ringing = APP.alarm_ringing,
+    alarm_sound = APP.alarm_sound,
+    alarm_audio_mode = APP.alarm_audio_mode,
     alarm_count = #APP.alarms,
     clock = clock,
     imu_registered = APP.imu_registered,
@@ -328,7 +435,7 @@ local function sleep_display()
   end
 end
 
-local function wake_display()
+wake_display = function()
   if http and http.post then
     pcall(function()
       http.post("http://127.0.0.1/display/api/wake", {
@@ -367,6 +474,7 @@ local function sync_settings()
   APP.wake_minute = clamp(settings.scheduled_wake_minute, 0, 59, 0)
   APP.normal_brightness = clamp(settings.brightness or settings.display_brightness, 1, 100, 80)
   APP.alarms = normalize_alarms(settings.alarms)
+  APP.alarm_sound = normalize_alarm_sound(settings.alarm_sound)
 
   local timezone = tostring(settings.timezone or "")
   if timezone ~= "" and time and time.settimezone then
@@ -377,7 +485,7 @@ local function sync_settings()
     tostring(APP.enabled), APP.mode,
     APP.sleep_hour, APP.sleep_minute,
     APP.wake_hour, APP.wake_minute,
-    APP.normal_brightness, timezone,
+    APP.normal_brightness, timezone, APP.alarm_sound,
   }, ":")
   local changed = signature ~= APP.settings_signature
   APP.settings_signature = signature
@@ -536,7 +644,7 @@ if tmr and tmr.create then
   timer:alarm(1000, tmr.ALARM_AUTO, tick)
   local alarm_timer = tmr.create()
   APP.timers[#APP.timers + 1] = alarm_timer
-  alarm_timer:alarm(450, tmr.ALARM_AUTO, ring_alarm)
+  alarm_timer:alarm(220, tmr.ALARM_AUTO, ring_alarm)
 end
 
 print("[display_schedule] ready", APP.VERSION, tostring(APP.enabled))
