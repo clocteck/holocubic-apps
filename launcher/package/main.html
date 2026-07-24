@@ -3126,7 +3126,102 @@ const I18N_ROWS = [
   ["当前没有可连接的热点，正在尝试扫描。", "No network is available; scanning now.", "接続可能なネットワークがありません。検索しています。", "目前沒有可連線的網路，正在掃描。"],
   ["密码至少需要 8 位，请重新输入。", "The password must be at least 8 characters.", "パスワードは8文字以上で入力してください。", "密碼至少需要 8 個字元，請重新輸入。"],
   ["连接中...", "Connecting...", "接続中...", "連線中..."],
-  ["已提交连接请求，正在等待设备联网。", "Connection submitted; waiting for the device.", "接続要求を送信しました。デバイスを待っています。", "已送出連線要求，正在等待裝置連網。"]
+  ["已提交连接请求，正在等待设备联网。", "Connection submitted; waiting for the device.", "接続要求を送信しました。デバイスを待っています。", "已送出連線要求，正在等待裝置連網。"],
+  ["离线", "Offline", "オフライン", "離線"],
+  ["读取失败", "Read failed", "読み込み失敗", "讀取失敗"],
+  ["独立页面", "App page", "アプリページ", "獨立頁面"],
+  ["已连接", "Connected", "接続済み", "已連線"],
+  ["未连接", "Disconnected", "未接続", "未連線"],
+  ["连接中", "Connecting", "接続中", "連線中"],
+  ["正在连接", "Connecting", "接続中", "正在連線"],
+  ["等待配网", "Waiting for WiFi setup", "WiFi 設定待ち", "等待配網"],
+  ["AP 已开", "AP enabled", "AP 有効", "AP 已開"],
+  ["暂无可用热点", "No networks available", "利用可能なネットワークなし", "暫無可用網路"],
+  ["正在扫描附近热点...", "Scanning nearby networks...", "周辺ネットワークを検索中...", "正在掃描附近網路..."],
+  ["扫描中...", "Scanning...", "検索中...", "掃描中..."],
+  ["等待可用热点", "Waiting for a network", "ネットワーク待ち", "等待可用網路"],
+  ["请输入密码", "Enter the password", "パスワードを入力", "請輸入密碼"],
+  ["正在连接中", "Connecting", "接続中", "正在連線"],
+  ["当前热点已连接", "This network is connected", "このネットワークに接続済み", "目前網路已連線"],
+  ["已选择新热点，可点击连接", "New network selected; select Connect", "新しいネットワークを選択しました", "已選擇新網路，可按連線"],
+  ["连接失败，请重试", "Connection failed; try again", "接続に失敗しました", "連線失敗，請重試"],
+  ["正在扫描可用热点", "Scanning for networks", "ネットワークを検索中", "正在掃描可用網路"],
+  ["开放网络可直接连接", "Open network; no password required", "オープンネットワークです", "開放網路可直接連線"],
+  ["暂未发现可连接热点", "No connectable network found", "接続可能なネットワークなし", "暫未發現可連線網路"],
+  ["正在扫描附近热点，请稍候。", "Scanning nearby networks. Please wait.", "周辺ネットワークを検索しています。", "正在掃描附近網路，請稍候。"],
+  ["未发现可用热点，请稍后重试。", "No network found. Try again later.", "ネットワークが見つかりません。", "未發現可用網路，請稍後重試。"],
+  ["暂无资源。", "No media.", "リソースなし。", "暫無資源。"],
+  ["暂无可用热点", "No networks available", "利用可能なネットワークなし", "暫無可用網路"],
+  ["静态图片", "Images", "画像", "靜態圖片"],
+  ["动画", "Animations", "アニメーション", "動畫"],
+  ["还没有图片", "No images yet", "画像はまだありません", "尚無圖片"],
+  ["还没有 GIF", "No GIFs yet", "GIF はまだありません", "尚無 GIF"],
+  ["未命名资源", "Unnamed media", "名称未設定", "未命名資源"],
+  ["当前无法预览", "Preview unavailable", "プレビュー不可", "目前無法預覽"],
+  ["查看", "View", "表示", "檢視"],
+  ["删除", "Delete", "削除", "刪除"],
+  ["删除中...", "Deleting...", "削除中...", "刪除中..."],
+  ["正在删除。", "Deleting.", "削除中です。", "正在刪除。"],
+  ["上传完成。", "Upload complete.", "アップロード完了。", "上傳完成。"],
+  ["收起高级", "Hide advanced", "詳細を閉じる", "收起進階選項"],
+  ["刷新中...", "Refreshing...", "更新中...", "重新整理中..."],
+  ["服务", "Service", "サービス", "服務"],
+  ["版本", "Version", "バージョン", "版本"],
+  ["类型", "Type", "種類", "類型"],
+  ["作者", "Author", "作者", "作者"],
+  ["应用名称", "App name", "アプリ名", "應用程式名稱"],
+  ["应用 ID", "App ID", "アプリ ID", "應用程式 ID"],
+  ["这个应用没有填写介绍。", "No description is available for this app.", "説明はありません。", "此應用程式沒有介紹。"],
+  ["这个应用没有详情页地址", "This app has no details page URL", "詳細ページ URL がありません", "此應用程式沒有詳細頁位址"],
+  ["这个应用没有本地介绍", "This app has no local description", "ローカル説明がありません", "此應用程式沒有本機介紹"],
+  ["本地应用介绍。", "Local app information.", "ローカルアプリ情報。", "本機應用程式介紹。"],
+  ["来自设备本地 info.html。", "From the device's local info.html.", "デバイスの info.html から取得。", "來自裝置本機 info.html。"],
+  ["来自设备本地 app.info。", "From the device's local app.info.", "デバイスの app.info から取得。", "來自裝置本機 app.info。"],
+  ["应用 ID 无效，无法读取本地介绍", "Invalid app ID; local information cannot be read", "無効なアプリ ID です", "應用程式 ID 無效，無法讀取本機介紹"],
+  ["本地没有找到 info.html 或 app.info", "No local info.html or app.info was found", "info.html または app.info がありません", "找不到本機 info.html 或 app.info"],
+  ["读取中...", "Reading...", "読み込み中...", "讀取中..."],
+  ["未命名应用", "Unnamed app", "名称未設定アプリ", "未命名應用程式"],
+  ["设备已安装，本次目录未返回该应用。", "Installed on the device but absent from this catalog.", "デバイスにインストール済みです。", "已安裝於裝置，但此目錄沒有該應用程式。"],
+  ["不可更新", "Not updatable", "更新不可", "不可更新"],
+  ["安装", "Install", "インストール", "安裝"],
+  ["更新", "Update", "更新", "更新"],
+  ["卸载", "Remove", "アンインストール", "解除安裝"],
+  ["卸载中...", "Removing...", "アンインストール中...", "解除安裝中..."],
+  ["介绍", "Details", "紹介", "介紹"],
+  ["内置", "Built in", "内蔵", "內建"],
+  ["打开", "Open", "開く", "開啟"],
+  ["打开中...", "Opening...", "開いています...", "開啟中..."],
+  ["退出", "Exit", "終了", "退出"],
+  ["退出中...", "Exiting...", "終了中...", "退出中..."],
+  ["正在返回启动器", "Returning to Launcher", "ランチャーに戻っています", "正在返回啟動器"],
+  ["进入 app 页面", "Open app page", "アプリページを開く", "進入應用程式頁面"],
+  ["进入服务页面", "Open service page", "サービスページを開く", "進入服務頁面"],
+  ["固件已写入，设备正在重启。", "Firmware installed; the device is restarting.", "ファームウェアを適用し再起動しています。", "韌體已寫入，裝置正在重新啟動。"],
+  ["已开始安装固件更新", "Firmware installation started", "ファームウェア更新を開始しました", "已開始安裝韌體更新"],
+  ["安装固件更新后设备会自动重启。继续安装？", "The device will restart after the firmware update. Continue?", "更新後に再起動します。続行しますか？", "安裝韌體更新後裝置會重新啟動。是否繼續？"],
+  ["关闭自启动", "Disable autostart", "自動起動を無効化", "關閉自動啟動"],
+  ["已切换为默认应用目录。", "Switched to the default app catalog.", "既定のカタログに切り替えました。", "已切換為預設應用程式目錄。"],
+  ["（未在列表中）", " (not listed)", "（一覧にありません）", "（不在清單中）"],
+  ["处理中", "Processing", "処理中", "處理中"],
+  ["已添加到设备", "Added to device", "デバイスに追加済み", "已新增到裝置"],
+  ["正在刷新目录。", "Refreshing the catalog.", "カタログを更新しています。", "正在重新整理目錄。"],
+  ["目录中没有项目。", "The catalog is empty.", "カタログに項目がありません。", "目錄中沒有項目。"],
+  ["已删除。", "Deleted.", "削除しました。", "已刪除。"],
+  ["介绍页加载超时，请检查网络连接或介绍页地址是否可访问。", "The details page timed out. Check the network or page URL.", "詳細ページがタイムアウトしました。", "介紹頁載入逾時，請檢查網路或頁面位址。"],
+  ["介绍页加载失败，请检查介绍页地址是否可访问。", "The details page failed to load. Check the page URL.", "詳細ページを読み込めません。", "介紹頁載入失敗，請檢查頁面位址。"],
+  ["浏览器不支持图片缩放", "This browser cannot resize images", "このブラウザーは画像の調整に対応していません", "瀏覽器不支援圖片縮放"],
+  ["简体中文", "Simplified Chinese", "簡体字中国語", "簡體中文"],
+  ["日本語", "Japanese", "日本語", "日文"],
+  ["繁體中文", "Traditional Chinese", "繁体字中国語", "繁體中文"],
+  ["屏幕亮度", "Screen brightness", "画面の明るさ", "螢幕亮度"],
+  ["全局亮度，拖动时立即应用到设备。", "Global brightness; changes apply to the device immediately.", "全体の明るさ。変更はすぐにデバイスへ反映されます。", "全域亮度，拖動時立即套用到裝置。"],
+  ["自动休眠", "Automatic sleep", "自動スリープ", "自動休眠"],
+  ["关闭", "Off", "オフ", "關閉"],
+  ["选择无操作多久后自动息屏，按键后恢复亮度。", "Choose the idle time before the screen sleeps. Press a button to wake it.", "無操作から画面を消すまでの時間を選択します。ボタンで復帰します。", "選擇閒置多久後自動關閉螢幕，按鍵後恢復亮度。"],
+  ["开机自启动应用", "App to launch at startup", "起動時に開くアプリ", "開機自動啟動應用程式"],
+  ["仅设备开机约 5 秒内启动 Launcher 时触发；返回 Launcher 不会重复启动。", "Runs only when Launcher starts within about 5 seconds after boot; returning to Launcher will not launch it again.", "起動後約 5 秒以内に Launcher が開始した場合のみ実行され、Launcher に戻っても再実行されません。", "僅在裝置開機約 5 秒內啟動 Launcher 時觸發；返回 Launcher 不會重複啟動。"],
+  ["未在列表中", "not listed", "一覧にありません", "不在清單中"],
+  ["返回", "Back", "戻る", "返回"]
 ];
 const I18N_PREFIX_ROWS = [
   ["页面已保存，写入设备失败：", "Saved in the page, but device write failed: ", "ページには保存しましたが、デバイスへの書き込みに失敗しました: ", "頁面已儲存，但寫入裝置失敗："],
@@ -3136,7 +3231,36 @@ const I18N_PREFIX_ROWS = [
   ["正在上传 ", "Uploading ", "アップロード中 ", "正在上傳 "],
   ["正在保存并连接 ", "Saving and connecting to ", "保存して接続中 ", "正在儲存並連線 "],
   ["已开始连接 ", "Connecting to ", "接続を開始しました ", "已開始連線 "],
-  ["连接成功，IP: ", "Connected, IP: ", "接続しました、IP: ", "連線成功，IP: "]
+  ["连接成功，IP: ", "Connected, IP: ", "接続しました、IP: ", "連線成功，IP: "],
+  ["正在连接，IP: ", "Connecting, IP: ", "接続中、IP: ", "正在連線，IP: "],
+  ["等待配网，IP: ", "Waiting for WiFi setup, IP: ", "WiFi 設定待ち、IP: ", "等待配網，IP: "],
+  ["已刷新 ", "Refreshed ", "更新済み ", "已重新整理 "],
+  ["已占用 ", "Used ", "使用済み ", "已使用 "],
+  ["已上传 ", "Uploaded ", "アップロード済み ", "已上傳 "],
+  ["已同步 ", "Synced ", "同期済み ", "已同步 "],
+  ["已删除 ", "Deleted ", "削除済み ", "已刪除 "],
+  ["正在适配 ", "Preparing ", "調整中 ", "正在調整 "],
+  ["正在下载 ", "Downloading ", "ダウンロード中 ", "正在下載 "],
+  ["正在打开 ", "Opening ", "開いています ", "正在開啟 "],
+  ["已安装 ", "Installed ", "インストール済み ", "已安裝 "],
+  ["已卸载 ", "Removed ", "アンインストール済み ", "已解除安裝 "],
+  ["版本 ", "Version ", "バージョン ", "版本 "],
+  ["部分上传成功：", "Some files uploaded: ", "一部をアップロードしました: ", "部分上傳成功："],
+  ["介绍页加载超时", "Details page timed out", "詳細ページがタイムアウトしました", "介紹頁載入逾時"],
+  ["介绍页加载失败", "Details page failed to load", "詳細ページを読み込めません", "介紹頁載入失敗"],
+  ["system api 返回了无效数据", "System API returned invalid data", "システム API のデータが無効です", "系統 API 傳回無效資料"],
+  ["media api 返回了无效数据", "Media API returned invalid data", "メディア API のデータが無効です", "媒體 API 傳回無效資料"],
+  ["已开始", "Started ", "開始しました ", "已開始"],
+  ["确认删除 “", "Delete “", "削除しますか「", "確認刪除「"],
+  ["文件过大", "File is too large", "ファイルが大きすぎます", "檔案過大"],
+  ["文件名无效", "Invalid file name", "ファイル名が無効です", "檔案名稱無效"],
+  ["读取失败", "Read failed", "読み込み失敗", "讀取失敗"],
+  ["尺寸无效", "Invalid dimensions", "サイズが無効です", "尺寸無效"],
+  ["缩放失败", "Resize failed", "サイズ変更に失敗しました", "縮放失敗"],
+  ["格式不受支持", "Unsupported format", "未対応の形式です", "不支援此格式"],
+  ["不是 GIF 文件", " is not a GIF file", " は GIF ファイルではありません", " 不是 GIF 檔案"],
+  ["请上传到 GIF 分组", " belongs in the GIF group", " は GIF グループに追加してください", " 請上傳到 GIF 分組"],
+  ["超过 64 MB 上传限制", " exceeds the 64 MB upload limit", " は 64 MB の上限を超えています", " 超過 64 MB 上傳限制"]
 ];
 const I18N_INDEX = { "zh-CN": 0, en: 1, ja: 2, "zh-TW": 3 };
 const i18nTextSources = new WeakMap();
@@ -3150,6 +3274,84 @@ function normalizeLanguage(value){
   if(/^ja/i.test(text)) return "ja";
   if(/^en/i.test(text)) return "en";
   return DEFAULT_LANGUAGE;
+}
+
+const APP_NAME_I18N = {
+  launcher: {"zh-CN":"启动器",en:"Launcher",ja:"ランチャー","zh-TW":"啟動器"},
+  "2048": {"zh-CN":"2048",en:"2048",ja:"2048","zh-TW":"2048"},
+  BTC: {"zh-CN":"行情",en:"Ticker",ja:"相場","zh-TW":"行情"},
+  ConwayLife: {"zh-CN":"康威生命游戏",en:"Conway's Life",ja:"ライフゲーム","zh-TW":"康威生命遊戲"},
+  devtools: {"zh-CN":"开发工具",en:"DevTools",ja:"開発ツール","zh-TW":"開發工具"},
+  Spectrum: {"zh-CN":"频谱",en:"Spectrum",ja:"スペクトラム","zh-TW":"頻譜"},
+  "time-calendar-weather-memo": {"zh-CN":"助手",en:"Assistant",ja:"アシスタント","zh-TW":"助理"},
+  photos: {"zh-CN":"相册",en:"Photos",ja:"写真","zh-TW":"相簿"},
+  wifi_guide: {"zh-CN":"配网指南",en:"WiFi Setup",ja:"WiFi 設定","zh-TW":"配網指南"},
+  videos: {"zh-CN":"动图播放器",en:"GIF Player",ja:"GIF プレーヤー","zh-TW":"動圖播放器"},
+  NixieClock: {"zh-CN":"辉光时钟",en:"Holo Clock",ja:"ホロ時計","zh-TW":"輝光時鐘"},
+  settings: {"zh-CN":"设置",en:"Settings",ja:"設定","zh-TW":"設定"},
+  mp3_player: {"zh-CN":"音乐",en:"Music",ja:"音楽","zh-TW":"音樂"},
+  MatrixRain: {"zh-CN":"矩阵雨",en:"Matrix Rain",ja:"マトリックスレイン","zh-TW":"矩陣雨"},
+  holopet: {"zh-CN":"Clawd 监控",en:"Clawd Monitor",ja:"Clawd モニター","zh-TW":"Clawd 監控"},
+  devrun: {"zh-CN":"开发运行",en:"DevRun",ja:"開発実行","zh-TW":"開發執行"},
+  weather: {"zh-CN":"天气",en:"Weather",ja:"天気","zh-TW":"天氣"},
+  holo_pc_monitor: {"zh-CN":"电脑监控",en:"PC Monitor",ja:"PC モニター","zh-TW":"電腦監控"},
+  "holo-retro-go": {"zh-CN":"复古游戏",en:"Retro-Go",ja:"レトロゲーム","zh-TW":"復古遊戲"},
+  FluidPendant: {"zh-CN":"流体挂件",en:"Fluid Pendant",ja:"流体ペンダント","zh-TW":"流體掛件"},
+  aida_monitor: {"zh-CN":"AIDA64 监控",en:"AIDA64 Monitor",ja:"AIDA64 モニター","zh-TW":"AIDA64 監控"},
+  xiaozhi: {"zh-CN":"小智",en:"Xiaozhi",ja:"Xiaozhi","zh-TW":"小智"},
+  "xiaozhi-service": {"zh-CN":"小智服务",en:"Xiaozhi Service",ja:"Xiaozhi サービス","zh-TW":"小智服務"},
+  plane: {"zh-CN":"飞机大战",en:"Plane",ja:"飛行機","zh-TW":"飛機大戰"}
+};
+
+function containsCjk(value){
+  return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/.test(String(value || ""));
+}
+
+function localizedObjectValue(value){
+  if(!value || typeof value !== "object") return "";
+  const keys = currentLanguage === "zh-CN"
+    ? ["zh-CN","zh_cn","zh","cn"]
+    : currentLanguage === "zh-TW"
+      ? ["zh-TW","zh_tw","zh-Hant","zh_hant","tw"]
+      : currentLanguage === "ja"
+        ? ["ja","jp"]
+        : ["en","en-US","en_us"];
+  for(const key of keys){
+    if(value[key]) return String(value[key]).trim();
+  }
+  return "";
+}
+
+function localizedAppName(item, fallback){
+  const source = item && typeof item === "object" ? item : {};
+  const id = String(source.id || source.app_id || "").trim();
+  const fieldKeys = currentLanguage === "zh-CN"
+    ? ["name_zh_cn","name_zh","name_cn"]
+    : currentLanguage === "zh-TW"
+      ? ["name_zh_tw","name_zh_hant","name_tw"]
+      : currentLanguage === "ja"
+        ? ["name_ja","name_jp"]
+        : ["name_en","name_en_us"];
+  for(const key of fieldKeys){
+    if(source[key]) return String(source[key]).trim();
+  }
+  const objectName = localizedObjectValue(source.name);
+  if(objectName) return objectName;
+  const known = APP_NAME_I18N[id];
+  if(known && known[currentLanguage]) return known[currentLanguage];
+  const raw = typeof source.name === "string" ? source.name.trim() : "";
+  if(currentLanguage === "en" && containsCjk(raw)){
+    return id || fallback || "App";
+  }
+  return raw || id || fallback || translateCore("应用");
+}
+
+function languageSafeText(value, fallback){
+  const translated = translateText(String(value || ""));
+  if(currentLanguage === "en" && containsCjk(translated)){
+    return String(fallback || "Operation failed");
+  }
+  return translated;
 }
 
 function translateCore(source){
@@ -3230,6 +3432,19 @@ function applyLanguage(value, persist){
   const select = qs("#languageSelect");
   if(select) select.value = currentLanguage;
   if(persist) storageSet(STORAGE_KEYS.language, currentLanguage);
+  appCardsSignature = "";
+  serviceCardsSignature = "";
+  autostartAppOptionsSignature = "";
+  const autostartSelect = qs("#autostartAppSelect");
+  if(autostartSelect){
+    setAutostartSelectValue(autostartSelect.value, latestSystemState);
+  }
+  if(latestSystemState){
+    renderState(latestSystemState);
+  }
+  if(currentView === "appmanage" && typeof refreshAppStoreCatalog === "function"){
+    refreshAppStoreCatalog(true);
+  }
 }
 
 const i18nObserver = new MutationObserver((mutations) => {
@@ -3243,7 +3458,7 @@ i18nObserver.observe(document.body, { subtree: true, childList: true, characterD
 
 function showToast(text, isError, durationMs){
   const el = qs("#toast");
-  el.textContent = text;
+  el.textContent = languageSafeText(text, isError ? "Operation failed" : "Done");
   el.style.background = isError ? "#8f3041" : "#183a63";
   el.classList.add("show");
   clearTimeout(toastTimer);
@@ -3257,7 +3472,7 @@ async function api(path, init){
   try{
     data = await res.json();
   }catch(err){
-    throw new Error("system api 返回了无效数据");
+    throw new Error(translateCore("system api 返回了无效数据"));
   }
   if(!res.ok || data.ok === false){
     throw new Error(data && data.error ? data.error : ("HTTP " + res.status));
@@ -3609,11 +3824,11 @@ function setAutostartSelectValue(appId, data){
   select.innerHTML = "";
   const off = document.createElement("option");
   off.value = "";
-  off.textContent = "关闭自启动";
+  off.textContent = translateCore("关闭自启动");
   select.appendChild(off);
   apps.forEach((app) => {
     const id = String(app && app.id || "");
-    const name = String(app && app.name || id);
+    const name = localizedAppName(app, id);
     const option = document.createElement("option");
     option.value = id;
     option.textContent = name === id ? id : (name + " (" + id + ")");
@@ -3622,7 +3837,7 @@ function setAutostartSelectValue(appId, data){
   if(selected && !apps.some((app) => String(app && app.id || "") === selected)){
     const missing = document.createElement("option");
     missing.value = selected;
-    missing.textContent = selected + "（未在列表中）";
+    missing.textContent = selected + translateCore("（未在列表中）");
     select.appendChild(missing);
   }
   select.value = selected;
@@ -3703,9 +3918,9 @@ function escapeAttr(text){
 
 function sortMediaEntries(list){
   return (Array.isArray(list) ? list.slice() : []).sort((a, b) => {
-    const left = String(a && a.name || "");
-    const right = String(b && b.name || "");
-    return left.localeCompare(right, "zh-Hans-CN", { numeric: true, sensitivity: "base" });
+    const left = localizedAppName(a, "");
+    const right = localizedAppName(b, "");
+    return left.localeCompare(right, currentLanguage, { numeric: true, sensitivity: "base" });
   });
 }
 
@@ -3907,7 +4122,7 @@ async function prepareImageFileForUpload(file){
 
 function setMediaStatus(text, isError){
   const node = qs("#mediaLibraryStatus");
-  node.textContent = text;
+  node.textContent = languageSafeText(text, isError ? "Media operation failed" : "Ready");
   node.classList.toggle("error", !!isError);
 }
 
@@ -4289,17 +4504,25 @@ function initAppManageView(){
     const direct = raw.description;
     let zh = "";
     let en = "";
+    let ja = "";
+    let zhTw = "";
     if(direct && typeof direct === "object"){
       zh = String(direct.zh || direct["zh-CN"] || direct.cn || direct.chinese || "").trim();
       en = String(direct.en || direct["en-US"] || direct.english || "").trim();
+      ja = String(direct.ja || direct.jp || direct.japanese || "").trim();
+      zhTw = String(direct["zh-TW"] || direct.zh_tw || direct["zh-Hant"] || direct.traditional_chinese || "").trim();
     }else{
       zh = String(direct || "").trim();
     }
     zh = String(raw.description_zh || raw.description_cn || raw.desc_zh || raw.desc_cn || zh || "").trim();
     en = String(raw.description_en || raw.desc_en || en || "").trim();
+    ja = String(raw.description_ja || raw.desc_ja || ja || "").trim();
+    zhTw = String(raw.description_zh_tw || raw.description_tw || raw.desc_zh_tw || zhTw || "").trim();
     return {
       zh,
       en,
+      ja,
+      zhTw,
       text: zh || en
     };
   }
@@ -4309,6 +4532,15 @@ function initAppManageView(){
       return "";
     }
     const desc = item.description_fields || normalizeDescriptionFields(item);
+    if(currentLanguage === "en"){
+      return desc.en || (!containsCjk(desc.text) ? desc.text : "No English description available.");
+    }
+    if(currentLanguage === "ja"){
+      return desc.ja || desc.en || "説明はありません。";
+    }
+    if(currentLanguage === "zh-TW"){
+      return desc.zhTw || desc.zh || desc.en || "";
+    }
     return desc.zh || desc.text || desc.en || "";
   }
 
@@ -4349,6 +4581,10 @@ function initAppManageView(){
       id: LAUNCHER_APP_ID,
       app_id: LAUNCHER_APP_ID,
       name: String((info && info.name) || existing.name || "Launcher"),
+      name_zh_cn: String((info && (info.name_zh_cn || info.name_zh)) || existing.name_zh_cn || ""),
+      name_en: String((info && info.name_en) || existing.name_en || "Launcher"),
+      name_ja: String((info && info.name_ja) || existing.name_ja || ""),
+      name_zh_tw: String((info && info.name_zh_tw) || existing.name_zh_tw || ""),
       version: String((info && (info.version || info.app_version)) || existing.version || existing.app_version || ""),
       app_version: String((info && (info.app_version || info.version)) || existing.app_version || existing.version || ""),
       kind: "launcher",
@@ -4356,6 +4592,8 @@ function initAppManageView(){
       description: descriptionFields.text || existing.description || "",
       description_zh: descriptionFields.zh || existing.description_zh || "",
       description_en: descriptionFields.en || existing.description_en || "",
+      description_ja: descriptionFields.ja || existing.description_ja || "",
+      description_zh_tw: descriptionFields.zhTw || existing.description_zh_tw || "",
       installed_by_app_info: true
     });
   }
@@ -4389,29 +4627,30 @@ function initAppManageView(){
     return normalizeDescriptionFields({
       description: info.description || info.desc || "",
       description_zh: info.description_zh || info.description_cn || info.desc_zh || info.desc_cn || "",
-      description_en: info.description_en || info.desc_en || ""
+      description_en: info.description_en || info.desc_en || "",
+      description_ja: info.description_ja || info.desc_ja || "",
+      description_zh_tw: info.description_zh_tw || info.description_tw || info.desc_zh_tw || ""
     });
   }
 
   function appInfoHtml(item, info){
     const desc = appInfoDescriptionFields(info);
+    const appName = localizedAppName(Object.assign({}, item || {}, info || {}), translateCore("应用"));
     const rows = [
-      ["应用名称", info.name || item.name || item.id],
-      ["版本", info.version || item.version || ""],
-      ["类型", storeKindLabel(info.kind || item.kind)],
-      ["作者", info.author || ""],
-      ["应用 ID", item.id || ""]
+      [translateCore("应用名称"), appName],
+      [translateCore("版本"), info.version || item.version || ""],
+      [translateCore("类型"), storeKindLabel(info.kind || item.kind)],
+      [translateCore("作者"), info.author || ""],
+      [translateCore("应用 ID"), item.id || ""]
     ].filter((row) => row[1]);
-    const descriptionHtml = desc.zh || desc.en
-      ? '<section class="local-section">' +
-          (desc.zh ? '<p>' + escapeHtml(desc.zh) + '</p>' : '') +
-          (desc.en ? '<p lang="en">' + escapeHtml(desc.en) + '</p>' : '') +
-        '</section>'
-      : '<p class="muted">这个应用没有填写介绍。</p>';
-    return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">' +
+    const description = storeDescriptionText({ description_fields: desc });
+    const descriptionHtml = description
+      ? '<section class="local-section"><p>' + escapeHtml(description) + '</p></section>'
+      : '<p class="muted">' + escapeHtml(translateCore("这个应用没有填写介绍。")) + '</p>';
+    return '<!doctype html><html lang="' + escapeHtml(currentLanguage) + '"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
       '<style>body{margin:0;padding:24px;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#15211c;background:#fbfdfc}h1{margin:0 0 12px;font-size:28px;line-height:1.12}.muted{color:#68766e}.local-section{margin:16px 0 20px}.local-section p{margin:0 0 10px}.info-grid{display:grid;gap:10px;margin-top:18px}.info-row{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px solid rgba(22,35,27,.1)}.info-row span{color:#68766e}.info-row strong{font-weight:650;word-break:break-word}</style>' +
-      '</head><body><h1>' + escapeHtml(info.name || item.name || item.id || "应用详情") + '</h1>' +
+      '</head><body><h1>' + escapeHtml(appName) + '</h1>' +
       descriptionHtml +
       '<div class="info-grid">' + rows.map((row) => '<div class="info-row"><span>' + escapeHtml(row[0]) + '</span><strong>' + escapeHtml(row[1]) + '</strong></div>').join("") + '</div>' +
       '</body></html>';
@@ -4518,17 +4757,17 @@ function initAppManageView(){
   function storeKindLabel(kind){
     const normalized = normalizeStoreKind(kind);
     if(normalized === "service"){
-      return "服务";
+      return translateCore("服务");
     }
     if(normalized === "launcher"){
-      return "启动器";
+      return translateCore("启动器");
     }
-    return "应用";
+    return translateCore("应用");
   }
 
   function setStoreStatus(text, isError){
     if(statusText){
-      statusText.textContent = String(text || "");
+      statusText.textContent = languageSafeText(text, isError ? "Catalog request failed" : "Ready");
       statusText.style.color = isError ? "#b54747" : "";
     }
   }
@@ -4577,7 +4816,10 @@ function initAppManageView(){
       detailLoadTimer = 0;
     }
     if(detailErrorText){
-      detailErrorText.textContent = String(message || "请稍后重试，或检查介绍页地址是否可访问。");
+      detailErrorText.textContent = languageSafeText(
+        message || "请稍后重试，或检查介绍页地址是否可访问。",
+        "Details are temporarily unavailable."
+      );
     }
     if(detailError){
       detailError.classList.remove("is-hidden");
@@ -4614,8 +4856,36 @@ function initAppManageView(){
     detailActiveTrigger = null;
   }
 
+  function detailUrlWithLanguage(value){
+    const source = String(value || "").trim();
+    if(!source) return "";
+    try{
+      const url = new URL(source, window.location.href);
+      url.searchParams.set("lang", currentLanguage);
+      url.searchParams.set("language", currentLanguage);
+      return url.href;
+    }catch(err){
+      return source;
+    }
+  }
+
+  function infoHtmlWithLauncherLanguage(value){
+    const html = String(value || "");
+    const language = JSON.stringify(currentLanguage);
+    const bridge = "<scr" + "ipt>(function(){var lang=" + language + ";" +
+      "var originalLang=String(document.documentElement.lang||'');" +
+      "var fallbackLang=lang.indexOf('zh')===0?'zh':'en';" +
+      "if(document.body){document.body.setAttribute('data-launcher-language',lang);}" +
+      "var toggle=document.querySelector('[data-lang-toggle]');" +
+      "if(toggle){var wantEnglish=fallbackLang==='en';var hasEnglish=/^en/i.test(originalLang);" +
+      "if(wantEnglish!==hasEnglish){try{toggle.click();}catch(e){}}}" +
+      "try{window.dispatchEvent(new CustomEvent('launcher-language',{detail:{language:lang}}));}catch(e){}" +
+      "})();</scr" + "ipt>";
+    return /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, bridge + "</body>") : (html + bridge);
+  }
+
   function openStoreDetailModal(url, title, trigger){
-    const nextUrl = String(url || "").trim();
+    const nextUrl = detailUrlWithLanguage(url);
     if(!nextUrl){
       showToast("这个应用没有详情页地址", true);
       return;
@@ -4627,7 +4897,7 @@ function initAppManageView(){
     detailLoadToken += 1;
     const requestToken = detailLoadToken;
     detailPageUrl = nextUrl;
-    detailPageTitle = String(title || "应用详情");
+    detailPageTitle = languageSafeText(title || "应用详情", "App details");
     detailActiveTrigger = trigger || document.activeElement;
     if(detailModal.classList.contains("is-hidden")){
       detailBodyOverflow = document.body.style.overflow || "";
@@ -4679,7 +4949,7 @@ function initAppManageView(){
     }
     detailLoadToken += 1;
     detailPageUrl = "";
-    detailPageTitle = String(title || "应用详情");
+    detailPageTitle = languageSafeText(title || "应用详情", "App details");
     detailActiveTrigger = trigger || document.activeElement;
     if(detailModal.classList.contains("is-hidden")){
       detailBodyOverflow = document.body.style.overflow || "";
@@ -4727,12 +4997,22 @@ function initAppManageView(){
     try{
       try{
         const html = await readDevtoolsTextFile(infoHtmlPath, 524288);
-        openStoreDetailHtmlModal(html, item.name || item.id || "应用详情", "来自设备本地 info.html。", trigger);
+        openStoreDetailHtmlModal(
+          infoHtmlWithLauncherLanguage(html),
+          localizedAppName(item, translateCore("应用详情")),
+          translateCore("来自设备本地 info.html。"),
+          trigger
+        );
         return;
       }catch(err){}
       const text = await readDevtoolsTextFile(appInfoPath, 65536);
       const info = parseAppInfoText(text);
-      openStoreDetailHtmlModal(appInfoHtml(item, info), info.name || item.name || item.id || "应用详情", "来自设备本地 app.info。", trigger);
+      openStoreDetailHtmlModal(
+        appInfoHtml(item, info),
+        localizedAppName(Object.assign({}, item, info), translateCore("应用详情")),
+        translateCore("来自设备本地 app.info。"),
+        trigger
+      );
     }catch(err){
       showToast("本地没有找到 info.html 或 app.info", true);
     }finally{
@@ -4744,7 +5024,8 @@ function initAppManageView(){
   }
 
   function storeSearchText(item){
-    return String((item && item.id) || "") + " " + String((item && item.name) || "");
+    return String((item && item.id) || "") + " " +
+      String((item && item.name) || "") + " " + localizedAppName(item, "");
   }
 
   function hasStoreKeyword(item, words){
@@ -4763,7 +5044,11 @@ function initAppManageView(){
     );
     return {
       id,
-      name: String(raw && raw.name || id || "未命名应用"),
+      name: typeof (raw && raw.name) === "string" ? raw.name : String(id || "未命名应用"),
+      name_zh_cn: String(raw && (raw.name_zh_cn || raw.name_zh || raw.name_cn) || ""),
+      name_en: String(raw && raw.name_en || ""),
+      name_ja: String(raw && (raw.name_ja || raw.name_jp) || ""),
+      name_zh_tw: String(raw && (raw.name_zh_tw || raw.name_tw) || ""),
       description: descriptionFields.text,
       description_fields: descriptionFields,
       icon_url: String(raw && raw.icon_url || ""),
@@ -4789,6 +5074,10 @@ function initAppManageView(){
       items.push({
         id,
         name: String(info && info.name || id || "未命名应用"),
+        name_zh_cn: String(info && (info.name_zh_cn || info.name_zh || info.name_cn) || ""),
+        name_en: String(info && info.name_en || ""),
+        name_ja: String(info && (info.name_ja || info.name_jp) || ""),
+        name_zh_tw: String(info && (info.name_zh_tw || info.name_tw) || ""),
         description: descriptionFields.text || "设备已安装，本次目录未返回该应用。",
         description_fields: descriptionFields,
         icon_url: "",
@@ -4973,7 +5262,7 @@ function initAppManageView(){
       });
       started = true;
       appInstallStartedFromPage = true;
-      showToast("已开始" + actionName + " " + item.name, false);
+      showToast("已开始" + actionName + " " + localizedAppName(item, item.id), false);
       window.setTimeout(() => loadState(true), 250);
     }catch(err){
       appInstallLocalAppIds.delete(item.id);
@@ -5014,6 +5303,10 @@ function initAppManageView(){
               }
               return Object.assign({}, item, {
                 name: item.name || installedInfo.name || "Launcher",
+                name_zh_cn: item.name_zh_cn || installedInfo.name_zh_cn || "",
+                name_en: item.name_en || installedInfo.name_en || "Launcher",
+                name_ja: item.name_ja || installedInfo.name_ja || "",
+                name_zh_tw: item.name_zh_tw || installedInfo.name_zh_tw || "",
                 kind: "launcher",
                 installed: true,
                 installedInfo
@@ -5115,7 +5408,7 @@ function initAppManageView(){
     const copy = document.createElement("div");
     copy.className = "store-app-copy";
     const title = document.createElement("h3");
-    title.textContent = item.name;
+      title.textContent = localizedAppName(item, item.id);
     const desc = document.createElement("p");
     desc.textContent = storeDescriptionText(item) || ("版本 " + (item.version || "--"));
     copy.appendChild(title);
@@ -5154,7 +5447,7 @@ function initAppManageView(){
       detailBtn.type = "button";
       detailBtn.textContent = "介绍";
       detailBtn.addEventListener("click", () => {
-        openStoreDetailModal(infoUrl, item.name, detailBtn);
+        openStoreDetailModal(infoUrl, localizedAppName(item, item.id), detailBtn);
       });
       actions.appendChild(detailBtn);
     }else if(canUseLocalStoreInfo(item)){
@@ -5196,7 +5489,7 @@ function initAppManageView(){
           removeBtn.textContent = "卸载中...";
           try{
             await api("/api/system/apps?id=" + encodeURIComponent(item.id), { method: "DELETE" });
-            showToast("已卸载 " + item.name, false);
+            showToast("已卸载 " + localizedAppName(item, item.id), false);
             await loadState(true);
             await refreshAppStoreCatalog(true);
           }catch(err){
@@ -5297,7 +5590,11 @@ function initAppManageView(){
           if(a.installed !== b.installed){
             return a.installed ? -1 : 1;
           }
-          return a.name.localeCompare(b.name, "zh-Hans-CN", { numeric: true, sensitivity: "base" });
+          return localizedAppName(a, a.id).localeCompare(
+            localizedAppName(b, b.id),
+            currentLanguage,
+            { numeric: true, sensitivity: "base" }
+          );
         });
       setStoreStatus(storeCatalog.length ? ("已刷新 " + storeCatalog.length + " 个项目。") : "目录中没有项目。", false);
       renderStoreApps();
@@ -5457,7 +5754,7 @@ function appIconCandidates(app){
 
 function renderAppIconFallback(host, app){
   host.classList.remove("has-image");
-  host.innerHTML = "<span>" + appInitials(app && (app.name || app.id || "app")) + "</span>";
+  host.innerHTML = "<span>" + appInitials(localizedAppName(app, "app")) + "</span>";
 }
 
 function loadImageElement(url){
@@ -5595,7 +5892,7 @@ async function launchApp(app, button){
       await wakeDisplayNow();
     }catch(wakeErr){}
     await api("/api/system/launch?id=" + encodeURIComponent(app.id || ""), { method: "POST" });
-    showToast("正在打开 " + (app.name || app.id || "应用"), false);
+    showToast("正在打开 " + localizedAppName(app, translateCore("应用")), false);
     setTimeout(() => loadState(true), 350);
   }catch(err){
     showToast(err.message || String(err), true);
@@ -5657,7 +5954,7 @@ function updateAppCard(card, app, data){
   const current = currentAppId(data) === (app && app.id ? app.id : "");
   const routeHref = current ? currentAppWebUiRoute(data) : "";
   card.classList.toggle("current", current);
-  card.querySelector(".app-name").textContent = app.name || app.id || "应用";
+  card.querySelector(".app-name").textContent = localizedAppName(app, translateCore("应用"));
   card.querySelector(".app-id").textContent = "/" + (app.id || "");
 
   const statusTag = card.querySelector(".app-status");
@@ -5733,7 +6030,7 @@ function serviceRouteHref(service){
 }
 
 function updateServiceCard(card, service){
-  card.querySelector(".app-name").textContent = service.name || service.id || "设备服务";
+  card.querySelector(".app-name").textContent = localizedAppName(service, translateCore("设备服务"));
   card.querySelector(".app-note").textContent = service.version ? ("版本 " + service.version) : "已添加到设备";
   const actions = card.querySelector(".service-actions");
   const href = serviceRouteHref(service);
@@ -6444,7 +6741,10 @@ function handleAppInstallState(data){
     }
 
     const ok = phase === "done";
-    const name = String((job && (job.name || job.app_id)) || "应用");
+    const name = localizedAppName(
+      { id: job && job.app_id, name: job && job.name },
+      translateCore("应用")
+    );
     if(ok){
       showToast("已安装 " + name, false);
     }else{
@@ -6587,7 +6887,9 @@ function renderState(data){
   const routeBase = data.current_route_base || "";
   const webui = !!data.current_webui;
   const routeText = webui && routeBase ? (routeBase + "/") : "/main";
-  const currentName = current ? (current.name || current.id || "应用") : "启动器";
+  const currentName = current
+    ? localizedAppName(current, translateCore("应用"))
+    : localizedAppName({ id: "launcher", name: "Launcher" }, translateCore("启动器"));
   const status = current ? "运行中" : "";
   const networkInfo = deriveNetworkInfo(data);
   qs("#runningApp").textContent = currentName;
@@ -6806,7 +7108,7 @@ async function resetSettings(){
 
 function setWifiFormStatus(text, isError){
   const node = qs("#wifiFormStatus");
-  node.textContent = text;
+  node.textContent = languageSafeText(text, isError ? "WiFi operation failed" : "Ready");
   node.style.color = isError ? "#b54747" : "var(--success)";
   node.classList.add("show");
 }

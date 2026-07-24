@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-        <p class="summary zh">浏览、启动和管理设备上的应用。1.0.4 更新：新增开机自启动、全局实时亮度、自动休眠和按键/陀螺仪/网页唤醒支持。</p><p class="summary en">Browse, launch, and manage apps on the device.</p>
+        <p class="summary zh">浏览、启动和管理设备上的应用。1.0.6 更新：完善设备桌面、Web 控制页和应用介绍页的多语言支持。</p><p class="summary en">Browse, launch, and manage apps on the device. Version 1.0.6 improves language support across the desktop, web console, and app details.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -74,7 +74,7 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 230 KB</span><span class="value en">About 230 KB</span></div>
-          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.5</span></div>
+          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.6</span></div>
         </div>
         <p class="note zh">页面为 launcher 嵌入说明。当前版本重点更新自启动、全局亮度、自动休眠和多方式唤醒能力，图标已内嵌。</p><p class="note en">This page is embedded in launcher, with the icon bundled inline.</p>
       </section>
@@ -87,13 +87,28 @@
       var toggle = document.querySelector("[data-lang-toggle]");
       var img = document.querySelector("[data-alt-zh]");
       var lang = "zh";
-      try { lang = localStorage.getItem("launcher.info.lang") || lang; } catch (err) { lang = "zh"; }
+      function preferredLang() {
+        var requested = "";
+        try {
+          var params = new URLSearchParams(window.location.search);
+          requested = params.get("lang") || params.get("language") || "";
+        } catch (err) {}
+        if (!requested) {
+          try { requested = localStorage.getItem("cubic.mainpage.language") || ""; } catch (err) {}
+        }
+        if (!requested) {
+          try { requested = localStorage.getItem("launcher.info.lang") || ""; } catch (err) {}
+        }
+        requested = String(requested || "").toLowerCase();
+        return requested.indexOf("zh") === 0 ? "zh" : "en";
+      }
+      lang = preferredLang();
       function applyLang(next) {
         lang = next === "en" ? "en" : "zh";
         body.setAttribute("data-lang", lang);
         document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
         document.title = lang === "zh" ? "Launcher 信息" : "Launcher Info";
-        if (toggle) { toggle.textContent = lang === "zh" ? "EN" : "中文"; toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文"); }
+        if (toggle) { toggle.textContent = lang === "zh" ? "EN" : "ZH"; toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "Switch to Chinese"); }
         if (img) { img.alt = lang === "zh" ? img.getAttribute("data-alt-zh") : img.getAttribute("data-alt-en"); }
         try { localStorage.setItem("launcher.info.lang", lang); } catch (err) {}
       }
@@ -101,6 +116,11 @@
       applyLang(lang);
     })();
   </script>
-<section class="controller-support" style="width:calc(100% - 28px);max-width:932px;margin:14px auto 0;padding:14px 16px;border:1px solid rgba(59,130,246,.22);border-left:4px solid #3b82f6;border-radius:12px;background:linear-gradient(135deg,rgba(239,246,255,.98),rgba(255,255,255,.98));box-shadow:0 8px 24px rgba(37,99,235,.08)"><h2 style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">蓝牙手柄控制</h2><p style="margin:0;color:#475569;font-size:13px;line-height:1.65">方向键：选择应用；A/Menu：启动当前应用；桌面中的 Select/Home 不执行操作。</p></section>
+<section class="controller-support" style="width:calc(100% - 28px);max-width:932px;margin:14px auto 0;padding:14px 16px;border:1px solid rgba(59,130,246,.22);border-left:4px solid #3b82f6;border-radius:12px;background:linear-gradient(135deg,rgba(239,246,255,.98),rgba(255,255,255,.98));box-shadow:0 8px 24px rgba(37,99,235,.08)">
+  <h2 class="zh" style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">蓝牙手柄控制</h2>
+  <h2 class="en" style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">Bluetooth controller</h2>
+  <p class="zh" style="margin:0;color:#475569;font-size:13px;line-height:1.65">方向键：选择应用；A/Menu：启动当前应用；桌面中的 Select/Home 不执行操作。</p>
+  <p class="en" style="margin:0;color:#475569;font-size:13px;line-height:1.65">D-pad: select an app; A/Menu: launch it; Select/Home have no action on the desktop.</p>
+</section>
 </body>
 </html>

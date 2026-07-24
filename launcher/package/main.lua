@@ -17,6 +17,7 @@ local OFFSCREEN_RIGHT_X = SCREEN_W + 45
 local ANIM_MS = 360
 
 local SETTINGS_PATH = "/sd/apps/settings.json"
+local DEFAULT_LANGUAGE = "zh-CN"
 local AP_POLICY_START_DELAY_MS = 750
 local AP_IP_WAIT_MS = 5000
 local AP_POLICY_POLL_MS = 250
@@ -25,6 +26,16 @@ local AUTOSTART_DELAY_MS = 200
 local APP_LIST_POLL_MS = 1000
 local AUTOSTART_MARK_PATH = "/tmp/launcher_autostart_fired"
 local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
+
+local function normalize_language(value)
+  local text = tostring(value or ""):gsub("_", "-")
+  if text == "en" or text:match("^en%-") then return "en" end
+  if text == "ja" or text:match("^ja%-") then return "ja" end
+  if text == "zh-TW" or text == "zh-Hant" or text:match("^zh%-Hant") or text:match("^zh%-HK") then
+    return "zh-TW"
+  end
+  return DEFAULT_LANGUAGE
+end
 
 local function read_settings()
   if not file or not file.getcontents then return {} end
@@ -47,13 +58,40 @@ local function setting_bool(value, fallback)
 end
 
 local SETTINGS = read_settings()
+local LANGUAGE = normalize_language(SETTINGS.language or SETTINGS.locale or SETTINGS.lang)
 local AP_PREFERRED_ENABLED = setting_bool(SETTINGS.ap_enabled, true)
 local AUTOSTART_ENABLED = setting_bool(SETTINGS.autostart_enabled, true)
 local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART_APP_ID)
 
+local UI_TEXT = {
+  ["zh-CN"] = { no_apps = "暂无应用" },
+  en = { no_apps = "NO APPS" },
+  ja = { no_apps = "アプリなし" },
+  ["zh-TW"] = { no_apps = "暫無應用" },
+}
+
+local UI_FONT_PATHS = {
+  ["zh-CN"] = "/sd/apps/launcher/font/launcher_ui_zh_cn_16.bin",
+  ja = "/sd/apps/launcher/font/launcher_ui_ja_16.bin",
+  ["zh-TW"] = "/sd/apps/launcher/font/launcher_ui_zh_tw_16.bin",
+}
+
 local root = lv_scr_act()
 lv_obj_clean(root)
+if rawget(_G, "LAUNCHER_UI_FONT_HANDLE") and lv_font_free then
+  pcall(function() lv_font_free(_G.LAUNCHER_UI_FONT_HANDLE) end)
+end
+_G.LAUNCHER_UI_FONT_HANDLE = nil
+
 local UI_FONT = LV_FONT_MONTSERRAT_16
+local ui_font_path = UI_FONT_PATHS[LANGUAGE]
+if ui_font_path and lv_font_load then
+  local ok, handle = pcall(function() return lv_font_load(ui_font_path) end)
+  if ok and type(handle) == "number" and handle > 0 then
+    UI_FONT = handle
+    _G.LAUNCHER_UI_FONT_HANDLE = handle
+  end
+end
 
 local STATE = {
   apps = {},
@@ -81,6 +119,71 @@ local function text_or(value, fallback)
     return fallback or ""
   end
   return tostring(value)
+end
+
+local APP_NAMES = {
+  launcher = { ["zh-CN"]="启动器", en="Launcher", ja="ランチャー", ["zh-TW"]="啟動器" },
+  ["2048"] = { ["zh-CN"]="2048", en="2048", ja="2048", ["zh-TW"]="2048" },
+  BTC = { ["zh-CN"]="行情", en="Ticker", ja="相場", ["zh-TW"]="行情" },
+  ConwayLife = { ["zh-CN"]="康威生命游戏", en="Conway's Life", ja="ライフゲーム", ["zh-TW"]="康威生命遊戲" },
+  devtools = { ["zh-CN"]="开发工具", en="DevTools", ja="開発ツール", ["zh-TW"]="開發工具" },
+  Spectrum = { ["zh-CN"]="频谱", en="Spectrum", ja="スペクトラム", ["zh-TW"]="頻譜" },
+  ["time-calendar-weather-memo"] = { ["zh-CN"]="助手", en="Assistant", ja="アシスタント", ["zh-TW"]="助理" },
+  photos = { ["zh-CN"]="相册", en="Photos", ja="写真", ["zh-TW"]="相簿" },
+  wifi_guide = { ["zh-CN"]="配网指南", en="WiFi Setup", ja="WiFi 設定", ["zh-TW"]="配網指南" },
+  videos = { ["zh-CN"]="动图播放器", en="GIF Player", ja="GIF プレーヤー", ["zh-TW"]="動圖播放器" },
+  NixieClock = { ["zh-CN"]="辉光时钟", en="Holo Clock", ja="ホロ時計", ["zh-TW"]="輝光時鐘" },
+  settings = { ["zh-CN"]="设置", en="Settings", ja="設定", ["zh-TW"]="設定" },
+  mp3_player = { ["zh-CN"]="音乐", en="Music", ja="音楽", ["zh-TW"]="音樂" },
+  MatrixRain = { ["zh-CN"]="矩阵雨", en="Matrix Rain", ja="マトリックスレイン", ["zh-TW"]="矩陣雨" },
+  holopet = { ["zh-CN"]="Clawd 监控", en="Clawd Monitor", ja="Clawd モニター", ["zh-TW"]="Clawd 監控" },
+  devrun = { ["zh-CN"]="开发运行", en="DevRun", ja="開発実行", ["zh-TW"]="開發執行" },
+  weather = { ["zh-CN"]="天气", en="Weather", ja="天気", ["zh-TW"]="天氣" },
+  holo_pc_monitor = { ["zh-CN"]="电脑监控", en="PC Monitor", ja="PC モニター", ["zh-TW"]="電腦監控" },
+  ["holo-retro-go"] = { ["zh-CN"]="复古游戏", en="Retro-Go", ja="レトロゲーム", ["zh-TW"]="復古遊戲" },
+  FluidPendant = { ["zh-CN"]="流体挂件", en="Fluid Pendant", ja="流体ペンダント", ["zh-TW"]="流體掛件" },
+  aida_monitor = { ["zh-CN"]="AIDA64 监控", en="AIDA64 Monitor", ja="AIDA64 モニター", ["zh-TW"]="AIDA64 監控" },
+  xiaozhi = { ["zh-CN"]="小智", en="Xiaozhi", ja="Xiaozhi", ["zh-TW"]="小智" },
+  ["xiaozhi-service"] = { ["zh-CN"]="小智服务", en="Xiaozhi Service", ja="Xiaozhi サービス", ["zh-TW"]="小智服務" },
+  plane = { ["zh-CN"]="飞机大战", en="Plane", ja="飛行機", ["zh-TW"]="飛機大戰" },
+}
+
+local APP_INFO_CACHE = {}
+
+local function app_info_names(id)
+  id = tostring(id or "")
+  if APP_INFO_CACHE[id] then return APP_INFO_CACHE[id] end
+  local values = {}
+  if id:match("^[%w_.%-]+$") and file and file.getcontents then
+    local ok, raw = pcall(function() return file.getcontents("/sd/apps/" .. id .. "/app.info") end)
+    if ok and type(raw) == "string" then
+      for line in raw:gmatch("[^\r\n]+") do
+        local key, value = line:match("^%s*([%w_%-]+)%s*=%s*(.-)%s*$")
+        if key and value and value ~= "" then values[key:lower():gsub("-", "_")] = value end
+      end
+    end
+  end
+  APP_INFO_CACHE[id] = values
+  return values
+end
+
+local function localized_app_name(item)
+  if not item then return "" end
+  local id = text_or(item.id, "")
+  local info = app_info_names(id)
+  local keys = LANGUAGE == "zh-CN" and { "name_zh_cn", "name_zh", "name_cn" }
+    or LANGUAGE == "zh-TW" and { "name_zh_tw", "name_zh_hant", "name_tw" }
+    or LANGUAGE == "ja" and { "name_ja", "name_jp" }
+    or { "name_en", "name_en_us" }
+  for _, key in ipairs(keys) do
+    if info[key] and info[key] ~= "" then return info[key] end
+  end
+  local known = APP_NAMES[id]
+  if known and known[LANGUAGE] then return known[LANGUAGE] end
+  local raw = text_or(item.name, id)
+  -- 英文模式绝不把未本地化的 CJK 名称直接显示到桌面。
+  if LANGUAGE == "en" and raw:find("[\128-\255]") then return id ~= "" and id or "App" end
+  return raw
 end
 
 local function safe_set_text(id, text)
@@ -390,7 +493,7 @@ end
 local function set_slot_content(slot, item, dim)
   local next_id = text_or(item and item.id, "")
   local reuse_pixels = next_id ~= "" and slot.item_id == next_id
-  safe_set_text(slot.label, item and text_or(item.name, item.id) or "")
+  safe_set_text(slot.label, item and localized_app_name(item) or "")
   style_text(slot.label, dim and 0x808080 or 0xFFFFFF, UI_FONT, LV_TEXT_ALIGN_CENTER)
   if reuse_pixels then
     style_icon_box(slot.box, dim)
@@ -437,7 +540,7 @@ local function render_initial()
 
   if count <= 0 or not center_item then
     set_slot_content(UI.slots[1], nil, true)
-    set_slot_content(UI.slots[2], { name = "NO APPS" }, false)
+    set_slot_content(UI.slots[2], { name = (UI_TEXT[LANGUAGE] or UI_TEXT.en).no_apps }, false)
     set_slot_content(UI.slots[3], nil, true)
     UI.left, UI.center, UI.right, UI.hidden = UI.slots[1], UI.slots[2], UI.slots[3], UI.slots[4]
     set_slot_pos(UI.left, LEFT_X)
