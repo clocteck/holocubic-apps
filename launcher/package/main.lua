@@ -59,6 +59,8 @@ end
 
 local SETTINGS = read_settings()
 local LANGUAGE = normalize_language(SETTINGS.language or SETTINGS.locale or SETTINGS.lang)
+local TIMEZONE = tostring(SETTINGS.timezone or "CST-8")
+if TIMEZONE == "" then TIMEZONE = "CST-8" end
 local AP_PREFERRED_ENABLED = setting_bool(SETTINGS.ap_enabled, true)
 local AUTOSTART_ENABLED = setting_bool(SETTINGS.autostart_enabled, true)
 local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART_APP_ID)
@@ -125,7 +127,7 @@ local APP_NAMES = {
   launcher = { ["zh-CN"]="启动器", en="Launcher", ja="ランチャー", ["zh-TW"]="啟動器" },
   ["2048"] = { ["zh-CN"]="2048", en="2048", ja="2048", ["zh-TW"]="2048" },
   BTC = { ["zh-CN"]="股票", en="Ticker", ja="相場", ["zh-TW"]="股票" },
-  ConwayLife = { ["zh-CN"]="康威生命游戏", en="Conway's Life", ja="ライフゲーム", ["zh-TW"]="康威生命遊戲" },
+  ConwayLife = { ["zh-CN"]="生命游戏", en="Conway's Life", ja="ライフゲーム", ["zh-TW"]="生命遊戲" },
   devtools = { ["zh-CN"]="开发工具", en="DevTools", ja="開発ツール", ["zh-TW"]="開發工具" },
   Spectrum = { ["zh-CN"]="频谱时钟", en="Spectrum", ja="スペクトラム", ["zh-TW"]="頻譜時鐘" },
   ["time-calendar-weather-memo"] = { ["zh-CN"]="记事本", en="Assistant", ja="アシスタント", ["zh-TW"]="記事本" },
@@ -135,7 +137,7 @@ local APP_NAMES = {
   NixieClock = { ["zh-CN"]="全息时钟", en="Holo Clock", ja="ホロ時計", ["zh-TW"]="全息時鐘" },
   settings = { ["zh-CN"]="设置", en="Settings", ja="設定", ["zh-TW"]="設定" },
   mp3_player = { ["zh-CN"]="音乐", en="Music", ja="音楽", ["zh-TW"]="音樂" },
-  MatrixRain = { ["zh-CN"]="矩阵雨", en="Matrix Rain", ja="マトリックスレイン", ["zh-TW"]="矩陣雨" },
+  MatrixRain = { ["zh-CN"]="代码雨", en="Matrix Rain", ja="マトリックスレイン", ["zh-TW"]="程式碼雨" },
   holopet = { ["zh-CN"]="Clawd 监控", en="Clawd Monitor", ja="Clawd モニター", ["zh-TW"]="Clawd 監控" },
   devrun = { ["zh-CN"]="文件管理器", en="DevRun", ja="開発実行", ["zh-TW"]="檔案管理器" },
   weather = { ["zh-CN"]="天气", en="Weather", ja="天気", ["zh-TW"]="天氣" },
@@ -215,6 +217,16 @@ local function sync_ntp_once()
   end
   pcall(function()
     time_mod.initntp(NTP_SERVER)
+  end)
+end
+
+local function apply_timezone()
+  local time_mod = rawget(_G, "time")
+  if not time_mod or not time_mod.settimezone then
+    return
+  end
+  pcall(function()
+    time_mod.settimezone(TIMEZONE)
   end)
 end
 
@@ -839,6 +851,7 @@ end
 build_ui()
 load_apps()
 start_app_list_watch()
+apply_timezone()
 sync_ntp_once()
 start_ap_policy()
 schedule_autostart()

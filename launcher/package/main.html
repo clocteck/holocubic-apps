@@ -542,6 +542,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   font-size:12px;
   line-height:1.45;
 }
+#timezonePreview{color:var(--accent-strong);font-weight:700}
 .field input,.field select,.wifi-input{
   width:100%;
   min-height:44px;
@@ -2628,12 +2629,52 @@ button,input,select,textarea{font:inherit;color:inherit}
               <label class="field" for="timezoneSelect">
                 <span>时区</span>
                 <select id="timezoneSelect" name="timezone">
-                  <option value="CST-8">CST-8</option>
-                  <option value="UTC0">UTC0</option>
-                  <option value="JST-9">JST-9</option>
-                  <option value="EST5EDT,M3.2.0/2,M11.1.0/2">EST5EDT</option>
-                  <option value="PST8PDT,M3.2.0/2,M11.1.0/2">PST8PDT</option>
+                  <option value="IDLW12" data-iana="Etc/GMT+12">(UTC-12:00) International Date Line West</option>
+                  <option value="SST11" data-iana="Pacific/Pago_Pago">(UTC-11:00) Pago Pago</option>
+                  <option value="HST10" data-iana="Pacific/Honolulu">(UTC-10:00) Honolulu</option>
+                  <option value="AKST9AKDT,M3.2.0/2,M11.1.0/2" data-iana="America/Anchorage">(UTC-09:00) Anchorage</option>
+                  <option value="PST8PDT,M3.2.0/2,M11.1.0/2" data-iana="America/Los_Angeles">(UTC-08:00) Los Angeles / Vancouver</option>
+                  <option value="MST7" data-iana="America/Phoenix">(UTC-07:00) Phoenix</option>
+                  <option value="MST7MDT,M3.2.0/2,M11.1.0/2" data-iana="America/Denver">(UTC-07:00) Denver</option>
+                  <option value="CST6CDT,M3.2.0/2,M11.1.0/2" data-iana="America/Chicago">(UTC-06:00) Chicago</option>
+                  <option value="EST5EDT,M3.2.0/2,M11.1.0/2" data-iana="America/New_York">(UTC-05:00) New York / Toronto</option>
+                  <option value="AST4ADT,M3.2.0/2,M11.1.0/2" data-iana="America/Halifax">(UTC-04:00) Halifax</option>
+                  <option value="NST3:30NDT,M3.2.0/2,M11.1.0/2" data-iana="America/St_Johns">(UTC-03:30) St. John's</option>
+                  <option value="ART3" data-iana="America/Argentina/Buenos_Aires">(UTC-03:00) Buenos Aires</option>
+                  <option value="BRT3" data-iana="America/Sao_Paulo">(UTC-03:00) São Paulo</option>
+                  <option value="FNT2" data-iana="America/Noronha">(UTC-02:00) Fernando de Noronha</option>
+                  <option value="AZOT1AZOST,M3.5.0/0,M10.5.0/1" data-iana="Atlantic/Azores">(UTC-01:00) Azores</option>
+                  <option value="UTC0" data-iana="UTC">(UTC+00:00) UTC</option>
+                  <option value="GMT0BST,M3.5.0/1,M10.5.0/2" data-iana="Europe/London">(UTC+00:00) London</option>
+                  <option value="CET-1CEST,M3.5.0/2,M10.5.0/3" data-iana="Europe/Berlin">(UTC+01:00) Berlin / Paris</option>
+                  <option value="EET-2EEST,M3.5.0/3,M10.5.0/4" data-iana="Europe/Athens">(UTC+02:00) Athens / Helsinki</option>
+                  <option value="SAST-2" data-iana="Africa/Johannesburg">(UTC+02:00) Johannesburg</option>
+                  <option value="MSK-3" data-iana="Europe/Moscow">(UTC+03:00) Moscow</option>
+                  <option value="AST-3" data-iana="Asia/Riyadh">(UTC+03:00) Riyadh</option>
+                  <option value="IRST-3:30" data-iana="Asia/Tehran">(UTC+03:30) Tehran</option>
+                  <option value="GST-4" data-iana="Asia/Dubai">(UTC+04:00) Dubai</option>
+                  <option value="AFT-4:30" data-iana="Asia/Kabul">(UTC+04:30) Kabul</option>
+                  <option value="PKT-5" data-iana="Asia/Karachi">(UTC+05:00) Karachi</option>
+                  <option value="IST-5:30" data-iana="Asia/Kolkata">(UTC+05:30) Kolkata / Mumbai</option>
+                  <option value="NPT-5:45" data-iana="Asia/Kathmandu">(UTC+05:45) Kathmandu</option>
+                  <option value="BST-6" data-iana="Asia/Dhaka">(UTC+06:00) Dhaka</option>
+                  <option value="MMT-6:30" data-iana="Asia/Yangon">(UTC+06:30) Yangon</option>
+                  <option value="ICT-7" data-iana="Asia/Bangkok">(UTC+07:00) Bangkok / Jakarta</option>
+                  <option value="CST-8" data-iana="Asia/Shanghai" selected>(UTC+08:00) Beijing / Shanghai / Singapore</option>
+                  <option value="JST-9" data-iana="Asia/Tokyo">(UTC+09:00) Tokyo / Seoul</option>
+                  <option value="ACST-9:30" data-iana="Australia/Darwin">(UTC+09:30) Darwin</option>
+                  <option value="ACST-9:30ACDT,M10.1.0/2,M4.1.0/3" data-iana="Australia/Adelaide">(UTC+09:30) Adelaide</option>
+                  <option value="AEST-10" data-iana="Australia/Brisbane">(UTC+10:00) Brisbane</option>
+                  <option value="AEST-10AEDT,M10.1.0/2,M4.1.0/3" data-iana="Australia/Sydney">(UTC+10:00) Sydney / Melbourne</option>
+                  <option value="SBT-11" data-iana="Pacific/Guadalcanal">(UTC+11:00) Solomon Islands</option>
+                  <option value="FJT-12" data-iana="Pacific/Fiji">(UTC+12:00) Fiji</option>
+                  <option value="NZST-12NZDT,M9.5.0/2,M4.1.0/3" data-iana="Pacific/Auckland">(UTC+12:00) Auckland</option>
+                  <option value="CHAST-12:45CHADT,M9.5.0/2:45,M4.1.0/3:45" data-iana="Pacific/Chatham">(UTC+12:45) Chatham Islands</option>
+                  <option value="TOT-13" data-iana="Pacific/Tongatapu">(UTC+13:00) Tonga</option>
+                  <option value="LINT-14" data-iana="Pacific/Kiritimati">(UTC+14:00) Kiritimati</option>
                 </select>
+                <small id="timezoneHelp">选择时区后，下方会显示该地区当前时间；保存后应用将在下次启动时使用此时区。</small>
+                <small id="timezonePreview" aria-live="polite"></small>
               </label>
               <label class="field" for="weatherAddress">
                 <span>天气地址</span>
@@ -3019,6 +3060,10 @@ const I18N_ROWS = [
   ["常用设置", "General settings", "一般設定", "常用設定"],
   ["保存到设备", "Saved on device", "デバイスに保存", "儲存到裝置"],
   ["时区", "Time zone", "タイムゾーン", "時區"],
+  ["选择时区后，下方会显示该地区当前时间；保存后应用将在下次启动时使用此时区。", "The current time for the selected region is shown below. Apps use this time zone the next time they start after you save.", "選択した地域の現在時刻を下に表示します。保存後、アプリは次回起動時からこのタイムゾーンを使用します。", "選擇時區後，下方會顯示該地區目前時間；儲存後，應用程式會在下次啟動時使用此時區。"],
+  ["当前时间：", "Current time: ", "現在時刻：", "目前時間："],
+  ["无法预览当前时间", "Current time preview is unavailable", "現在時刻をプレビューできません", "無法預覽目前時間"],
+  ["自定义 POSIX 时区：", "Custom POSIX time zone: ", "カスタム POSIX タイムゾーン：", "自訂 POSIX 時區："],
   ["天气地址", "Weather location", "天気の場所", "天氣地點"],
   ["界面语言", "Interface language", "表示言語", "介面語言"],
   ["无线热点（AP）", "Wireless hotspot (AP)", "無線アクセスポイント (AP)", "無線熱點（AP）"],
@@ -3282,7 +3327,7 @@ const APP_NAME_I18N = {
   launcher: {"zh-CN":"启动器",en:"Launcher",ja:"ランチャー","zh-TW":"啟動器"},
   "2048": {"zh-CN":"2048",en:"2048",ja:"2048","zh-TW":"2048"},
   BTC: {"zh-CN":"股票",en:"Ticker",ja:"相場","zh-TW":"股票"},
-  ConwayLife: {"zh-CN":"康威生命游戏",en:"Conway's Life",ja:"ライフゲーム","zh-TW":"康威生命遊戲"},
+  ConwayLife: {"zh-CN":"生命游戏",en:"Conway's Life",ja:"ライフゲーム","zh-TW":"生命遊戲"},
   devtools: {"zh-CN":"开发工具",en:"DevTools",ja:"開発ツール","zh-TW":"開發工具"},
   Spectrum: {"zh-CN":"频谱时钟",en:"Spectrum",ja:"スペクトラム","zh-TW":"頻譜時鐘"},
   "time-calendar-weather-memo": {"zh-CN":"记事本",en:"Assistant",ja:"アシスタント","zh-TW":"記事本"},
@@ -3292,7 +3337,7 @@ const APP_NAME_I18N = {
   NixieClock: {"zh-CN":"全息时钟",en:"Holo Clock",ja:"ホロ時計","zh-TW":"全息時鐘"},
   settings: {"zh-CN":"设置",en:"Settings",ja:"設定","zh-TW":"設定"},
   mp3_player: {"zh-CN":"音乐",en:"Music",ja:"音楽","zh-TW":"音樂"},
-  MatrixRain: {"zh-CN":"矩阵雨",en:"Matrix Rain",ja:"マトリックスレイン","zh-TW":"矩陣雨"},
+  MatrixRain: {"zh-CN":"代码雨",en:"Matrix Rain",ja:"マトリックスレイン","zh-TW":"程式碼雨"},
   holopet: {"zh-CN":"Clawd 监控",en:"Clawd Monitor",ja:"Clawd モニター","zh-TW":"Clawd 監控"},
   devrun: {"zh-CN":"文件管理器",en:"DevRun",ja:"開発実行","zh-TW":"檔案管理器"},
   weather: {"zh-CN":"天气",en:"Weather",ja:"天気","zh-TW":"天氣"},
@@ -3428,6 +3473,7 @@ function localizeTree(root, preserveSource){
 
 function renderDirectLanguageControls(){
   [
+    ["#timezoneHelp", "选择时区后，下方会显示该地区当前时间；保存后应用将在下次启动时使用此时区。"],
     ["#brightnessLabel", "屏幕亮度"],
     ["#brightnessHelp", "全局亮度，拖动时立即应用到设备。"],
     ["#autoSleepLabel", "自动休眠"],
@@ -3438,6 +3484,35 @@ function renderDirectLanguageControls(){
   });
   const sleepOff = qs('#autoSleepSelect option[value="0"]');
   if(sleepOff) sleepOff.textContent = translateCore("关闭");
+  updateTimezonePreview();
+}
+
+function updateTimezonePreview(){
+  const select = qs("#timezoneSelect");
+  const preview = qs("#timezonePreview");
+  if(!select || !preview) return;
+  const option = select.selectedOptions && select.selectedOptions[0];
+  const iana = option && option.dataset ? String(option.dataset.iana || "") : "";
+  if(!iana){
+    preview.textContent = translateCore("自定义 POSIX 时区：") + String(select.value || DEFAULT_TIMEZONE);
+    return;
+  }
+  try{
+    const formatter = new Intl.DateTimeFormat(currentLanguage, {
+      timeZone: iana,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "shortOffset"
+    });
+    preview.textContent = translateCore("当前时间：") + formatter.format(new Date());
+  }catch(err){
+    preview.textContent = translateCore("无法预览当前时间");
+  }
 }
 
 function applyLanguage(value, persist){
@@ -7242,6 +7317,7 @@ function handleMediaInputChange(kind, ev){
 qs("#exitBtn").addEventListener("click", exitToLauncher);
 qs("#settingsForm").addEventListener("submit", saveSettings);
 qs("#resetSettings").addEventListener("click", resetSettings);
+qs("#timezoneSelect").addEventListener("change", updateTimezonePreview);
 qs("#languageSelect").addEventListener("change", (ev) => applyLanguage(ev.target.value, true));
 qs("#brightnessRange").addEventListener("input", (ev) => {
   setBrightnessControl(ev.target.value);
@@ -7294,6 +7370,7 @@ loadDeviceSettings().finally(() => {
 });
 renderMediaLibrary();
 setWifiPasswordVisibility(false);
+window.setInterval(updateTimezonePreview, 30000);
 loadMediaLibrary({ silent: true });
 loadState(false)
   .catch((err) => showToast(err.message || String(err), true))
