@@ -1564,6 +1564,18 @@ button,input,select,textarea{font:inherit;color:inherit}
   display:none;
 }
 
+.app-manage-view .service-settings-panel{
+  margin:0 0 24px;
+  padding:22px;
+  border-color:rgba(29,138,103,.14);
+  background:rgba(255,255,255,.76);
+  box-shadow:0 18px 44px rgba(17,34,26,.07);
+}
+
+.app-manage-view .service-settings-panel .card-head{
+  margin-bottom:18px;
+}
+
 .app-manage-view .store-tab{
   cursor:pointer;
   transition:transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
@@ -2757,72 +2769,6 @@ button,input,select,textarea{font:inherit;color:inherit}
           </form>
         </section>
 
-        <section class="card display-alarm-card">
-          <div class="card-head">
-            <div>
-              <span class="section-kicker">显示与提醒</span>
-              <h2>息屏与闹钟</h2>
-            </div>
-            <button class="btn compact primary" id="saveDisplayAlarmSettings" type="button">保存</button>
-          </div>
-          <div class="settings-grid">
-            <label class="field" for="autoSleepSelect">
-              <span id="autoSleepLabel">自动息屏</span>
-              <select id="autoSleepSelect" name="autoSleep">
-                <option value="0">关闭</option>
-                <option value="60">1min</option>
-                <option value="600">10min</option>
-                <option value="1800">30min</option>
-                <option value="3600">1h</option>
-                <option value="7200">2h</option>
-              </select>
-              <small id="autoSleepHelp">选择无操作多久后自动息屏，按键后恢复亮度。</small>
-            </label>
-            <section class="schedule-panel" id="scheduledSleepPanel">
-              <div class="schedule-panel-head">
-                <span class="schedule-panel-title" id="scheduledSleepLabel">定时息屏</span>
-                <select id="scheduledSleepEnabled" name="scheduledSleepEnabled" aria-label="定时息屏">
-                  <option value="false">关闭</option>
-                  <option value="true">开启</option>
-                </select>
-              </div>
-              <label class="field schedule-config" for="scheduledSleepMode">
-                <span id="scheduledSleepModeLabel">息屏模式</span>
-                <select id="scheduledSleepMode" name="scheduledSleepMode">
-                  <option value="off">关闭屏幕</option>
-                  <option value="dim">降低亮度</option>
-                </select>
-              </label>
-              <div class="schedule-time-grid schedule-config">
-                <label class="time-field">
-                  <span id="scheduledSleepTimeLabel">息屏时间</span>
-                  <span class="time-select-row">
-                    <select id="scheduledSleepHour" name="scheduledSleepHour" aria-label="息屏小时"></select>
-                    <span class="time-colon">:</span>
-                    <select id="scheduledSleepMinute" name="scheduledSleepMinute" aria-label="息屏分钟"></select>
-                  </span>
-                </label>
-                <label class="time-field">
-                  <span id="scheduledWakeTimeLabel">亮屏时间</span>
-                  <span class="time-select-row">
-                    <select id="scheduledWakeHour" name="scheduledWakeHour" aria-label="亮屏小时"></select>
-                    <span class="time-colon">:</span>
-                    <select id="scheduledWakeMinute" name="scheduledWakeMinute" aria-label="亮屏分钟"></select>
-                  </span>
-                </label>
-              </div>
-              <small class="schedule-config" id="scheduledSleepHelp">每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。</small>
-            </section>
-            <section class="schedule-panel">
-              <div class="schedule-panel-head">
-                <span class="schedule-panel-title" id="alarmSettingsLabel">闹钟</span>
-                <small id="alarmSettingsHelp">最多 3 组；响铃后按 HOME 或摇动设备停止。</small>
-              </div>
-              <div class="alarm-list" id="alarmList"></div>
-            </section>
-          </div>
-        </section>
-
         <section class="card resource-card">
           <div class="card-head">
             <div>
@@ -2935,6 +2881,72 @@ button,input,select,textarea{font:inherit;color:inherit}
         <button class="store-tab" type="button" data-filter="weather" aria-pressed="false">天气</button>
         <button class="store-tab" type="button" data-filter="time" aria-pressed="false">时间</button>
       </div>
+
+      <section class="card service-settings-panel is-hidden" id="displayAlarmServiceSettings">
+        <div class="card-head">
+          <div>
+            <span class="section-kicker">服务设置</span>
+            <h2>息屏与闹钟</h2>
+          </div>
+          <button class="store-btn store-btn-primary store-btn-compact" id="saveDisplayAlarmSettings" type="button">保存</button>
+        </div>
+        <div class="settings-grid">
+          <label class="field" for="autoSleepSelect">
+            <span id="autoSleepLabel">自动息屏</span>
+            <select id="autoSleepSelect" name="autoSleep">
+              <option value="0">关闭</option>
+              <option value="60">1min</option>
+              <option value="600">10min</option>
+              <option value="1800">30min</option>
+              <option value="3600">1h</option>
+              <option value="7200">2h</option>
+            </select>
+            <small id="autoSleepHelp">选择无操作多久后自动息屏，按键后恢复亮度。</small>
+          </label>
+          <section class="schedule-panel" id="scheduledSleepPanel">
+            <div class="schedule-panel-head">
+              <span class="schedule-panel-title" id="scheduledSleepLabel">定时息屏</span>
+              <select id="scheduledSleepEnabled" name="scheduledSleepEnabled" aria-label="定时息屏">
+                <option value="false">关闭</option>
+                <option value="true">开启</option>
+              </select>
+            </div>
+            <label class="field schedule-config" for="scheduledSleepMode">
+              <span id="scheduledSleepModeLabel">息屏模式</span>
+              <select id="scheduledSleepMode" name="scheduledSleepMode">
+                <option value="off">关闭屏幕</option>
+                <option value="dim">降低亮度</option>
+              </select>
+            </label>
+            <div class="schedule-time-grid schedule-config">
+              <label class="time-field">
+                <span id="scheduledSleepTimeLabel">息屏时间</span>
+                <span class="time-select-row">
+                  <select id="scheduledSleepHour" name="scheduledSleepHour" aria-label="息屏小时"></select>
+                  <span class="time-colon">:</span>
+                  <select id="scheduledSleepMinute" name="scheduledSleepMinute" aria-label="息屏分钟"></select>
+                </span>
+              </label>
+              <label class="time-field">
+                <span id="scheduledWakeTimeLabel">亮屏时间</span>
+                <span class="time-select-row">
+                  <select id="scheduledWakeHour" name="scheduledWakeHour" aria-label="亮屏小时"></select>
+                  <span class="time-colon">:</span>
+                  <select id="scheduledWakeMinute" name="scheduledWakeMinute" aria-label="亮屏分钟"></select>
+                </span>
+              </label>
+            </div>
+            <small class="schedule-config" id="scheduledSleepHelp">每天按设备当前时区执行；息屏后按键可临时亮屏，次日仍会按计划执行。</small>
+          </section>
+          <section class="schedule-panel">
+            <div class="schedule-panel-head">
+              <span class="schedule-panel-title" id="alarmSettingsLabel">闹钟</span>
+              <small id="alarmSettingsHelp">最多 3 组；响铃后按 HOME 或摇动设备停止。</small>
+            </div>
+            <div class="alarm-list" id="alarmList"></div>
+          </section>
+        </div>
+      </section>
 
       <section aria-labelledby="storeAppsTitle">
         <div class="store-section-head">
@@ -3370,6 +3382,7 @@ const I18N_ROWS = [
   ["屏幕亮度", "Screen brightness", "画面の明るさ", "螢幕亮度"],
   ["全局亮度，拖动时立即应用到设备。", "Global brightness; changes apply to the device immediately.", "全体の明るさ。変更はすぐにデバイスへ反映されます。", "全域亮度，拖動時立即套用到裝置。"],
   ["显示与提醒", "Display & alerts", "画面と通知", "顯示與提醒"],
+  ["服务设置", "Service settings", "サービス設定", "服務設定"],
   ["息屏与闹钟", "Screen & alarms", "画面オフとアラーム", "關閉螢幕與鬧鐘"],
   ["自动息屏", "Automatic screen off", "自動画面オフ", "自動關閉螢幕"],
   ["关闭", "Off", "オフ", "關閉"],
@@ -3477,6 +3490,7 @@ const APP_NAME_I18N = {
   MatrixRain: {"zh-CN":"代码雨",en:"Matrix Rain",ja:"マトリックスレイン","zh-TW":"程式碼雨"},
   holopet: {"zh-CN":"Clawd 监控",en:"Clawd Monitor",ja:"Clawd モニター","zh-TW":"Clawd 監控"},
   devrun: {"zh-CN":"文件管理器",en:"DevRun",ja:"開発実行","zh-TW":"檔案管理器"},
+  display_schedule: {"zh-CN":"息屏与闹钟",en:"Screen & Alarms",ja:"画面オフとアラーム","zh-TW":"關閉螢幕與鬧鐘"},
   weather: {"zh-CN":"天气",en:"Weather",ja:"天気","zh-TW":"天氣"},
   holo_pc_monitor: {"zh-CN":"全息PC监控",en:"PC Monitor",ja:"PC モニター","zh-TW":"全息PC監控"},
   "holo-retro-go": {"zh-CN":"复古游戏",en:"Retro-Go",ja:"レトロゲーム","zh-TW":"復古遊戲"},
@@ -4895,6 +4909,7 @@ function initAppManageView(){
   const detailCloseBtn = root.querySelector("#storeDetailCloseBtn");
   const detailRetryBtn = root.querySelector("#storeDetailRetryBtn");
   const detailOpenLink = root.querySelector("#storeDetailOpenLink");
+  const serviceSettings = root.querySelector("#displayAlarmServiceSettings");
   const LAUNCHER_APP_ID = "launcher";
   const LAUNCHER_APP_INFO_PATH = "/sd/apps/launcher/app.info";
   const themeClasses = [
@@ -5217,6 +5232,9 @@ function initAppManageView(){
 
   function setActiveStoreFilter(filter){
     storeCurrentFilter = filter || "all";
+    if(serviceSettings){
+      serviceSettings.classList.toggle("is-hidden", storeCurrentFilter !== "service");
+    }
     tabs.forEach((item) => {
       const active = item.dataset.filter === storeCurrentFilter;
       item.classList.toggle("active", active);

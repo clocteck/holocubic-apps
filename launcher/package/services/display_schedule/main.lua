@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.0.4",
+  VERSION = "1.0.5",
   SETTINGS_PATH = "/sd/apps/settings.json",
   DIM_BRIGHTNESS = 5,
   timers = {},
@@ -296,6 +296,11 @@ end
 
 local function api_info()
   local clock = local_clock()
+  local current_brightness = nil
+  if sys and sys.getbrightness then
+    local ok, value = pcall(function() return sys.getbrightness() end)
+    if ok then current_brightness = tonumber(value) end
+  end
   return json_response({
     ok = true,
     version = APP.VERSION,
@@ -311,6 +316,8 @@ local function api_info()
     alarm_count = #APP.alarms,
     clock = clock,
     imu_registered = APP.imu_registered,
+    current_brightness = current_brightness,
+    normal_brightness = APP.normal_brightness,
   })
 end
 
@@ -322,8 +329,25 @@ local function sleep_display()
 end
 
 local function wake_display()
+  if http and http.post then
+    pcall(function()
+      http.post("http://127.0.0.1/display/api/wake", {
+        timeout = 600,
+        bufsz = 256,
+        max_redirects = 0,
+      }, "")
+    end)
+  end
   set_brightness(APP.normal_brightness)
   APP.scheduled_sleeping = false
+end
+
+APP.sleep_now = sleep_display
+APP.wake_now = wake_display
+
+local function api_wake()
+  wake_display()
+  return api_info()
 end
 
 local function sync_settings()
@@ -414,12 +438,17 @@ local function handle_imu(roll, pitch, gx, gy, gz)
   }
   local previous = APP.imu_sample
   APP.imu_sample = sample
-  if not APP.alarm_ringing or not previous then return end
+  if not previous then return end
   local gyro_peak = math.max(math.abs(sample.gx), math.abs(sample.gy), math.abs(sample.gz))
   local angle_delta = math.max(
     math.abs(sample.roll - previous.roll),
     math.abs(sample.pitch - previous.pitch)
   )
+  if APP.scheduled_sleeping and (gyro_peak >= 80 or angle_delta >= 2.5) then
+    wake_display()
+    return
+  end
+  if not APP.alarm_ringing then return end
   if gyro_peak >= 180 or angle_delta >= 12 then
     stop_alarm()
   end
@@ -458,6 +487,13 @@ if httpd and httpd.dynamic then
   local ok, err = pcall(function() return httpd.dynamic(httpd.GET, route, api_info) end)
   if ok and not err then
     APP.routes[#APP.routes + 1] = { method = httpd.GET, route = route }
+  end
+  local wake_route = "/display-schedule/api/wake"
+  for _, method in ipairs({ httpd.GET, httpd.POST }) do
+    local wake_ok, wake_err = pcall(function() return httpd.dynamic(method, wake_route, api_wake) end)
+    if wake_ok and not wake_err then
+      APP.routes[#APP.routes + 1] = { method = method, route = wake_route }
+    end
   end
 end
 

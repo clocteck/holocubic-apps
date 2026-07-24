@@ -29,7 +29,7 @@ local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.0.4"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.0.5"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -918,7 +918,6 @@ load_apps()
 start_app_list_watch()
 apply_timezone()
 sync_ntp_once()
-start_display_schedule_service()
 start_ap_policy()
 schedule_autostart()
 
@@ -999,3 +998,7 @@ if controller and controller.state and tmr and tmr.create then
     -- PAD_SELECT / PAD_HOME intentionally do nothing in Launcher.
   end)
 end
+
+-- Register the global display wake callbacks after Launcher key handlers so
+-- scheduled screen-off can always be woken while the desktop is active.
+start_display_schedule_service()

@@ -1,5 +1,10 @@
-name = Display Schedule
-version = 1.0.4
+name = 息屏与闹钟
+name_zh_cn = 息屏与闹钟
+name_en = Screen & Alarms
+name_ja = 画面オフとアラーム
+name_zh_tw = 關閉螢幕與鬧鐘
+version = 1.0.5
 kind = service
 entry = main.lua
-description = Scheduled screen off and wake service
+description = 定时息屏、亮屏和三组重复闹钟服务
+description_en = Scheduled screen control and three repeating alarms
