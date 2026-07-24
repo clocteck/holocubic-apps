@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.0.2",
+  VERSION = "1.0.4",
   SETTINGS_PATH = "/sd/apps/settings.json",
   DIM_BRIGHTNESS = 5,
   timers = {},
@@ -33,6 +33,21 @@ DISPLAY_SCHEDULE_SERVICE = {
 
 local APP = DISPLAY_SCHEDULE_SERVICE
 
+local function write_status(stage)
+  if not file or not file.putcontents then return end
+  local line = table.concat({
+    "version=" .. APP.VERSION,
+    "stage=" .. tostring(stage or "unknown"),
+    "routes=" .. tostring(#APP.routes),
+    "imu=" .. tostring(APP.imu_registered),
+    "enabled=" .. tostring(APP.enabled),
+    "alarms=" .. tostring(#APP.alarms),
+  }, "\n") .. "\n"
+  pcall(function()
+    file.putcontents("/sd/apps/display_schedule/status.txt", line)
+  end)
+end
+
 local function clamp(value, min_value, max_value, fallback)
   local number = tonumber(value)
   if number == nil then number = fallback end
@@ -53,7 +68,10 @@ end
 
 local function json_response(value)
   local codec = rawget(_G, "json") or rawget(_G, "sjson")
-  local ok, body = codec and codec.encode and pcall(function() return codec.encode(value) end)
+  local ok, body = false, nil
+  if codec and codec.encode then
+    ok, body = pcall(function() return codec.encode(value) end)
+  end
   if not ok or type(body) ~= "string" then
     body = "{\"ok\":false,\"error\":\"json encode failed\"}"
   end
@@ -168,7 +186,7 @@ local function normalize_alarms(value)
       enabled = bool_value(item.enabled, false),
       hour = clamp(item.hour, 0, 23, index == 1 and 7 or (index == 2 and 8 or 9)),
       minute = clamp(item.minute, 0, 59, 0),
-      repeat_rule = normalize_repeat(item.repeat),
+      repeat_rule = normalize_repeat(item["repeat"]),
     }
   end
   return output
@@ -486,3 +504,4 @@ if tmr and tmr.create then
 end
 
 print("[display_schedule] ready", APP.VERSION, tostring(APP.enabled))
+write_status("ready")
