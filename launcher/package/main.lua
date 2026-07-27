@@ -29,7 +29,7 @@ local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.2.2"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.2.3"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -120,7 +120,16 @@ end
 
 local function start_display_schedule_service()
   if not app or not app.start_service then return end
-  ensure_display_schedule_service()
+  local updated = ensure_display_schedule_service()
+  local running = rawget(_G, "DISPLAY_SCHEDULE_SERVICE")
+  if not updated
+      and type(running) == "table"
+      and not version_lt(tostring(running.VERSION or ""), DISPLAY_SCHEDULE_BUNDLE_VERSION) then
+    if type(running.refresh_input_handlers) == "function" then
+      pcall(running.refresh_input_handlers)
+    end
+    return
+  end
   pcall(function() app.start_service(DISPLAY_SCHEDULE_SERVICE_ID) end)
 end
 

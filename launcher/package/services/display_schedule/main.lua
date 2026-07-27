@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.2.2",
+  VERSION = "1.2.3",
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
@@ -36,6 +36,7 @@ DISPLAY_SCHEDULE_SERVICE = {
   alarm_ringing = false,
   alarm_started_ms = 0,
   alarm_last_trigger = {},
+  manual_wake_window = "",
   alarm_audio_started = false,
   alarm_audio_mode = "builtin",
   alarm_sound = "builtin",
@@ -236,23 +237,42 @@ local function apply_firmware_display_settings(force)
   return false
 end
 
-local function load_alarm_state()
+local function valid_trigger_key(value)
+  return type(value) == "string"
+    and #value <= 64
+    and value:match("^%d+%-%d+%-%d+%-%d+%-%d+$") ~= nil
+end
+
+local function load_runtime_state()
   local state = read_json_file(APP.ALARM_STATE_PATH)
-  if type(state) ~= "table" or type(state.triggers) ~= "table" then return end
+  if type(state) ~= "table" then return end
   for index = 1, 3 do
-    local value = state.triggers[index] or state.triggers[tostring(index)]
-    if type(value) == "string" and #value <= 64 then
+    local value = state["alarm_" .. tostring(index)]
+    if value == nil and type(state.triggers) == "table" then
+      value = state.triggers[index] or state.triggers[tostring(index)]
+    end
+    if valid_trigger_key(value) then
       APP.alarm_last_trigger[index] = value
     end
   end
+  local manual_window = state.manual_wake_window
+  if type(manual_window) == "string" and #manual_window <= 96 then
+    APP.manual_wake_window = manual_window
+  end
 end
 
-local function save_alarm_state()
+local function save_runtime_state()
   if not file or not file.putcontents then return end
   local codec = rawget(_G, "json") or rawget(_G, "sjson")
   if not codec or not codec.encode then return end
   local ok, raw = pcall(function()
-    return codec.encode({ triggers = APP.alarm_last_trigger })
+    return codec.encode({
+      version = 2,
+      alarm_1 = APP.alarm_last_trigger[1] or "",
+      alarm_2 = APP.alarm_last_trigger[2] or "",
+      alarm_3 = APP.alarm_last_trigger[3] or "",
+      manual_wake_window = APP.manual_wake_window or "",
+    })
   end)
   if ok and type(raw) == "string" then
     pcall(function() file.putcontents(APP.ALARM_STATE_PATH, raw) end)
@@ -361,6 +381,31 @@ local function alarm_day_key(clock)
     tonumber(clock.day) or 0,
     tonumber(clock.hour) or 0,
     tonumber(clock.min) or 0,
+  }, "-")
+end
+
+local function schedule_window_key(clock)
+  if not inside_schedule(clock) then return "" end
+  local year = tonumber(clock.year) or 0
+  local yday = tonumber(clock.yday) or 0
+  local sleep_at = APP.sleep_hour * 60 + APP.sleep_minute
+  local wake_at = APP.wake_hour * 60 + APP.wake_minute
+  local now = (tonumber(clock.hour) or 0) * 60 + (tonumber(clock.min) or 0)
+  if sleep_at > wake_at and now < wake_at then
+    yday = yday - 1
+    if yday < 1 then
+      year = year - 1
+      local leap = year % 4 == 0 and (year % 100 ~= 0 or year % 400 == 0)
+      yday = leap and 366 or 365
+    end
+  end
+  return table.concat({
+    year,
+    yday,
+    APP.sleep_hour,
+    APP.sleep_minute,
+    APP.wake_hour,
+    APP.wake_minute,
   }, "-")
 end
 
@@ -496,7 +541,7 @@ local function start_alarm()
   APP.alarm_ringing = true
   APP.alarm_started_ms = now_ms()
   APP.alarm_pattern_step = 0
-  wake_display()
+  wake_display(true)
   if not start_mp3_alarm_audio() then
     start_builtin_alarm_audio()
   end
@@ -540,7 +585,7 @@ local function check_alarms(clock)
         and alarm_matches_day(alarm.repeat_rule, clock.wday)
         and APP.alarm_last_trigger[index] ~= trigger_key then
       APP.alarm_last_trigger[index] = trigger_key
-      save_alarm_state()
+      save_runtime_state()
       start_alarm()
     end
   end
@@ -619,14 +664,45 @@ local function api_info()
   })
 end
 
+local function touch_display_activity()
+  local display_service = rawget(_G, "DISPLAY_SERVICE")
+  if type(display_service) ~= "table" then return false end
+  local was_sleeping = display_service.sleeping == true
+  local notify = display_service.notify_activity
+  if type(notify) == "function" then
+    pcall(notify)
+  else
+    display_service.last_activity_ms = now_ms()
+  end
+  return was_sleeping
+end
+
 local function sleep_display()
+  local window_key = schedule_window_key(local_clock())
+  if window_key ~= "" and APP.manual_wake_window == window_key then
+    APP.scheduled_sleeping = false
+    return false
+  end
+  if APP.manual_wake_window ~= "" and APP.manual_wake_window ~= window_key then
+    APP.manual_wake_window = ""
+    save_runtime_state()
+  end
   local brightness = APP.mode == "dim" and APP.DIM_BRIGHTNESS or 0
   if set_brightness(brightness) then
     APP.scheduled_sleeping = true
+    return true
   end
+  return false
 end
 
-wake_display = function()
+wake_display = function(manual_wake)
+  if manual_wake then
+    local window_key = schedule_window_key(local_clock())
+    if window_key ~= "" and APP.manual_wake_window ~= window_key then
+      APP.manual_wake_window = window_key
+      save_runtime_state()
+    end
+  end
   local display_service = rawget(_G, "DISPLAY_SERVICE")
   if type(display_service) == "table" then
     local service_wake = display_service.wake_display or display_service.wake
@@ -663,7 +739,7 @@ APP.sleep_now = sleep_display
 APP.wake_now = wake_display
 
 local function api_wake()
-  wake_display()
+  wake_display(true)
   return api_info()
 end
 
@@ -714,9 +790,17 @@ local function sync_settings()
     or previous_wake_minute ~= APP.wake_minute
 
   if not APP.enabled then
+    if APP.manual_wake_window ~= "" then
+      APP.manual_wake_window = ""
+      save_runtime_state()
+    end
     if APP.scheduled_sleeping then wake_display() end
     APP.window_active = false
     return
+  end
+  if not active and APP.manual_wake_window ~= "" then
+    APP.manual_wake_window = ""
+    save_runtime_state()
   end
   if active and (APP.window_active == nil or schedule_changed) then
     sleep_display()
@@ -806,6 +890,10 @@ local function tick()
   if clock == nil then return end
   check_alarms(clock)
   local active = inside_schedule(clock)
+  if not active and APP.manual_wake_window ~= "" then
+    APP.manual_wake_window = ""
+    save_runtime_state()
+  end
   if APP.window_active == nil then
     APP.window_active = active
     if active then sleep_display() end
@@ -837,15 +925,70 @@ local function handle_imu(roll, pitch, gx, gy, gz)
     math.abs(sample.roll - previous.roll),
     math.abs(sample.pitch - previous.pitch)
   )
-  if APP.scheduled_sleeping and (gyro_peak >= 80 or angle_delta >= 2.5) then
-    wake_display()
-    return
-  end
-  if not APP.alarm_ringing then return end
-  if gyro_peak >= 180 or angle_delta >= 12 then
+  local strong_motion = gyro_peak >= 180 or angle_delta >= 12
+  local user_motion = gyro_peak >= 80 or angle_delta >= 2.5
+  if APP.alarm_ringing and strong_motion then
     stop_alarm()
   end
+  if not user_motion then return end
+  local display_sleeping = touch_display_activity()
+  if APP.scheduled_sleeping or display_sleeping then
+    wake_display(true)
+  end
 end
+
+APP.handle_imu = handle_imu
+
+local function unregister_input_handlers()
+  if key and key.off then
+    for _, code in ipairs(APP.key_codes) do
+      pcall(function() key.off(code) end)
+    end
+  end
+  APP.key_codes = {}
+  if app and app.on and APP.imu_registered then
+    pcall(function() app.on("imu", nil) end)
+  end
+  APP.imu_registered = false
+end
+
+local function register_input_handlers()
+  unregister_input_handlers()
+  if key and key.on then
+    local codes = { key.LEFT, key.RIGHT, key.UP, key.DOWN, key.HOME }
+    local seen = {}
+    for _, code in ipairs(codes) do
+      if code ~= nil and not seen[code] then
+        seen[code] = true
+        APP.key_codes[#APP.key_codes + 1] = code
+        pcall(function()
+          key.on(code, function()
+            if APP.alarm_ringing and code == key.HOME then
+              stop_alarm()
+              return true
+            end
+            local display_sleeping = touch_display_activity()
+            if APP.scheduled_sleeping or display_sleeping then
+              wake_display(true)
+              return true
+            end
+            return false
+          end)
+        end)
+      end
+    end
+  end
+  if app and app.on then
+    local ok = pcall(function()
+      app.on("imu", function(name, roll, pitch, gx, gy, gz)
+        handle_imu(roll, pitch, gx, gy, gz)
+      end)
+    end)
+    APP.imu_registered = ok
+  end
+end
+
+APP.refresh_input_handlers = register_input_handlers
 
 function APP.stop(reason)
   for i = #APP.routes, 1, -1 do
@@ -859,22 +1002,13 @@ function APP.stop(reason)
     pcall(function() timer:unregister() end)
   end
   APP.timers = {}
-  if key and key.off then
-    for _, code in ipairs(APP.key_codes) do
-      pcall(function() key.off(code) end)
-    end
-  end
-  APP.key_codes = {}
-  if app and app.on and APP.imu_registered then
-    pcall(function() app.on("imu", nil) end)
-  end
-  APP.imu_registered = false
+  unregister_input_handlers()
   stop_alarm()
   print("[display_schedule] stop", tostring(reason or ""))
 end
 
+load_runtime_state()
 sync_settings()
-load_alarm_state()
 
 local function register_route(method, route, handler)
   if not httpd or not httpd.dynamic then return false end
@@ -905,38 +1039,7 @@ if httpd then
   if APP.ROUTE_BASE ~= APP.FIXED_ROUTE_BASE then register_route_set(APP.FIXED_ROUTE_BASE) end
 end
 
-if key and key.on then
-  local codes = { key.LEFT, key.RIGHT, key.UP, key.DOWN, key.HOME }
-  local seen = {}
-  for _, code in ipairs(codes) do
-    if code ~= nil and not seen[code] then
-      seen[code] = true
-      APP.key_codes[#APP.key_codes + 1] = code
-      pcall(function()
-        key.on(code, function()
-          if APP.alarm_ringing and code == key.HOME then
-            stop_alarm()
-            return true
-          end
-          if APP.scheduled_sleeping then
-            wake_display()
-            return true
-          end
-          return false
-        end)
-      end)
-    end
-  end
-end
-
-if app and app.on then
-  local ok = pcall(function()
-    app.on("imu", function(name, roll, pitch, gx, gy, gz)
-      handle_imu(roll, pitch, gx, gy, gz)
-    end)
-  end)
-  APP.imu_registered = ok
-end
+register_input_handlers()
 
 if tmr and tmr.create then
   local timer = tmr.create()
