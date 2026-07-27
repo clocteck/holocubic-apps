@@ -5,12 +5,15 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.2.0",
+  VERSION = "1.2.1",
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
   ROUTE_BASE = "/display-schedule",
   SETTINGS_PATH = "/sd/apps/settings.json",
+  SETTINGS_TEMP_PATH = "/sd/apps/settings.json.tmp",
+  SETTINGS_BACKUP_PATH = "/sd/apps/settings.json.bak",
+  ALARM_STATE_PATH = "/sd/apps/display_schedule/alarm_state.json",
   AUDIO_MODULE_PATH = "/sd/apps/mp3_player/modules/audio.so",
   DIM_BRIGHTNESS = 5,
   timers = {},
@@ -26,6 +29,9 @@ DISPLAY_SCHEDULE_SERVICE = {
   window_active = nil,
   scheduled_sleeping = false,
   settings_signature = "",
+  display_settings_signature = "",
+  auto_sleep_enabled = false,
+  auto_sleep_seconds = 1800,
   alarms = {},
   alarm_ringing = false,
   alarm_started_ms = 0,
@@ -134,20 +140,63 @@ local function write_settings(settings)
   if not codec or not codec.encode then return false, "json.encode missing" end
   local ok, raw = pcall(function() return codec.encode(settings) end)
   if not ok or type(raw) ~= "string" then return false, tostring(raw or "json encode failed") end
+
+  if file.rename and file.remove then
+    local temp_ok, temp_result = pcall(function() return file.putcontents(APP.SETTINGS_TEMP_PATH, raw) end)
+    if not temp_ok or temp_result == false then return false, tostring(temp_result or "temp write failed") end
+    local verify_ok, verify_raw = pcall(function() return file.getcontents(APP.SETTINGS_TEMP_PATH) end)
+    if not verify_ok or verify_raw ~= raw then
+      pcall(function() file.remove(APP.SETTINGS_TEMP_PATH) end)
+      return false, "temp verify failed"
+    end
+
+    pcall(function() file.remove(APP.SETTINGS_BACKUP_PATH) end)
+    local current_exists = file.exists and file.exists(APP.SETTINGS_PATH)
+    if current_exists then
+      local backup_ok, backup_result = pcall(function()
+        return file.rename(APP.SETTINGS_PATH, APP.SETTINGS_BACKUP_PATH)
+      end)
+      if not backup_ok or backup_result == false then
+        pcall(function() file.remove(APP.SETTINGS_TEMP_PATH) end)
+        return false, "settings backup failed"
+      end
+    end
+
+    local replace_ok, replace_result = pcall(function()
+      return file.rename(APP.SETTINGS_TEMP_PATH, APP.SETTINGS_PATH)
+    end)
+    if not replace_ok or replace_result == false then
+      if current_exists then
+        pcall(function() file.rename(APP.SETTINGS_BACKUP_PATH, APP.SETTINGS_PATH) end)
+      end
+      pcall(function() file.remove(APP.SETTINGS_TEMP_PATH) end)
+      return false, "settings replace failed"
+    end
+    return true
+  end
+
   local wrote, result = pcall(function() return file.putcontents(APP.SETTINGS_PATH, raw) end)
   if not wrote or result == false then return false, tostring(result or "write failed") end
   return true
 end
 
-local function read_settings()
-  if not file or not file.getcontents then return {} end
-  local ok, raw = pcall(function() return file.getcontents(APP.SETTINGS_PATH) end)
-  if not ok or type(raw) ~= "string" or raw == "" then return {} end
+local function read_json_file(path)
+  if not file or not file.getcontents then return nil end
+  local ok, raw = pcall(function() return file.getcontents(path) end)
+  if not ok or type(raw) ~= "string" or raw == "" then return nil end
   local codec = rawget(_G, "json") or rawget(_G, "sjson")
-  if not codec or not codec.decode then return {} end
+  if not codec or not codec.decode then return nil end
   local decoded, doc = pcall(function() return codec.decode(raw) end)
-  if not decoded or type(doc) ~= "table" then return {} end
+  if not decoded or type(doc) ~= "table" then return nil end
   return doc
+end
+
+local function read_settings()
+  local settings = read_json_file(APP.SETTINGS_PATH)
+  if type(settings) == "table" then return settings end
+  local backup = read_json_file(APP.SETTINGS_BACKUP_PATH)
+  if type(backup) == "table" then return backup end
+  return {}
 end
 
 local function set_brightness(value)
@@ -161,6 +210,53 @@ local function now_ms()
     if ok and tonumber(value) then return tonumber(value) end
   end
   return 0
+end
+
+local function apply_firmware_display_settings(force)
+  local signature = table.concat({
+    tostring(APP.auto_sleep_enabled),
+    tostring(APP.auto_sleep_seconds),
+  }, ":")
+  if not force and signature == APP.display_settings_signature then return true end
+  if not http or not http.post then return false end
+  local url = "http://127.0.0.1/display/api/settings"
+    .. "?auto_sleep_enabled=" .. (APP.auto_sleep_enabled and "true" or "false")
+    .. "&auto_sleep_seconds=" .. tostring(APP.auto_sleep_seconds)
+  local ok, result = pcall(function()
+    return http.post(url, {
+      timeout = 1000,
+      bufsz = 512,
+      max_redirects = 0,
+    }, "")
+  end)
+  if ok and result ~= false then
+    APP.display_settings_signature = signature
+    return true
+  end
+  return false
+end
+
+local function load_alarm_state()
+  local state = read_json_file(APP.ALARM_STATE_PATH)
+  if type(state) ~= "table" or type(state.triggers) ~= "table" then return end
+  for index = 1, 3 do
+    local value = state.triggers[index] or state.triggers[tostring(index)]
+    if type(value) == "string" and #value <= 64 then
+      APP.alarm_last_trigger[index] = value
+    end
+  end
+end
+
+local function save_alarm_state()
+  if not file or not file.putcontents then return end
+  local codec = rawget(_G, "json") or rawget(_G, "sjson")
+  if not codec or not codec.encode then return end
+  local ok, raw = pcall(function()
+    return codec.encode({ triggers = APP.alarm_last_trigger })
+  end)
+  if ok and type(raw) == "string" then
+    pcall(function() file.putcontents(APP.ALARM_STATE_PATH, raw) end)
+  end
 end
 
 local function weekday_from_date(year, month, day)
@@ -444,6 +540,7 @@ local function check_alarms(clock)
         and alarm_matches_day(alarm.repeat_rule, clock.wday)
         and APP.alarm_last_trigger[index] ~= trigger_key then
       APP.alarm_last_trigger[index] = trigger_key
+      save_alarm_state()
       start_alarm()
     end
   end
@@ -459,11 +556,12 @@ local function list_mp3_files()
         local name = tostring(type(entry) == "table" and entry.name or entry or "")
         local is_dir = type(entry) == "table" and entry.is_dir == true
         if not is_dir and name:lower():match("%.mp3$") then
+          local dedupe_key = name:lower()
           local path = type(entry) == "table" and tostring(entry.path or "") or ""
           if path == "" then path = dir .. "/" .. name end
           path = normalize_alarm_sound(path)
-          if path ~= "builtin" and not seen[path] then
-            seen[path] = true
+          if path ~= "builtin" and not seen[dedupe_key] then
+            seen[dedupe_key] = true
             output[#output + 1] = { name = name, path = path }
           end
         end
@@ -497,8 +595,9 @@ local function api_info()
     language = tostring(settings.language or settings.locale or settings.lang or "zh-CN"),
     route_base = APP.ROUTE_BASE,
     fixed_route_base = APP.FIXED_ROUTE_BASE,
-    auto_sleep_enabled = bool_value(settings.auto_sleep_enabled, false),
-    auto_sleep_seconds = clamp(settings.auto_sleep_seconds, 1, 86400, 1800),
+    auto_sleep_enabled = APP.auto_sleep_enabled,
+    auto_sleep_seconds = APP.auto_sleep_seconds,
+    display_settings_applied = APP.display_settings_signature ~= "",
     scheduled_sleep_enabled = APP.enabled,
     scheduled_sleep_mode = APP.mode,
     scheduled_sleep_hour = APP.sleep_hour,
@@ -565,8 +664,11 @@ local function sync_settings()
   APP.wake_hour = clamp(settings.scheduled_wake_hour, 0, 23, 7)
   APP.wake_minute = clamp(settings.scheduled_wake_minute, 0, 59, 0)
   APP.normal_brightness = clamp(settings.brightness or settings.display_brightness, 1, 100, 80)
+  APP.auto_sleep_enabled = bool_value(settings.auto_sleep_enabled, false)
+  APP.auto_sleep_seconds = clamp(settings.auto_sleep_seconds, 60, 86400, 1800)
   APP.alarms = normalize_alarms(settings.alarms)
   APP.alarm_sound = normalize_alarm_sound(settings.alarm_sound)
+  apply_firmware_display_settings(false)
 
   local timezone = tostring(settings.timezone or "")
   if timezone ~= "" and time and time.settimezone then
@@ -578,6 +680,7 @@ local function sync_settings()
     APP.sleep_hour, APP.sleep_minute,
     APP.wake_hour, APP.wake_minute,
     APP.normal_brightness, timezone, APP.alarm_sound,
+    tostring(APP.auto_sleep_enabled), APP.auto_sleep_seconds,
   }, ":")
   local changed = signature ~= APP.settings_signature
   APP.settings_signature = signature
@@ -752,6 +855,7 @@ function APP.stop(reason)
 end
 
 sync_settings()
+load_alarm_state()
 
 local function register_route(method, route, handler)
   if not httpd or not httpd.dynamic then return false end
@@ -822,6 +926,11 @@ if tmr and tmr.create then
   local alarm_timer = tmr.create()
   APP.timers[#APP.timers + 1] = alarm_timer
   alarm_timer:alarm(220, tmr.ALARM_AUTO, ring_alarm)
+  local display_retry_timer = tmr.create()
+  APP.timers[#APP.timers + 1] = display_retry_timer
+  display_retry_timer:alarm(2000, tmr.ALARM_SINGLE or 0, function()
+    apply_firmware_display_settings(true)
+  end)
 end
 
 print("[display_schedule] ready", APP.VERSION, tostring(APP.enabled))
