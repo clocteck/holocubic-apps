@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.2.3",
+  VERSION = "1.2.4",
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
@@ -664,17 +664,11 @@ local function api_info()
   })
 end
 
-local function touch_display_activity()
-  local display_service = rawget(_G, "DISPLAY_SERVICE")
-  if type(display_service) ~= "table" then return false end
-  local was_sleeping = display_service.sleeping == true
-  local notify = display_service.notify_activity
-  if type(notify) == "function" then
-    pcall(notify)
-  else
-    display_service.last_activity_ms = now_ms()
-  end
-  return was_sleeping
+local function get_current_brightness()
+  if not sys or not sys.getbrightness then return nil end
+  local ok, value = pcall(function() return sys.getbrightness() end)
+  if not ok then return nil end
+  return tonumber(value)
 end
 
 local function sleep_display()
@@ -703,20 +697,8 @@ wake_display = function(manual_wake)
       save_runtime_state()
     end
   end
-  local display_service = rawget(_G, "DISPLAY_SERVICE")
-  if type(display_service) == "table" then
-    local service_wake = display_service.wake_display or display_service.wake
-    if type(service_wake) == "function" then
-      pcall(service_wake)
-    end
-    -- Scheduled screen-off changes the hardware brightness directly, so the
-    -- display service may still hold an expired idle timer or a stale sleeping
-    -- flag. Reset both before restoring brightness to prevent an immediate
-    -- second screen-off after the scheduled wake time.
-    display_service.last_activity_ms = now_ms()
-    display_service.sleeping = false
-    display_service.brightness = APP.normal_brightness
-  end
+  -- Automatic screen-off is owned by the firmware /display service. Calling
+  -- its wake endpoint both restores the backlight and resets the idle timer.
   if http and http.post then
     pcall(function()
       http.post("http://127.0.0.1/display/api/wake", {
@@ -727,11 +709,6 @@ wake_display = function(manual_wake)
     end)
   end
   set_brightness(APP.normal_brightness)
-  if type(display_service) == "table" then
-    display_service.last_activity_ms = now_ms()
-    display_service.sleeping = false
-    display_service.brightness = APP.normal_brightness
-  end
   APP.scheduled_sleeping = false
 end
 
@@ -931,10 +908,7 @@ local function handle_imu(roll, pitch, gx, gy, gz)
     stop_alarm()
   end
   if not user_motion then return end
-  local display_sleeping = touch_display_activity()
-  if APP.scheduled_sleeping or display_sleeping then
-    wake_display(true)
-  end
+  wake_display(true)
 end
 
 APP.handle_imu = handle_imu
@@ -967,12 +941,11 @@ local function register_input_handlers()
               stop_alarm()
               return true
             end
-            local display_sleeping = touch_display_activity()
-            if APP.scheduled_sleeping or display_sleeping then
-              wake_display(true)
-              return true
-            end
-            return false
+            local scheduled_sleeping = APP.scheduled_sleeping
+            local brightness = get_current_brightness()
+            local screen_dimmed = brightness ~= nil and brightness <= APP.DIM_BRIGHTNESS
+            wake_display(scheduled_sleeping or screen_dimmed)
+            return scheduled_sleeping or screen_dimmed
           end)
         end)
       end
@@ -987,8 +960,6 @@ local function register_input_handlers()
     APP.imu_registered = ok
   end
 end
-
-APP.refresh_input_handlers = register_input_handlers
 
 function APP.stop(reason)
   for i = #APP.routes, 1, -1 do
