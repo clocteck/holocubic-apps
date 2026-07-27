@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.2.1",
+  VERSION = "1.2.2",
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
@@ -627,6 +627,20 @@ local function sleep_display()
 end
 
 wake_display = function()
+  local display_service = rawget(_G, "DISPLAY_SERVICE")
+  if type(display_service) == "table" then
+    local service_wake = display_service.wake_display or display_service.wake
+    if type(service_wake) == "function" then
+      pcall(service_wake)
+    end
+    -- Scheduled screen-off changes the hardware brightness directly, so the
+    -- display service may still hold an expired idle timer or a stale sleeping
+    -- flag. Reset both before restoring brightness to prevent an immediate
+    -- second screen-off after the scheduled wake time.
+    display_service.last_activity_ms = now_ms()
+    display_service.sleeping = false
+    display_service.brightness = APP.normal_brightness
+  end
   if http and http.post then
     pcall(function()
       http.post("http://127.0.0.1/display/api/wake", {
@@ -637,6 +651,11 @@ wake_display = function()
     end)
   end
   set_brightness(APP.normal_brightness)
+  if type(display_service) == "table" then
+    display_service.last_activity_ms = now_ms()
+    display_service.sleeping = false
+    display_service.brightness = APP.normal_brightness
+  end
   APP.scheduled_sleeping = false
 end
 

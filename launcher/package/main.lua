@@ -29,7 +29,7 @@ local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.2.1"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.2.2"
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
