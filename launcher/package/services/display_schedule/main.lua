@@ -5,7 +5,7 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.2.4",
+  VERSION = "1.2.6",
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
@@ -642,7 +642,7 @@ local function api_info()
     fixed_route_base = APP.FIXED_ROUTE_BASE,
     auto_sleep_enabled = APP.auto_sleep_enabled,
     auto_sleep_seconds = APP.auto_sleep_seconds,
-    display_settings_applied = APP.display_settings_signature ~= "",
+    display_settings_requested = APP.display_settings_signature ~= "",
     scheduled_sleep_enabled = APP.enabled,
     scheduled_sleep_mode = APP.mode,
     scheduled_sleep_hour = APP.sleep_hour,
@@ -908,7 +908,11 @@ local function handle_imu(roll, pitch, gx, gy, gz)
     stop_alarm()
   end
   if not user_motion then return end
-  wake_display(true)
+  local brightness = get_current_brightness()
+  local screen_dimmed = brightness ~= nil and brightness <= APP.DIM_BRIGHTNESS
+  if APP.scheduled_sleeping or screen_dimmed then
+    wake_display(true)
+  end
 end
 
 APP.handle_imu = handle_imu
