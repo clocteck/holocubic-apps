@@ -1,5 +1,17 @@
-# Launcher
+# Launcher 1.1
 
-Imported from device path `/sd/apps/launcher` at `http://192.168.0.140/`.
+部署文件位于 `launcher/package/`，安装到设备的 `/sd/apps/launcher/`。
 
-Deployable files live in `package/`.
+## 1.1 更新内容
+
+- 完善 Launcher、Web 控制页、应用列表、服务页面和介绍页的中英文显示。
+- 调整中文应用名称，并补充更多常用时区。
+- 新增独立的“息屏与闹钟”服务页面，支持自动息屏、每日定时息屏与亮屏。
+- 自动息屏在 Launcher 和其他 App 中均可生效，支持 HOME 按键或摇动设备唤醒。
+- 支持三组闹钟，可选择每日、工作日、周末或指定星期。
+- 支持内置“嘀嘀嘀”提示音及 SD 卡中的 MP3 铃声。
+- 修复闹钟停止后因服务重载重复响铃、人工唤醒后再次息屏等状态问题。
+- 修复 Web 保存后固件自动息屏设置未立即应用的问题。
+
+“息屏与闹钟”服务的部署文件位于
+`launcher/package/services/display_schedule/`，Launcher 会在需要时安装或更新该服务。
