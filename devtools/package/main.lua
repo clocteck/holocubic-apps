@@ -8,7 +8,7 @@ end
 DEVTOOLS = {}
 local APP = DEVTOOLS
 
-APP.VERSION = "2026-07-15-devtools-folder-transfer-v6"
+APP.VERSION = "2026-07-28-devtools-max-handlers-256-v7"
 APP.ROOT_PATH = "/sd"
 APP.APPS_PATH = "/sd/apps"
 APP.SERVICE_ID = "devtools"
@@ -2291,7 +2291,7 @@ ensure_run_app()
 httpd.start({
   webroot = "/sd",
   auto_index = httpd.INDEX_NONE,
-  max_handlers = 36
+  max_handlers = 256
 })
 
 APP.register_route(httpd.GET, APP.ROUTE_BASE, APP.route_redirect)

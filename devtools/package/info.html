@@ -30,6 +30,8 @@
     .label { display: block; color: var(--muted); font-size: 12px; font-weight: 750; }
     .value { display: block; margin-top: 2px; font-size: 16px; font-weight: 850; line-height: 1.2; overflow-wrap: anywhere; }
     .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .release { margin-top: 12px; border-color: #bfdbfe; background: var(--soft); }
+    .release p { margin: 0; color: #334155; font-size: 13px; line-height: 1.5; }
     .opensource { margin: 12px 2px 0; color: #8792a3; font-size: 11px; line-height: 1.45; text-align: center; }
     .opensource a { color: inherit; font-weight: 700; text-decoration: none; overflow-wrap: anywhere; }
     [data-lang="en"] .zh, [data-lang="zh"] .en { display: none; }
@@ -66,11 +68,16 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 94 KB</span><span class="value en">About 94 KB</span></div>
-          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.1</span></div>
+          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.0.2</span></div>
         </div>
         <p class="note zh">页面为 launcher 嵌入说明，图标已内嵌。</p><p class="note en">This page is embedded in launcher, with the icon bundled inline.</p>
       </section>
     </div>
+    <section class="panel release" aria-labelledby="release-title">
+      <h2 id="release-title" class="zh">1.0.2 更新说明</h2><h2 class="en">Version 1.0.2</h2>
+      <p class="zh">将 HTTP 动态处理器上限从 36 提升到 256，为多个应用和服务同时注册 Web 接口预留更多容量，降低接口因处理器数量不足而注册失败的概率。</p>
+      <p class="en">Raises the HTTP dynamic handler limit from 36 to 256, providing more capacity when multiple apps and services register web endpoints.</p>
+    </section>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
   </main>
   <script>
