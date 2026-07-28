@@ -24,12 +24,28 @@ local AP_POLICY_POLL_MS = 250
 local AUTOSTART_BOOT_WINDOW_MS = 5000
 local AUTOSTART_DELAY_MS = 200
 local APP_LIST_POLL_MS = 1000
+local HTTP_MAX_HANDLERS = 256
 local AUTOSTART_MARK_PATH = "/tmp/launcher_autostart_fired"
 local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.1"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.11"
+local DISPLAY_SCHEDULE_BUNDLE_BUILD = "2026-07-28-handler-256"
+
+local function configure_httpd_capacity()
+  if not httpd or not httpd.start then return false end
+  local ok, err = pcall(function()
+    return httpd.start({
+      webroot = "/sd",
+      auto_index = httpd.INDEX_NONE,
+      max_handlers = HTTP_MAX_HANDLERS,
+    })
+  end)
+  return ok and not err
+end
+
+configure_httpd_capacity()
 
 local function normalize_language(value)
   local text = tostring(value or ""):gsub("_", "-")
@@ -101,10 +117,12 @@ local function ensure_display_schedule_service()
   if not file.exists(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.lua") then return false end
 
   local current_version = read_info_value(DISPLAY_SCHEDULE_APP_DIR .. "/app.info", "version")
+  local current_build = read_info_value(DISPLAY_SCHEDULE_APP_DIR .. "/app.info", "build")
   if file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
       and file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.html")
       and current_version ~= ""
-      and not version_lt(current_version, DISPLAY_SCHEDULE_BUNDLE_VERSION) then
+      and not version_lt(current_version, DISPLAY_SCHEDULE_BUNDLE_VERSION)
+      and current_build == DISPLAY_SCHEDULE_BUNDLE_BUILD then
     return false
   end
 
@@ -124,7 +142,8 @@ local function start_display_schedule_service()
   local running = rawget(_G, "DISPLAY_SCHEDULE_SERVICE")
   if not updated
       and type(running) == "table"
-      and not version_lt(tostring(running.VERSION or ""), DISPLAY_SCHEDULE_BUNDLE_VERSION) then
+      and not version_lt(tostring(running.VERSION or ""), DISPLAY_SCHEDULE_BUNDLE_VERSION)
+      and tostring(running.BUILD or "") == DISPLAY_SCHEDULE_BUNDLE_BUILD then
     return
   end
   pcall(function() app.start_service(DISPLAY_SCHEDULE_SERVICE_ID) end)

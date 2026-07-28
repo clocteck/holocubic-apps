@@ -5,7 +5,9 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.1",
+  VERSION = "1.11",
+  BUILD = "2026-07-28-handler-256",
+  HTTP_MAX_HANDLERS = 256,
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
   FIXED_ROUTE_BASE = "/display-schedule",
@@ -50,6 +52,18 @@ DISPLAY_SCHEDULE_SERVICE = {
 local APP = DISPLAY_SCHEDULE_SERVICE
 local wake_display
 
+local function configure_httpd_capacity()
+  if not httpd or not httpd.start then return false end
+  local ok, err = pcall(function()
+    return httpd.start({
+      webroot = "/sd",
+      auto_index = httpd.INDEX_NONE,
+      max_handlers = APP.HTTP_MAX_HANDLERS,
+    })
+  end)
+  return ok and not err
+end
+
 if app and app.current then
   local current = app.current()
   local entry = current and current.entry
@@ -67,6 +81,8 @@ local function write_status(stage)
   if not file or not file.putcontents then return end
   local line = table.concat({
     "version=" .. APP.VERSION,
+    "build=" .. APP.BUILD,
+    "max_handlers=" .. tostring(APP.HTTP_MAX_HANDLERS),
     "stage=" .. tostring(stage or "unknown"),
     "routes=" .. tostring(#APP.routes),
     "imu=" .. tostring(APP.imu_registered),
@@ -637,6 +653,8 @@ local function api_info()
   return json_response({
     ok = true,
     version = APP.VERSION,
+    build = APP.BUILD,
+    max_handlers = APP.HTTP_MAX_HANDLERS,
     language = tostring(settings.language or settings.locale or settings.lang or "zh-CN"),
     route_base = APP.ROUTE_BASE,
     fixed_route_base = APP.FIXED_ROUTE_BASE,
@@ -1009,6 +1027,7 @@ local function register_route_set(base)
   register_route(post, base .. "/api/wake", api_wake)
 end
 
+configure_httpd_capacity()
 if httpd then
   register_route_set(APP.ROUTE_BASE)
   if APP.ROUTE_BASE ~= APP.FIXED_ROUTE_BASE then register_route_set(APP.FIXED_ROUTE_BASE) end
