@@ -1527,6 +1527,12 @@ function APP.stop(reason)
     imu_registered = false
   end
 
+  -- tick 抛错也会走到这里（定时器回调里 pcall 失败就 stop）。原来不清
+  -- LVGL root，画面永久冻结在最后一帧，全屏 canvas 及其缓冲一直占内存。
+  if lv_obj_clean and lv_scr_act then
+    pcall_fn(function() lv_obj_clean(lv_scr_act()) end)
+  end
+  canvas = nil
   if rawget(_G, "FLUID_PENDANT_APP") == APP then
     _G.FLUID_PENDANT_APP = nil
   end

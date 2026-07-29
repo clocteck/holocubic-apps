@@ -15,7 +15,7 @@ end
 local Backend = load_module("backend")
 
 local app_obj = {
-  VERSION = "1.2.1",
+  VERSION = "1.2.2",
   APP_ID = "btc",
   APP_DIR = APP_DIR,
   route_base = (app and app.route_base and app.route_base()) or "/btc",
@@ -100,6 +100,11 @@ function app_obj.stop(reason)
   end
   if app_obj.backend then
     pcall(function() app_obj.backend:stop(reason) end)
+  end
+  -- stop 后必须清全局单例 key：否则退出后整份状态（行情/历史数组/闭包/
+  -- LVGL 对象 id）仍被全局表持有无法回收，下次进入还会再调一遍旧实例的 stop。
+  if rawget(_G, "BTC_MARKETS_APP") == app_obj then
+    _G.BTC_MARKETS_APP = nil
   end
 end
 

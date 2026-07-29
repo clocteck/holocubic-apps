@@ -6,6 +6,17 @@ local SETUP_PORTAL = "192.168.18.1"
 local DEVICE_HOST = "clocteck-cubic.local"
 local FONT_DIR = "/sd/apps/wifi_guide/font"
 
+-- 入口脚本会被重复执行（热重载）。以前只有 HOME/手柄路径会调 leave_app()，
+-- 热重载、被其它 app 顶掉时 poll/controller 两个 ALARM_AUTO 定时器和字体
+-- 都不会释放；异步 RSSI 回调也没有代次检查，会往已删除的 obj_id 上写。
+local prev_guide = rawget(_G, "WIFI_GUIDE_APP")
+if prev_guide and prev_guide.stop then
+  pcall(function() prev_guide.stop("reload") end)
+end
+
+local GUIDE = {}
+_G.WIFI_GUIDE_APP = GUIDE
+
 local root = lv_scr_act()
 lv_obj_clean(root)
 
@@ -494,6 +505,10 @@ local function request_system_rssi(force)
   local started = pcall(function()
     http.get(url, {}, function(code, body)
       STATE.rssi_requesting = false
+      -- 请求发出后按 HOME 或热重载时，这个回调仍会到达。此时 launcher
+      -- 可能已经接管屏幕，继续 update_success_signal() 就是往已删除或
+      -- 已被复用的 obj_id 上写。
+      if GUIDE.stopped or rawget(_G, "WIFI_GUIDE_APP") ~= GUIDE then return end
       if tonumber(code) ~= 200 or type(body) ~= "string" then return end
       local codec = rawget(_G, "json") or rawget(_G, "sjson")
       if not codec or not codec.decode then return end
@@ -651,11 +666,30 @@ local function check_state()
   end
 end
 
-local function leave_app()
+function GUIDE.stop(reason)
+  if GUIDE.stopped then
+    return
+  end
+  GUIDE.stopped = true
+
   stop_timer("poll_timer")
   stop_timer("controller_timer")
-  release_fonts()
   pcall(function() key.off() end)
+  -- 先删引用字体的 LVGL 对象，再 lv_font_free；反过来会留下指向已释放
+  -- 字体的样式，渲染任务碰到就是 use-after-free。
+  if lv_obj_clean then
+    pcall(function() lv_obj_clean(root) end)
+  end
+  release_fonts()
+  if rawget(_G, "WIFI_GUIDE_APP") == GUIDE then
+    _G.WIFI_GUIDE_APP = nil
+  end
+end
+
+GUIDE.shutdown = GUIDE.stop
+
+local function leave_app()
+  GUIDE.stop("exit")
   if app and app.exit then pcall(function() app.exit() end) end
 end
 

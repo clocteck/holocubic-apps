@@ -2013,4 +2013,9 @@ function APP.shutdown()
   end
   release_fonts()
   release_game_over_snapshot()
+  -- stop 后必须清全局单例 key：否则退出后整份状态（行情/历史数组/闭包/
+  -- LVGL 对象 id）仍被全局表持有无法回收，下次进入还会再调一遍旧实例的 stop。
+  if rawget(_G, "PLANE_WAR_APP") == APP then
+    _G.PLANE_WAR_APP = nil
+  end
 end

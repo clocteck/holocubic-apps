@@ -148,17 +148,35 @@ local function countdown(name)
   end
 end
 
+-- 麦克风没接、DMA 起不来或持续读超时时，i2s.read() 会一直返回 nil/空串。
+-- 原来的循环只在拿到数据时才推进 got，于是永远出不来：整个 Lua 运行时被
+-- 卡死，后面的 i2s.stop(0) 也永远执行不到，I2S 被永久占用。
+-- 这里加总截止时间和连续空读上限。
+local READ_DEADLINE_MS = 15000
+local MAX_EMPTY_READS = 200
+
 local function read_i2s_bytes(target, keep)
   local chunks = {}
   local got = 0
+  local empty_reads = 0
+  local deadline = now_ms() + READ_DEADLINE_MS
   while got < target do
     local need = math.min(READ_BYTES, target - got)
-    local chunk = i2s.read(0, need, 160)
-    if chunk and #chunk > 0 then
+    local ok, chunk = pcall(i2s.read, 0, need, 160)
+    if ok and chunk and #chunk > 0 then
+      empty_reads = 0
       if keep then
         chunks[#chunks + 1] = chunk
       end
       got = got + #chunk
+    else
+      empty_reads = empty_reads + 1
+      if empty_reads >= MAX_EMPTY_READS then
+        break
+      end
+    end
+    if now_ms() >= deadline then
+      break
     end
   end
   if keep then

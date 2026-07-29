@@ -5,8 +5,8 @@ if _G.DISPLAY_SCHEDULE_SERVICE and _G.DISPLAY_SCHEDULE_SERVICE.stop then
 end
 
 DISPLAY_SCHEDULE_SERVICE = {
-  VERSION = "1.11",
-  BUILD = "2026-07-28-handler-256",
+  VERSION = "1.12",
+  BUILD = "2026-07-29-lifecycle-fixes",
   HTTP_MAX_HANDLERS = 256,
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
@@ -160,7 +160,8 @@ local function write_settings(settings)
 
   if file.rename and file.remove then
     local temp_ok, temp_result = pcall(function() return file.putcontents(APP.SETTINGS_TEMP_PATH, raw) end)
-    if not temp_ok or temp_result == false then return false, tostring(temp_result or "temp write failed") end
+    -- putcontents 失败返回 nil，只判 `== false` 会漏掉。
+    if not temp_ok or not temp_result then return false, tostring(temp_result or "temp write failed") end
     local verify_ok, verify_raw = pcall(function() return file.getcontents(APP.SETTINGS_TEMP_PATH) end)
     if not verify_ok or verify_raw ~= raw then
       pcall(function() file.remove(APP.SETTINGS_TEMP_PATH) end)
@@ -193,7 +194,7 @@ local function write_settings(settings)
   end
 
   local wrote, result = pcall(function() return file.putcontents(APP.SETTINGS_PATH, raw) end)
-  if not wrote or result == false then return false, tostring(result or "write failed") end
+  if not wrote or not result then return false, tostring(result or "write failed") end
   return true
 end
 
@@ -246,7 +247,11 @@ local function apply_firmware_display_settings(force)
       max_redirects = 0,
     }, "")
   end)
-  if ok and result ~= false then
+  -- http.post 同步返回的是 HTTP 状态码。原来只判 `result ~= false`，
+  -- nil、负错误码、4xx/5xx 全都算成功并记下 signature；之后 5 秒一次的
+  -- 同步因为 signature 相同不再重试，设置永远下发不下去。
+  local code = tonumber(result)
+  if ok and code and code >= 200 and code < 300 then
     APP.display_settings_signature = signature
     return true
   end
@@ -997,6 +1002,12 @@ function APP.stop(reason)
   APP.timers = {}
   unregister_input_handlers()
   stop_alarm()
+  -- 必须清全局 key。launcher 的 start_display_schedule_service() 会看
+  -- _G.DISPLAY_SCHEDULE_SERVICE 的 VERSION/BUILD 判断「服务还在跑」，
+  -- 留着旧表会让它跳过 app.start_service()，息屏和闹钟就再也起不来。
+  if rawget(_G, "DISPLAY_SCHEDULE_SERVICE") == APP then
+    _G.DISPLAY_SCHEDULE_SERVICE = nil
+  end
   print("[display_schedule] stop", tostring(reason or ""))
 end
 

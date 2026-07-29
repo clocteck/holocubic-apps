@@ -280,6 +280,11 @@ function state.stop()
   if state.renderer then state.renderer:destroy() state.renderer = nil end
   if state.web then state.web:stop("app_stop") state.web = nil end
   if key and key.off then key.off() end
+  -- stop 后必须清全局单例 key：否则退出后整份状态（行情/历史数组/闭包/
+  -- LVGL 对象 id）仍被全局表持有无法回收，下次进入还会再调一遍旧实例的 stop。
+  if rawget(_G, "__aida_monitor") == state then
+    _G.__aida_monitor = nil
+  end
 end
 
 if key and key.on then

@@ -1705,6 +1705,17 @@ end
         return
     end
 
+    -- 删除 startup_screen 之前必须先把 main_screen 切成活动 screen：
+    -- 启动页还在显示（启动后约 300ms 内）时 startup_screen 就是活动 screen，
+    -- 直接删活动 screen 会让后续 lv_scr_act()/lv_clear() 拿到失效对象。
+    -- 切换失败就保留启动页、放弃这次删除（和 hide_startup_page() 同样的策略），
+    -- 宁可漏一次释放，也不能把活动 screen 删掉。
+    if APP.ui.startup_screen and lv_scr_load then
+        if not (APP.ui.main_screen and load_screen(APP.ui.main_screen)) then
+        return
+        end
+    end
+
     set_fullscreen_overlay_hidden(APP.ui.startup_page, true)
     local del_fn = rawget(_G, "lv_obj_del") or rawget(_G, "lv_obj_delete")
     if del_fn then
@@ -1756,16 +1767,14 @@ end
         return false
     end
 
-    if not json or not json.decode then
+    -- 用同文件已有的 decode_json()：它同时支持 json / sjson，带 pcall 和
+    -- table 类型检查。直接调 json.decode 的问题是：固件只保证提供 sjson
+    -- （见 README_LUA），没有 json 别名时天气永远停在 "JSON missing"；
+    -- 而返回截断/畸形 JSON 时又会在异步回调里直接抛异常。
+    local doc = decode_json(body)
+    if type(doc) ~= "table" then
         APP.state.valid = false
-        APP.state.last_error = "JSON missing"
-        return false
-    end
-
-    local doc, err = json.decode(body)
-    if not doc then
-        APP.state.valid = false
-        APP.state.last_error = "JSON " .. tostring(err)
+        APP.state.last_error = "JSON decode failed"
         return false
     end
 
@@ -1808,16 +1817,11 @@ end
         return false
     end
 
-    if not json or not json.decode then
+    -- 同上：统一走 decode_json()。
+    local doc = decode_json(body)
+    if type(doc) ~= "table" then
         state.valid = false
-        state.last_error = "JSON missing"
-        return false
-    end
-
-    local doc, err = json.decode(body)
-    if not doc then
-        state.valid = false
-        state.last_error = "JSON " .. tostring(err)
+        state.last_error = "JSON decode failed"
         return false
     end
 
@@ -2234,9 +2238,8 @@ end
     APP.state.forecast.request_inflight = false
     unbind_input()
     stop_timers()
-    if stop_reason ~= "reload" then
-        release_startup_page()
-    end
+    -- 启动页无论是否 reload 都要释放（原来 reload 路径会漏一整套 screen）。
+    release_startup_page()
     release_glass_snapshot()
     release_forecast_glass_snapshot()
     log("stop", stop_reason)
@@ -2245,7 +2248,16 @@ end
         _G.WEATHER_APP = nil
     end
 
-    if lv_clear and stop_reason ~= "reload" then
+    -- 原来 reload 路径跳过清屏却照样 release_fonts()，旧的 main_screen /
+    -- startup_screen 还活着并引用已释放的字体，渲染时就是 use-after-free。
+    -- 清理必须无条件做，而且要在释放字体之前。
+    -- 注意 init_ui() 在有 lv_scr_load 时会新建两个专用 screen，而 lv_clear()
+    -- 只清「当前活动」的那一个，所以 main_screen 要显式 clean。
+    local clean_fn = rawget(_G, "lv_obj_clean")
+    if clean_fn and APP.ui.main_screen then
+        pcall_fn(function() clean_fn(APP.ui.main_screen) end)
+    end
+    if lv_clear then
         pcall_fn(function() lv_clear() end)
     end
     release_fonts()

@@ -1,4 +1,4 @@
 name = MatrixRain
 entry = main.lua
 description = Matrix code rain effect
-version = 0.0.1
+version = 0.0.2

@@ -1,4 +1,4 @@
 name = Gif Player
 entry = videos.lua
 description = play gif videos
-version = 1.12
+version = 1.13

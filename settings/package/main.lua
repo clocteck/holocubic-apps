@@ -1095,6 +1095,11 @@ local function refresh_info_items()
   }
 end
 
+-- 前置声明：refresh_ui / build_ui 以前是全局函数，即使 stop() 清掉了
+-- SETTINGS_APP，这两个闭包仍持有局部 APP，整份状态无法回收；别的 app
+-- 若碰巧调到同名全局，还会用已释放的字体和失效 obj_id 重建 Settings UI。
+local refresh_ui, build_ui
+
 local function create_header(title)
   APP.ui.title = create_text(APP.ui.root, title, FONT.title, C.title, 14, 8, 160)
   APP.ui.badge_box = lv_obj_create(APP.ui.root)
@@ -1168,7 +1173,7 @@ local function build_info_page()
   APP.ui.footer = create_text(APP.ui.root, "左右切换页面  Home 返回", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
 end
 
-function refresh_ui()
+refresh_ui = function()
   if not APP.ui.root then
     return
   end
@@ -1244,7 +1249,7 @@ function refresh_ui()
   end
 end
 
-function build_ui()
+build_ui = function()
   lv_obj_clean(lv_scr_act())
   APP.ui = {
     root = lv_scr_act(),
@@ -1474,13 +1479,14 @@ function APP.stop(_reason)
       ipc.listen(SETTINGS_HIDPAD_ENDPOINT, nil)
     end)
   end
-  release_fonts()
-
+  -- 必须先删掉引用字体的 LVGL 对象，再 lv_font_free。反过来做的话
+  -- 样式里还留着已释放的字体指针，渲染任务碰到就是 use-after-free。
   if lv_obj_clean and lv_scr_act then
     pcall(function()
       lv_obj_clean(lv_scr_act())
     end)
   end
+  release_fonts()
 
   if rawget(_G, "SETTINGS_APP") == APP then
     _G.SETTINGS_APP = nil

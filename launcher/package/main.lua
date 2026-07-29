@@ -30,8 +30,8 @@ local DEFAULT_AUTOSTART_APP_ID = "wifi_guide"
 local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
-local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.11"
-local DISPLAY_SCHEDULE_BUNDLE_BUILD = "2026-07-28-handler-256"
+local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.12"
+local DISPLAY_SCHEDULE_BUNDLE_BUILD = "2026-07-29-lifecycle-fixes"
 
 local function configure_httpd_capacity()
   if not httpd or not httpd.start then return false end
@@ -109,7 +109,10 @@ local function copy_file(src, dst)
   local ok, data = pcall(function() return file.getcontents(src) end)
   if not ok or type(data) ~= "string" then return false end
   local wrote, result = pcall(function() return file.putcontents(dst, data) end)
-  return wrote and result ~= false
+  -- putcontents 失败返回 nil，不能用 `~= false` 判定成功；否则
+  -- display_schedule 部署包写坏了也会被当成安装成功，而 app.info 已经
+  -- 写上了新 version/build，重启后也不会再修。
+  return wrote and result and true or false
 end
 
 local function ensure_display_schedule_service()
@@ -170,6 +173,19 @@ local UI_FONT_PATHS = {
   ["zh-TW"] = "/sd/apps/launcher/font/launcher_ui_zh_tw_16.bin",
 }
 
+-- launcher 入口脚本会被重复执行（热重载 / 从 app 退回桌面）。以前这里只
+-- 释放了字体 handle，却没有任何办法停掉上一代的定时器和按键监听：
+-- 40ms 手柄轮询、1s app 列表轮询、250ms AP 策略这三个 ALARM_AUTO 定时器
+-- 会一代一代叠加，回调里还在访问已经被 lv_obj_clean 删掉的旧 obj_id。
+-- 按仓库 README 的模板补上单例 + stop。
+local prev_launcher = rawget(_G, "LAUNCHER_APP")
+if prev_launcher and prev_launcher.stop then
+  pcall(function() prev_launcher.stop("reload") end)
+end
+
+local LAUNCHER = {}
+_G.LAUNCHER_APP = LAUNCHER
+
 local root = lv_scr_act()
 lv_obj_clean(root)
 if rawget(_G, "LAUNCHER_UI_FONT_HANDLE") and lv_font_free then
@@ -202,6 +218,7 @@ local STATE = {
   autostart_fired = false,
   app_list_signature = "",
   app_list_timer = nil,
+  autostart_timer = nil,
   controller_timer = nil,
   controller_buttons = 0,
 }
@@ -897,10 +914,16 @@ local function schedule_autostart()
     return
   end
   local t = tmr.create()
+  -- 存到 STATE，否则 stop() 无法取消：热重载正好落在这 200ms 窗口里时，
+  -- 两代 autostart 定时器会各自 app.launch() 一次。
+  STATE.autostart_timer = t
   t:alarm(AUTOSTART_DELAY_MS, tmr.ALARM_SINGLE, function(self)
     pcall(function()
       self:unregister()
     end)
+    if STATE.autostart_timer == self then
+      STATE.autostart_timer = nil
+    end
     run_autostart(true)
   end)
 end
@@ -1025,6 +1048,42 @@ if controller and controller.state and tmr and tmr.create then
     -- PAD_SELECT / PAD_HOME intentionally do nothing in Launcher.
   end)
 end
+
+-- 统一释放这一代 launcher 持有的所有资源。入口重复执行时由文件开头的
+-- prev_launcher.stop("reload") 调用。
+function LAUNCHER.stop(reason)
+  if LAUNCHER.stopped then
+    return
+  end
+  LAUNCHER.stopped = true
+
+  stop_timer("reload_timer")
+  stop_timer("anim_timer")
+  stop_timer("ap_policy_timer")
+  stop_timer("app_list_timer")
+  stop_timer("autostart_timer")
+  stop_timer("controller_timer")
+
+  if key and key.off then
+    pcall(function() key.off() end)
+  end
+
+  -- 先删引用字体的对象，再释放字体。
+  if lv_obj_clean then
+    pcall(function() lv_obj_clean(root) end)
+  end
+  if rawget(_G, "LAUNCHER_UI_FONT_HANDLE") and lv_font_free then
+    pcall(function() lv_font_free(_G.LAUNCHER_UI_FONT_HANDLE) end)
+    _G.LAUNCHER_UI_FONT_HANDLE = nil
+  end
+
+  if rawget(_G, "LAUNCHER_APP") == LAUNCHER then
+    _G.LAUNCHER_APP = nil
+  end
+  print("[launcher] stop", tostring(reason or ""))
+end
+
+LAUNCHER.shutdown = LAUNCHER.stop
 
 -- Register the global display wake callbacks after Launcher key handlers so
 -- scheduled screen-off can always be woken while the desktop is active.

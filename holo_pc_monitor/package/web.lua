@@ -128,9 +128,16 @@ local function valid_ipv4(host)
 end
 
 local function normalize_path(path)
+  local fallback_path = "/sse"
   path = trim(path)
   if path == "" then
-    return "/sse"
+    return fallback_path
+  end
+  -- 这个 path 会被直接拼进原始请求行 `GET <path> HTTP/1.1`，必须拒掉
+  -- 空白和控制字符（含 CR/LF/NUL）。否则 WebUI 里保存
+  -- `/sse%0d%0aX-Test:%201` 就能往目标 AIDA 主机注入额外的 HTTP 头。
+  if path:find("[%s%c]") then
+    path = fallback_path
   end
   if path:sub(1, 1) ~= "/" then
     path = "/" .. path
@@ -285,7 +292,8 @@ local function write_config(path, config)
     local ok, ret = pcall(function()
       return file.putcontents(path, raw)
     end)
-    if ok and ret ~= false then
+    -- putcontents 失败返回 nil，`~= false` 会把它当成功。
+    if ok and ret then
       return true
     end
     return false, tostring(ret)

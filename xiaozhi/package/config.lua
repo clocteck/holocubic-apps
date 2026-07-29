@@ -187,14 +187,20 @@ local function apply_ota(ota)
   if ota.force ~= nil then
     M.ota.force = ota.force and true or false
   end
-  if tonumber(ota.interval_ms) then
-    M.ota.interval_ms = math.floor(tonumber(ota.interval_ms))
+  -- 注意 Lua 里 0 是真值，`if tonumber(x) then` 会放过 0 和负数。
+  -- interval_ms = 0 会变成无间隔的 HTTP 轮询，或者被 timer:alarm() 拒绝
+  -- 导致激活流程直接卡死；下面两个同理。
+  local interval_ms = tonumber(ota.interval_ms)
+  if interval_ms and interval_ms >= 1000 then
+    M.ota.interval_ms = math.floor(interval_ms)
   end
-  if tonumber(ota.max_polls) then
-    M.ota.max_polls = math.floor(tonumber(ota.max_polls))
+  local max_polls = tonumber(ota.max_polls)
+  if max_polls and max_polls > 0 then
+    M.ota.max_polls = math.floor(max_polls)
   end
-  if tonumber(ota.timeout_ms) then
-    M.ota.timeout_ms = math.floor(tonumber(ota.timeout_ms))
+  local timeout_ms = tonumber(ota.timeout_ms)
+  if timeout_ms and timeout_ms > 0 then
+    M.ota.timeout_ms = math.floor(timeout_ms)
   end
 end
 

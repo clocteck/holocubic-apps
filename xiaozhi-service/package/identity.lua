@@ -114,6 +114,16 @@ function M.device_id()
   if cached_mac then
     return cached_mac
   end
+  -- 已保存的 MAC 优先。set_device_id() 把自定义 MAC 写进文件后重启服务，
+  -- 原来这里先返回硬件 Wi-Fi MAC，自定义值必然失效（配对/WebSocket 仍用
+  -- 旧的硬件 MAC）。注意只能用「只读」的 read_saved_mac()：
+  -- saved_or_new_mac() 会在没有文件时生成并落盘一个随机 MAC，放到最前面
+  -- 会把所有从未设置过自定义 MAC 的设备身份也换掉。
+  local saved = read_saved_mac()
+  if saved then
+    cached_mac = saved
+    return cached_mac
+  end
   if wifi and wifi.sta and wifi.sta.getmac then
     local ok, mac = pcall(wifi.sta.getmac)
     if ok then
