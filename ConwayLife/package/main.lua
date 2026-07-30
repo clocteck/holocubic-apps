@@ -1,4 +1,11 @@
 
+-- 入口脚本会被重复执行（热重载），必须先把上一代实例停掉，否则它的
+-- 4 个 ALARM_AUTO 定时器、字体和整张网格表都会永久泄漏。
+local prev = rawget(_G, "CONWAY_LIFE_APP")
+if prev and prev.stop then
+  pcall(function() prev.stop("reload") end)
+end
+
 CONWAY_LIFE_APP = {
   VERSION = "2026-04-28-conway-life-v11-periodic-large-seed"
 }
@@ -807,6 +814,12 @@ local function init_controller_exit()
   local last_buttons = 0
   APP.controller_timer = tmr.create()
   APP.controller_timer:alarm(40, tmr.ALARM_AUTO, function()
+    -- 和 tick/time/inject 定时器一样要做代次检查。否则上一代的 controller
+    -- 定时器在按键时会调用旧 APP.stop()，而 stop 里的 lv_obj_clean 会把
+    -- 新实例的画面清掉，还会顺手 app.exit()。
+    if rawget(_G, "CONWAY_LIFE_APP") ~= APP then
+      return
+    end
     local ok, pad = pcall(function() return controller.state("ble-main") end)
     local buttons = ok and type(pad) == "table" and (tonumber(pad.buttons) or 0) or 0
     local pressed = buttons & (~last_buttons)

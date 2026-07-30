@@ -1,5 +1,5 @@
 name = WiFi Setting Guide
-version = 2.0.1
+version = 2.0.2
 kind = app
 entry = main.lua
 description = Bilingual first-run WiFi setup guide with live network details

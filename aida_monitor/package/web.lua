@@ -6,8 +6,15 @@ local function trim(value)
 end
 
 local function normalize_path(value, fallback)
+  local fallback_path = fallback or "/"
   local path = trim(value)
-  if path == "" then path = fallback or "/" end
+  if path == "" then path = fallback_path end
+  -- 这个 path 会被直接拼进原始请求行 `GET <path> HTTP/1.1`，必须拒掉
+  -- 空白和控制字符（含 CR/LF/NUL）。否则 WebUI 里保存
+  -- `/sse%0d%0aX-Test:%201` 就能往目标 AIDA 主机注入额外的 HTTP 头。
+  if path:find("[%s%c]") then
+    path = fallback_path
+  end
   if path:sub(1, 1) ~= "/" then path = "/" .. path end
   return path
 end
@@ -160,7 +167,8 @@ local function write_config(path, config)
   local raw = config_text(config)
   if file and file.putcontents then
     local ok, result = pcall(file.putcontents, path, raw)
-    if ok and result ~= false then return true end
+    -- putcontents 失败返回 nil，`~= false` 会把它当成功。
+    if ok and result then return true end
     return false, tostring(result)
   end
   return false, "file.putcontents unavailable"

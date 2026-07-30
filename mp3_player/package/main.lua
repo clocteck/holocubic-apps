@@ -6,7 +6,7 @@ if prev and prev.stop then
 end
 
 MUSIC_PLAYER_APP = {
-  VERSION = "1.12",
+  VERSION = "1.14",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/mp3_player",
@@ -49,7 +49,8 @@ MUSIC_PLAYER_APP = {
   WEB_UPLOAD_WRITE_BYTES = 16 * 1024,
   WEB_UPLOAD_YIELD_BYTES = 64 * 1024,
   WEB_MAX_FILE_SIZE = 32 * 1024 * 1024,
-  WEB_MAX_HANDLERS = 64,
+  -- 和 launcher/devtools 保持一致：httpd 是全局共享的，容量不能被本 app 缩小。
+  WEB_MAX_HANDLERS = 256,
   WEB_DEBUG = false,
   FUNCTION_LOG = true,
   EQ_SETTINGS_FILE = "eq_settings.json",
@@ -1081,6 +1082,8 @@ local function register_web_route(method, route, handler)
     return false
   end
   web_log("route", "method=" .. tostring(method), route)
+  APP.web_routes = APP.web_routes or {}
+  APP.web_routes[#APP.web_routes + 1] = { method = method, route = route }
   return true
 end
 
@@ -1095,7 +1098,11 @@ end
 
 local function start_web()
   if not httpd or not httpd.start then return end
-  pcall(httpd.stop)
+  -- httpd 是全局共享服务，launcher 已经用 max_handlers=256 起好了。
+  -- 这里不能 pcall(httpd.stop) 再 start：那会清掉 DevTools 及其它
+  -- service 的全部路由，还把全局 handler 容量降到 WEB_MAX_HANDLERS(64)。
+  -- 只注册自己的路由，APP.stop() 里逐条 httpd.unregister()。
+  APP.web_routes = {}
   local ok, err = pcall(function()
     httpd.start({
       webroot = "/sd",
@@ -2353,12 +2360,24 @@ function APP.stop(reason)
   if app and app.set_home_exit then
     pcall(function() app.set_home_exit(true) end)
   end
-  if APP.web_started and httpd and httpd.stop then
-    pcall(httpd.stop)
-    APP.web_started = false
+  if APP.web_started and httpd and httpd.unregister then
+    -- 只注销本 app 的路由，不要 httpd.stop()（那是全局共享服务）。
+    for i = #(APP.web_routes or {}), 1, -1 do
+      local item = APP.web_routes[i]
+      pcall(function() httpd.unregister(item.method, item.route) end)
+    end
+  end
+  APP.web_routes = {}
+  APP.web_started = false
+  -- 先清 LVGL root 再释放字体，否则残留对象仍指向已释放的字体。
+  if lv_obj_clean and lv_scr_act then
+    pcall(function() lv_obj_clean(lv_scr_act()) end)
   end
   if APP._ui_release_fonts then
     APP._ui_release_fonts()
+  end
+  if rawget(_G, "MUSIC_PLAYER_APP") == APP then
+    _G.MUSIC_PLAYER_APP = nil
   end
 end
 

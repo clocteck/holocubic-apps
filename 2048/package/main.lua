@@ -1087,6 +1087,9 @@ function APP.stop(reason)
     _G.APP_2048 = nil
   end
 
+  -- 从「游戏结束」画面按 HOME 退出时，show_game_over() 拿到的 snapshot
+  -- 只在 reset/再次刷新时才释放，stop 里漏了，反复进出会一直吃 PSRAM。
+  release_game_over_snapshot()
   if lv_clear then
     pcall(function() lv_clear() end)
   end

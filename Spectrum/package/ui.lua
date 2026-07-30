@@ -1200,6 +1200,15 @@ APP_STATE.stop = function()
       audio.stop()
     end
   end)
+
+  -- 清 UI 后再清全局 key：否则 canvas、时间标签、FFT 闭包和整份频谱状态
+  -- 都还挂在 _G.RING_BAR_SPEC_APP 上，退出后收不回来。
+  if lv_obj_clean and lv_scr_act then
+    pcall_fn(function() lv_obj_clean(lv_scr_act()) end)
+  end
+  if rawget(_G, "RING_BAR_SPEC_APP") == APP_STATE then
+    _G.RING_BAR_SPEC_APP = nil
+  end
 end
 
 return APP_STATE

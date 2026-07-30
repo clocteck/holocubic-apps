@@ -8,7 +8,7 @@ end
 DEVTOOLS = {}
 local APP = DEVTOOLS
 
-APP.VERSION = "2026-07-28-devtools-max-handlers-256-v7"
+APP.VERSION = "2026-07-29-devtools-clear-global-key-v8"
 APP.ROOT_PATH = "/sd"
 APP.APPS_PATH = "/sd/apps"
 APP.SERVICE_ID = "devtools"
@@ -2284,6 +2284,11 @@ function APP.stop(reason)
     pcall(function() timer:unregister() end)
   end
   APP.unregister_all_routes()
+  -- 清全局 key：_G.DEVTOOLS 会连带持有很大的内嵌 HTML 字符串，
+  -- 服务停掉且没被 autostart 立刻拉起时这块内存收不回来。
+  if rawget(_G, "DEVTOOLS") == APP then
+    _G.DEVTOOLS = nil
+  end
   print("[devtools] stop", text_or(reason, ""))
 end
 

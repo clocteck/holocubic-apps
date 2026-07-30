@@ -2,4 +2,4 @@ name = XiaoZhi AI
 kind = app
 entry = main.lua
 description = XiaoZhi voice core and wake module
-version = 1.0.3
+version = 1.0.4

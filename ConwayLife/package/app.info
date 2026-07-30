@@ -2,4 +2,4 @@ name = ConwayLife
 entry = main.lua
 icon = main.png
 description = Game of Life screensaver
-version = 0.0.1
+version = 0.0.2

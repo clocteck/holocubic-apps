@@ -1105,9 +1105,18 @@ function state.stop()
   if key and key.off then
     key.off()
   end
+  -- 先清 LVGL 对象再释放字体，否则残留对象仍指向已释放的字体指针。
+  if lv_obj_clean and lv_scr_act then
+    pcall(function() lv_obj_clean(lv_scr_act()) end)
+  end
   if WEATHER_FONT and lv_font_free then
     pcall(lv_font_free, WEATHER_FONT)
     WEATHER_FONT = nil
+  end
+  -- stop 后必须清全局单例 key：否则退出后整份状态（采样历史/闭包/canvas id）
+  -- 仍被 _G.__aida_monitor 持有无法回收，下次进入还会再调一遍旧实例的 stop。
+  if rawget(_G, "__aida_monitor") == state then
+    _G.__aida_monitor = nil
   end
 end
 

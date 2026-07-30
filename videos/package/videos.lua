@@ -273,6 +273,15 @@ function APP.shutdown(reason)
     controller_timer = nil
   end
 
+  -- 只停 Lua 定时器是不够的：LVGL 的 GIF 对象会自己继续解码下一帧。
+  -- shutdown 后若 app.exit() 延迟或失败，它会一直占 CPU 和解码缓冲。
+  if gif and gif ~= 0 and lv_gif_set_src then
+    pcall(function() lv_gif_set_src(gif, nil) end)
+  end
+  if lv_obj_clean and root then
+    pcall(function() lv_obj_clean(root) end)
+  end
+
   if rawget(_G, "VIDEOS_APP") == APP then
     _G.VIDEOS_APP = nil
   end

@@ -397,4 +397,15 @@ function APP.shutdown()
   stop_x_anim(left_slot.id)
   stop_x_anim(center_slot.id)
   stop_x_anim(right_slot.id)
+  tick_timer = nil
+  -- 三个 320x240 canvas 加上 label/背景是几百 KB，shutdown 里必须清掉；
+  -- 只停定时器的话，controller 退出时若 app.exit() 失败它们会一直驻留。
+  if lv_obj_clean and lv_scr_act then
+    pcall(function() lv_obj_clean(lv_scr_act()) end)
+  end
+  -- stop 后必须清全局单例 key：否则退出后整份状态（行情/历史数组/闭包/
+  -- LVGL 对象 id）仍被全局表持有无法回收，下次进入还会再调一遍旧实例的 stop。
+  if rawget(_G, "PHOTO_CANVAS_APP") == APP then
+    _G.PHOTO_CANVAS_APP = nil
+  end
 end

@@ -219,7 +219,9 @@ end
 local function write_text(path, value)
   if file and file.putcontents then
     local ok, result = pcall_fn(file.putcontents, path, value)
-    return ok and result ~= false
+    -- file.putcontents 的失败返回是 nil（README_LUA: `-> true|nil`），
+    -- `result ~= false` 会把 nil 当成功，SD 满/只读时 WebUI 会谎报「已保存」。
+    return ok and result and true or false
   end
   return false
 end
@@ -1306,9 +1308,18 @@ end
 local function start_web()
   local server = rawget(_G, "httpd")
   if not (server and server.start and server.dynamic) then return end
-  pcall_fn(server.stop)
-  pcall_fn(server.start, { webroot = "/sd", auto_index = server.INDEX_NONE, max_handlers = 16 })
-  local function route(method, path, handler) pcall_fn(server.dynamic, method, path, handler) end
+  -- httpd 是全局共享服务。这里绝不能 server.stop()——那会连带清掉
+  -- DevTools 和其它 service 的全部路由。start 保留（httpd 已在跑时是
+  -- 幂等的，devtools/launcher 也这么做），但容量要和它们一致用 256，
+  -- 否则会把全局 handler 池从 256 缩到 16。
+  pcall_fn(server.start, { webroot = "/sd", auto_index = server.INDEX_NONE, max_handlers = 256 })
+  APP.routes = {}
+  local function route(method, path, handler)
+    local ok, err = pcall_fn(server.dynamic, method, path, handler)
+    if ok and not err then
+      APP.routes[#APP.routes + 1] = { method = method, path = path }
+    end
+  end
   local function index() return web_response(WEB_HTML, "text/html; charset=utf-8") end
   local function face_api(req)
     if req and req.method == server.POST then
@@ -1515,7 +1526,14 @@ function APP.stop(reason)
     pcall_fn(key_mod.off, key_mod.RIGHT)
   end
   local server = rawget(_G, "httpd")
-  if APP.web_started and server and server.stop then pcall_fn(server.stop) end
+  if APP.web_started and server and server.unregister then
+    -- 只注销自己注册的路由；不要 stop 全局 httpd（见 start_web 注释）。
+    for i = #(APP.routes or {}), 1, -1 do
+      local item = APP.routes[i]
+      pcall_fn(server.unregister, item.method, item.path)
+    end
+  end
+  APP.routes = {}
   APP.web_started = false
   if lv_font_free then
     for _, handle in ipairs(APP.font_handles) do pcall_fn(lv_font_free, handle) end

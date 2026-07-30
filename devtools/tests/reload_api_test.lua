@@ -69,7 +69,7 @@ tmr = {
 
 assert(host_loadfile(main_path))()
 local first = assert(DEVTOOLS)
-assert(first.VERSION == "2026-07-15-devtools-folder-transfer-v6")
+assert(type(first.VERSION) == "string" and #first.VERSION > 0, "DEVTOOLS.VERSION must be a non-empty string")
 assert(first.generation == 1)
 assert(routes["POST /devtools/api/reload"] == first.api_reload)
 

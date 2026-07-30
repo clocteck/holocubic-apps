@@ -2,4 +2,4 @@ name = plane
 entry = main.lua
 icon = main.png
 description = plane war game
-version = 0.0.1
+version = 0.0.2

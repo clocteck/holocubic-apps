@@ -4,4 +4,4 @@ entry = main.lua
 allow_webui = true
 autostart_service = true
 description = 随时可以唤醒的小智后台服务
-version = 1.0.3
+version = 1.0.4

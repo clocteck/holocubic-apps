@@ -2,4 +2,4 @@ name = Weather
 kind = app
 entry = main.lua
 description = QWeather card with device settings
-version = 1.14
+version = 1.15
