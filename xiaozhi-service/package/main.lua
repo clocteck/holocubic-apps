@@ -42,8 +42,26 @@ if previous and previous.stop then
 end
 
 local APP_DIR = "/sd/apps/xiaozhi-service"
+local UI_APP_DIR = "/sd/apps/xiaozhi"
+XIAOZHI_UI_APP_DIR = UI_APP_DIR
+XIAOZHI_SERVICE_DIR = APP_DIR
+local SHARED_MODULES = {
+  activation = true,
+  audio = true,
+  identity = true,
+  mcp = true,
+  mic_diag = true,
+  protocol = true,
+  state = true,
+}
 
 local function load_app_module(name)
+  if SHARED_MODULES[name] then
+    local ok, mod = pcall(dofile, UI_APP_DIR .. "/" .. name .. ".lua")
+    if ok then return mod end
+    error("[xiaozhi-service] missing shared module " .. name
+      .. " from " .. UI_APP_DIR .. ": " .. tostring(mod or ""))
+  end
   return dofile(APP_DIR .. "/" .. name .. ".lua")
 end
 

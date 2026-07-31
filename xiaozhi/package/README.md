@@ -11,9 +11,11 @@
 ```json
 {
   "ota": {
-    "url": "https://your-xiaozhi-server/xiaozhi/ota/",
+    "url": "https://api.tenclass.net/xiaozhi/ota/",
     "enabled": true,
-    "force": false
+    "force": false,
+    "interval_ms": 3000,
+    "max_polls": 80
   },
   "websocket": {
     "url": "",
@@ -26,13 +28,57 @@
     "frame_duration": 60,
     "bitrate": 12000
   },
-  "wake_word": "你好小智"
+  "wake_word": "你好小智",
+  "timezone": "CST-8",
+  "ui": {
+    "gif_enabled": true,
+    "emotion_min_ms": 1000,
+    "type": "subtitle"
+  }
 }
 ```
 
 路径：`/sd/apps/xiaozhi/config.json`
 
-可通过顶层字段 `default_ui_style` 设置启动时的默认 UI 风格：`default` 为官方字幕风格，`wechat` 为微信气泡风格。运行时仍可使用按键长按切换。
+可通过 `ui.type` 设置启动时的前台 App UI 风格：`subtitle` 为字幕风格，`wechat` 为微信气泡风格。也可以填写自定义样式名，对应 `/sd/apps/xiaozhi/ui/<type>.lua`。`driver.lua` 和 `headless.lua` 是 UI 框架入口，不会出现在 WebUI 的样式下拉框中。
+
+若安装了 `xiaozhi-service`，推荐直接在它的 WebUI 中修改“主应用 UI”，会写回本文件。
+当 `xiaozhi` 以 standalone 非 IPC 模式运行时，它只发布前台 App 配置页，内容写入
+`/sd/apps/xiaozhi/config.json`；`service.json` 相关的后台唤醒、悬浮 UI 和退避 App
+仍由 `xiaozhi-service` 的 WebUI 管理。进入 IPC 模式后，`xiaozhi` 不再重复发布配置页。
+
+### 前台 UI 插件
+
+前台 App UI 插件放在：
+
+```text
+/sd/apps/xiaozhi/ui/<type>.lua
+```
+
+文件名即 `ui.type`，只允许字母、数字、下划线、点和横线。每个插件应返回 `{ new = function(cfg) ... end }`，`new` 返回的对象可以实现以下方法；未实现的方法会被驱动忽略：
+
+```lua
+return {
+  new = function(cfg)
+    local self = {}
+    function self:setup() end
+    function self:stop(reason) end
+    function self:on_state(state, old_state) end
+    function self:set_status(status) end
+    function self:show_notification(text, duration_ms) end
+    function self:set_emotion(emotion) end
+    function self:set_chat_message(role, content) end
+    function self:clear_chat_messages() end
+    function self:set_metrics(metrics) end
+    function self:update_status_bar(force) end
+    function self:set_view_mode(mode) end
+    function self:alert(status, message, emotion) end
+    return self
+  end,
+}
+```
+
+前台 UI 运行在小智 App 进程内，适合使用完整 LVGL 屏幕。后台悬浮 UI 不放在这里，见 `xiaozhi-service` 的 README。
 
 `audio` 控制设备上行 Opus 参数，并会原样用于 WebSocket `hello.audio_params`。自建服务端建议保持 `16000 Hz / 单声道 / 60 ms`。加载器也兼容服务端常用的 `audio_params` 名称，以及 `rate`、`frame_ms` 字段别名。
 

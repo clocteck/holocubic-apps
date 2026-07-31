@@ -6,6 +6,7 @@ if previous and previous.stop then
 end
 
 local APP_DIR = "/sd/apps/xiaozhi"
+XIAOZHI_UI_APP_DIR = APP_DIR
 
 local function load_app_module(name)
   return dofile(APP_DIR .. "/" .. name .. ".lua")
@@ -13,12 +14,29 @@ end
 
 local Config = load_app_module("config")
 local Runtime = load_app_module("runtime")
+local UiIpc = load_app_module("ui_ipc")
 
 local cfg = Config.load()
-local app = Runtime.new(cfg, load_app_module)
+local use_ipc = UiIpc.available()
+if not use_ipc and UiIpc.service_installed() then
+  if app and app.start_service then
+    pcall(function() app.start_service("xiaozhi-service") end)
+  end
+  use_ipc = true
+end
+
+local app = use_ipc and UiIpc.new(cfg) or Runtime.new(cfg, load_app_module)
 local app_api = rawget(_G, "app")
 
 XIAOZHI_APP = app
+if not use_ipc then
+  local ok_web, Web = pcall(load_app_module, "web")
+  if ok_web and Web and Web.new then
+    app.web = Web.new(app, cfg)
+    local web_ok, web_err = pcall(function() return app.web:start() end)
+    if not web_ok then print("[xiaozhi] web start failed", tostring(web_err or "")) end
+  end
+end
 app:start()
 
 if controller and controller.state and tmr and tmr.create then

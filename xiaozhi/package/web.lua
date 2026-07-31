@@ -81,34 +81,8 @@ local PAGE = [=[<!doctype html>
     <label class="field">界面类型
       <select id="appUiType"></select>
     </label>
-    <p class="hint">保存后重新打开前台生效。选项来自 /sd/apps/xiaozhi/ui 。</p>
-  </section>
-
-  <section class="card">
-    <b>后台服务 UI</b>
-    <!--p class="muted">这里写入 /sd/apps/xiaozhi-service/service.json，控制后台唤醒后的呈现方式。</p-->
-    <label class="check"><input id="wakeEnabled" type="checkbox">启用后台唤醒</label>
-    <div class="grid2">
-      <label class="field">呈现模式
-        <select id="serviceUiMode">
-          <option value="app">打开小智 App</option>
-          <option value="floating">悬浮显示</option>
-        </select>
-      </label>
-      <label class="field"></label>
-      <label class="field">悬浮界面类型
-        <select id="serviceUiType"></select>
-      </label>
-      <label class="field">悬浮角色
-        <select id="serviceUiCharacter"></select>
-      </label>
-      <p class="hint">保存后立即生效。选项来自 /sd/apps/xiaozhi-service/ui。</p>
-    </div>
-    <label class="field">退避 App
-      <div id="denyApps" class="checks"></div>
-    </label>
-    <p class="hint">勾选后，这些 App 在前台运行时会暂停小智后台唤醒/音频，避免资源冲突。</p>
-    <button id="saveUi">保存 UI 配置</button>
+    <p class="hint">保存后需重启应用生效。选项来自 /sd/apps/xiaozhi/ui 。</p>
+    <button id="saveUi">保存主应用 UI</button>
   </section>
 </main>
 <script>
@@ -117,10 +91,6 @@ let volume=100,volumeTimer=0,serverLoaded=false,uiLoaded=false;
 async function api(p,o){let r=await fetch(p,o);let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j}
 function optionLabel(v){return v==='window'?'小窗模式':(v==='subtitle'?'字幕模式':(v==='wechat'?'微信气泡':(v==='assistant'?'助手形象':v)))}
 function fillOptions(el,items,value,fallback){items=Array.isArray(items)?items:[];if(!items.length)items=[fallback||'subtitle'];el.innerHTML='';let seen={};items.forEach(v=>{v=String(v||'').trim();if(!v||seen[v])return;seen[v]=1;let o=document.createElement('option');o.value=v;o.textContent=optionLabel(v);el.appendChild(o)});if(value&&seen[value])el.value=value;else if(seen[fallback])el.value=fallback;else el.selectedIndex=0}
-function fillDenyApps(options,selected){let box=q('#denyApps');options=Array.isArray(options)?options:[];selected=selected||{};box.innerHTML='';options.forEach(item=>{let id=String((item&&item.id)||item||'').trim();if(!id)return;let name=String((item&&item.name)||id);let label=document.createElement('label');label.className='check';let input=document.createElement('input');input.type='checkbox';input.value=id;input.checked=selected[id]===true;let span=document.createElement('span');span.textContent=name===id?id:(name+' · '+id);label.appendChild(input);label.appendChild(span);box.appendChild(label)})}
-function collectDenyApps(){let out={};document.querySelectorAll('#denyApps input[type=checkbox]').forEach(i=>{if(i.checked)out[i.value]=true});return out}
-function syncServiceUiDisabled(){let floating=q('#serviceUiMode').value==='floating';q('#serviceUiType').disabled=!floating;q('#serviceUiCharacter').disabled=!floating||q('#serviceUiType').value!=='assistant'}
-async function pushWakeEnabled(v){try{let s=await api('./api/wake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:v})});q('#wakeEnabled').checked=s.wake_service_enabled===true;q('#message').textContent=s.wake_service_enabled?'后台唤醒已开启':'后台唤醒已关闭'}catch(e){q('#message').textContent=e.message;refresh()}}
 function showVolume(v){volume=Math.max(0,Math.min(100,Number(v)||0));q('#volumeSlider').value=String(volume);q('#volume').textContent=volume+'%'}
 function pushVolume(v){fetch('./api/volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({volume:v}),keepalive:true}).catch(()=>{})}
 function queueVolume(v,now){showVolume(v);clearTimeout(volumeTimer);if(now)pushVolume(volume);else volumeTimer=setTimeout(()=>pushVolume(volume),150)}
@@ -143,12 +113,6 @@ async function refresh(){
     }
     if(!uiLoaded){
       fillOptions(q('#appUiType'),s.ui_options&&s.ui_options.app,s.app_ui_type,'subtitle');
-      q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';
-      fillOptions(q('#serviceUiType'),s.ui_options&&s.ui_options.float,s.service_ui_type,'window');
-      fillOptions(q('#serviceUiCharacter'),s.ui_options&&s.ui_options.characters,s.service_ui_character,'xiaozhi_chibi');
-      fillDenyApps(s.deny_app_options,s.deny_apps);
-      q('#wakeEnabled').checked=s.wake_service_enabled===true;
-      syncServiceUiDisabled();
       uiLoaded=true;
     }
   }catch(e){
@@ -160,13 +124,10 @@ async function refresh(){
 q('#volumeSlider').oninput=e=>queueVolume(e.target.value,false);
 q('#volumeSlider').onchange=e=>queueVolume(e.target.value,true);
 q('#customToggle').onclick=()=>{let p=q('#customPanel'),open=p.hidden;p.hidden=!open;q('#customToggle').setAttribute('aria-expanded',String(open));if(open)q('#customOtaUrl').focus()};
-q('#serviceUiMode').onchange=syncServiceUiDisabled;
-q('#serviceUiType').onchange=syncServiceUiDisabled;
-q('#wakeEnabled').onchange=e=>pushWakeEnabled(e.target.checked);
 q('#saveCustom').onclick=async()=>{let b=q('#saveCustom');b.disabled=true;try{let s=await api('./api/server',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ota_url:q('#customOtaUrl').value,url:q('#customUrl').value,token:q('#customToken').value,version:Number(q('#customVersion').value)})});q('#message').textContent='自定义服务已保存，唤醒后连接';q('#server').textContent=s.url?'服务器：'+s.url:'OTA：'+s.ota_url;q('#customToken').value='';q('#customToken').placeholder=s.token_set?'已设置；留空将清除':'可选'}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
 q('#saveMac').onclick=async()=>{let b=q('#saveMac');b.disabled=true;try{let s=await api('./api/mac',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:q('#deviceMac').value})});q('#deviceMac').value=s.mac;q('#message').textContent=s.unchanged?'MAC 未变化':(s.pairing_required?'设备身份已修改，正在重新获取配对码':'设备身份已修改，正在重启服务');if(s.restarting)setTimeout(refresh,1800);else b.disabled=false}catch(e){q('#message').textContent=e.message;b.disabled=false}};
 q('#pair').onclick=async()=>{q('#pair').disabled=true;try{await api('./api/repair',{method:'POST'});q('#message').textContent='正在请求官方配对码…';setTimeout(refresh,1800)}catch(e){q('#message').textContent=e.message}finally{setTimeout(()=>q('#pair').disabled=false,2500)}};
-q('#saveUi').onclick=async()=>{let b=q('#saveUi');b.disabled=true;try{let s=await api('./api/ui',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_ui_type:q('#appUiType').value,service_ui_mode:q('#serviceUiMode').value,service_ui_type:q('#serviceUiType').value,service_ui_character:q('#serviceUiCharacter').value,deny_apps:collectDenyApps()})});q('#message').textContent='UI 配置已保存，已立即生效';q('#appUiType').value=s.app_ui_type;q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';q('#serviceUiType').value=s.service_ui_type;q('#serviceUiCharacter').value=s.service_ui_character;if(s.deny_apps)fillDenyApps(s.deny_app_options,s.deny_apps);syncServiceUiDisabled()}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
+q('#saveUi').onclick=async()=>{let b=q('#saveUi');b.disabled=true;try{let s=await api('./api/ui',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_ui_type:q('#appUiType').value})});q('#message').textContent='主应用 UI 已保存，已立即生效';q('#appUiType').value=s.app_ui_type}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
 refresh();
 setInterval(refresh,2000);
 </script>
@@ -243,15 +204,7 @@ function M.new(runtime, cfg)
 
     local function ui(req)
       local doc = request_json(req)
-      local saved, result = runtime:set_ui_config(doc.app_ui_type, doc.service_ui_mode, doc.service_ui_type, doc.service_ui_character, doc.deny_apps)
-      if not saved then return json_response("400 Bad Request", { ok = false, error = result }) end
-      result.ok = true
-      return json_response("200 OK", result)
-    end
-
-    local function wake(req)
-      local doc = request_json(req)
-      local saved, result = runtime:set_wake_enabled(doc.enabled == true)
+      local saved, result = runtime:set_app_ui_config(doc.app_ui_type)
       if not saved then return json_response("400 Bad Request", { ok = false, error = result }) end
       result.ok = true
       return json_response("200 OK", result)
@@ -300,7 +253,6 @@ function M.new(runtime, cfg)
       register(httpd.POST, base .. "/api/volume", volume)
       register(httpd.POST, base .. "/api/server", server)
       register(httpd.POST, base .. "/api/ui", ui)
-      register(httpd.POST, base .. "/api/wake", wake)
       register(httpd.POST, base .. "/api/mac", mac)
       register(httpd.POST, base .. "/api/repair", repair)
     end

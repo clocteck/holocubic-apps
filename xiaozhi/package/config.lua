@@ -14,7 +14,7 @@ M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
 M.TIMEZONE = "CST-8"
-M.DEFAULT_UI_STYLE = "default"
+M.UI_TYPE = nil
 M.ASSET_DIR = M.APP_DIR .. "/assets"
 M.EMOJI_GIF_DIR = M.ASSET_DIR .. "/emojis/gif"
 M.EMOJI_PNG_DIR = M.ASSET_DIR .. "/emojis/png"
@@ -160,6 +160,7 @@ local function apply_audio(audio)
   local channels = tonumber(audio.channels)
   local frame_ms = tonumber(audio.frame_duration or audio.frame_ms)
   local bitrate = tonumber(audio.bitrate)
+  local volume = tonumber(audio.volume)
   if rate and rate > 0 then
     M.AUDIO.rate = math.floor(rate)
   end
@@ -171,6 +172,9 @@ local function apply_audio(audio)
   end
   if bitrate and bitrate > 0 then
     M.AUDIO.bitrate = math.floor(bitrate)
+  end
+  if volume then
+    M.AUDIO.volume = math.max(0, math.min(100, math.floor(volume)))
   end
 end
 
@@ -198,13 +202,15 @@ local function apply_ota(ota)
   end
 end
 
-local function apply_default_ui_style(value)
+local function apply_ui_config(ui)
+  if type(ui) ~= "table" then return end
+  local value = ui.type
   if type(value) == "string" then
     value = value:match("^%s*(.-)%s*$"):lower()
   end
-  if value == "default" or value == "wechat" then
-    M.DEFAULT_UI_STYLE = value
-    M.default_ui_style = value
+  if type(value) == "string" and value ~= "" and #value <= 48 and value:match("^[%w_.%-]+$") then
+    M.UI_TYPE = value
+    M.UI.type = value
   end
 end
 
@@ -219,8 +225,8 @@ function M.load()
     apply_websocket(obj.websocket)
     apply_ota(obj.ota)
     apply_audio(obj.audio or obj.audio_params)
-    apply_default_ui_style(obj.default_ui_style)
-    print("[xiaozhi] default ui style", tostring(M.DEFAULT_UI_STYLE))
+    apply_ui_config(obj.ui)
+    apply_ui_config({ type = obj.ui_type })
     if type(obj.wake_word) == "string" and obj.wake_word ~= "" then
       M.WAKE_WORD = obj.wake_word
     end
@@ -238,7 +244,7 @@ function M.load()
   local version = pick_number(ws_block, "version")
   local wake_word = pick_string(raw, "wake_word")
   local timezone = pick_string(raw, "timezone")
-  local default_ui_style = pick_string(raw, "default_ui_style")
+  local ui_type = pick_string(raw, "ui_type")
 
   if url and url:match("^wss?://") then
     M.websocket.url = url
@@ -255,8 +261,7 @@ function M.load()
   if timezone and timezone ~= "" then
     M.TIMEZONE = timezone
   end
-  apply_default_ui_style(default_ui_style)
-  print("[xiaozhi] default ui style", tostring(M.DEFAULT_UI_STYLE))
+  apply_ui_config({ type = ui_type })
   if ota_block ~= "" then
     local ota_url = pick_string(ota_block, "url")
     local enabled = pick_bool(ota_block, "enabled")
@@ -279,6 +284,7 @@ function M.load()
       channels = pick_number(audio_block, "channels"),
       frame_duration = pick_number(audio_block, "frame_duration") or pick_number(audio_block, "frame_ms"),
       bitrate = pick_number(audio_block, "bitrate"),
+      volume = pick_number(audio_block, "volume"),
     })
   end
 

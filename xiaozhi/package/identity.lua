@@ -3,6 +3,8 @@ local M = {}
 local DEFAULT_BOARD_TYPE = "bread-compact-wifi-lcd"
 local DEFAULT_BOARD_NAME = "bread-compact-wifi-lcd"
 local DEFAULT_FW_VERSION = "1.7.5"
+local DEVICE_MAC_DIR = "/sd/xiaozhi-service"
+local DEVICE_MAC_PATH = DEVICE_MAC_DIR .. "/device_mac.json"
 local cached_mac = nil
 
 local function json_escape(text)
@@ -30,6 +32,84 @@ local function normalize_mac(text)
   return table.concat(out, ":")
 end
 
+local function read_saved_mac()
+  if not file or not file.getcontents then
+    return nil
+  end
+  local ok, text = pcall(file.getcontents, DEVICE_MAC_PATH)
+  if not ok then
+    return nil
+  end
+  local mac = nil
+  if sjson and sjson.decode then
+    local decoded_ok, doc = pcall(sjson.decode, text or "")
+    if decoded_ok and type(doc) == "table" then
+      mac = doc.mac
+    end
+  end
+  if not mac then
+    mac = tostring(text or ""):match('"mac"%s*:%s*"([^"]+)"')
+  end
+  return normalize_mac(mac)
+end
+
+local function entropy_seed()
+  local seed = 1
+  if millis then
+    local ok, value = pcall(millis)
+    if ok and tonumber(value) then
+      seed = seed + math.floor(tonumber(value))
+    end
+  end
+  if sys and sys.usage then
+    local ok, usage = pcall(sys.usage)
+    if ok and type(usage) == "table" then
+      seed = seed + math.floor(tonumber(usage.heap_free) or 0)
+      seed = seed + math.floor(tonumber(usage.heap_used) or 0) * 3
+    end
+  end
+  local address = tostring({}):match("0x(%x+)")
+  if address then
+    seed = seed + (tonumber(address:sub(-8), 16) or 0)
+  end
+  return (seed % 2147483646) + 1
+end
+
+local function generate_mac()
+  local state = entropy_seed()
+  local bytes = {}
+  for i = 1, 6 do
+    state = (state * 48271) % 2147483647
+    bytes[i] = state % 256
+  end
+  bytes[1] = math.floor(bytes[1] / 4) * 4 + 2
+  local out = {}
+  for i = 1, 6 do
+    out[i] = string.format("%02x", bytes[i])
+  end
+  return table.concat(out, ":")
+end
+
+local function saved_or_new_mac()
+  local mac = read_saved_mac()
+  if mac then
+    return mac
+  end
+  if not file or not file.putcontents then
+    return nil
+  end
+  mac = generate_mac()
+  if file.mkdir then
+    pcall(file.mkdir, DEVICE_MAC_DIR)
+  end
+  local body = '{"mac":"' .. mac .. '"}\n'
+  local ok, saved = pcall(file.putcontents, DEVICE_MAC_PATH, body)
+  if not ok or not saved then
+    return nil
+  end
+  return read_saved_mac()
+end
+
 function M.device_id()
   if cached_mac then
     return cached_mac
@@ -54,7 +134,36 @@ function M.device_id()
       end
     end
   end
+  local mac = saved_or_new_mac()
+  if mac then
+    cached_mac = mac
+    return cached_mac
+  end
   return nil
+end
+
+function M.set_device_id(mac)
+  local hex = tostring(mac or ""):lower():gsub("[^0-9a-f]", "")
+  if #hex ~= 12 then
+    return nil, "MAC 地址格式无效"
+  end
+  mac = normalize_mac(mac)
+  if not mac then
+    return nil, "MAC 地址格式无效"
+  end
+  if not file or not file.putcontents then
+    return nil, "设备身份存储接口不可用"
+  end
+  if file.mkdir then
+    pcall(file.mkdir, DEVICE_MAC_DIR)
+  end
+  local body = '{"mac":"' .. mac .. '"}\n'
+  local ok, saved = pcall(file.putcontents, DEVICE_MAC_PATH, body)
+  if not ok or not saved then
+    return nil, "设备 MAC 保存失败"
+  end
+  cached_mac = mac
+  return mac
 end
 
 function M.client_id(mac)

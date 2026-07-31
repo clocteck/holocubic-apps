@@ -19,5 +19,9 @@
   },
   "wake_word": "你好小智",
   "timezone": "CST-8",
-  "default_ui_style": "default"
+  "ui": {
+    "gif_enabled": true,
+    "emotion_min_ms": 1000,
+    "type": "subtitle"
+  }
 }

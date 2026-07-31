@@ -3,5 +3,5 @@ kind = service
 entry = main.lua
 allow_webui = true
 autostart_service = true
-description = 随时可以唤醒的小智后台服务
-version = 1.0.3
+description = XiaoZhi background resource owner and IPC service
+version = 1.1.0
