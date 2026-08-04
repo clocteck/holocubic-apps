@@ -11,6 +11,7 @@ HOLO_TIME_APP = {
   SETTINGS_PATH = "/sd/apps/settings.json",
   CONFIG_PATH = "/sd/apps/NixieClock/config.json",
   DEFAULT_TIMEZONE = "CST-8",
+  DEFAULT_WEATHER_LOCATION = "Shanghai",
   NTP_SERVER = "ntp.aliyun.com",
   WEATHER_NOW_PATH = "/v1/weather/now",
   WEATHER_3D_PATH = "/v1/weather/3d",
@@ -170,6 +171,13 @@ local function decode_json(raw)
   return nil
 end
 
+local function encode_json(value)
+  local codec = rawget(_G, "json") or rawget(_G, "sjson")
+  if not (codec and codec.encode) then return nil end
+  local ok, raw = pcall_fn(codec.encode, value)
+  return ok and type(raw) == "string" and raw or nil
+end
+
 local function trim(value)
   return tostring(value or ""):match("^%s*(.-)%s*$") or ""
 end
@@ -285,6 +293,18 @@ local function load_settings()
   state.timezone = trim(doc.timezone)
   if state.timezone == "" then state.timezone = APP.DEFAULT_TIMEZONE end
   state.weather_address = trim(doc.weather_address or doc.weatherAddress)
+  if state.weather_address == "" then
+    state.weather_address = APP.DEFAULT_WEATHER_LOCATION
+    doc.weather_address = state.weather_address
+    doc.weather_location_address = nil
+    doc.weather_location_raw = nil
+    doc.weather_location_id = nil
+    doc.weather_city = nil
+    local encoded = encode_json(doc)
+    if not encoded or not write_text(APP.SETTINGS_PATH, encoded) then
+      warn("default weather address write failed", APP.SETTINGS_PATH)
+    end
+  end
   state.weather_location_id = trim(doc.weather_location_id)
   local city = state.weather_address ~= "" and state.weather_address or trim(doc.weather_city or doc.city_name or doc.city)
   if city ~= "" then

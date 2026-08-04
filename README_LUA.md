@@ -193,6 +193,33 @@ end)
 
 `cfg` 常用字段：`mode`、`rate`、`bits`、`channel`、`format`、`buffer_count`、`buffer_len`、`data_out_pin`。
 
+### uart 串口读取
+
+`uart` 仅供前台应用使用，当前串口 id 固定为 `0`。`uart.read()` 是非阻塞读取，
+没有可用数据时返回 `nil`：
+
+```lua
+uart.setup(0, 115200)
+
+local data = uart.read(0)       -- 读取当前全部可用数据
+local part = uart.read(0, 32)   -- 最多读取 32 字节
+local all  = uart.read(0, "*a") -- 读取当前全部可用数据
+local line = uart.read(0, "*l") -- 读取到换行符或当前可用片段
+```
+
+也可以按换行符异步接收，回调数据包含结尾的 `\n`：
+
+```lua
+uart.on("data", "\n", function(data)
+  print("uart:", data)
+end)
+
+-- 取消监听
+uart.on("data")
+```
+
+`uart.read()` 和 `uart.on()` 会消费同一串口输入，不要同时使用。
+
 ### mqtt
 
 常用事件：`"connect"`、`"connfail"`、`"offline"`、`"message"`、`"suback"`、`"unsuback"`、`"puback"`。
@@ -481,9 +508,73 @@ ipc.listen("ble-controller", nil)
 `ipc.endpoints()` 可查看当前 endpoint；同名 endpoint 被其它 Lua 状态机持有时，
 `ipc.listen()` 返回 `nil, err`。
 
+应用、Service 和 Launcher 切换时，应用管理器会向固定 endpoint `app-lifecycle`
+发送事件。进入应用依次收到 `launcher.stopped`、`app.started`，退出应用依次收到
+`app.stopped`、`launcher.started`；Service 使用 `service.started` 和
+`service.stopped`。payload 是包含 `id` 和 `instance_id` 的 JSON，Launcher 固定为
+`{"id":"launcher","instance_id":0}`：
+
+```lua
+ipc.listen("app-lifecycle", function(topic, payload, timestamp_ms)
+  local event = json.decode(payload)
+  print(topic, event.id, event.instance_id, timestamp_ms)
+end)
+```
+
 服务和 WebUI 相关接口按需使用：`app.services()`、`app.start_service(id)`、`app.stop_service(id_or_instance)`、`app.route_base()`、`app.set_home_exit(enabled)`。WebUI 是否可用由底层根据当前 app 注册的 `route_base .. "/"` 首页路由自动识别。
 `app.start_service(id)` 遇到同 id service 已运行时会重启旧实例。
 manifest 设置 `autostart_service=true` 的 Service 会被视为常驻服务；退出或停止后，应用管理器会在约 2 秒内再次拉起。需要长期停用时应关闭该 manifest 配置或卸载对应 Service。
+
+### Service UI 与 HOME
+
+HOME 只交给最上层可见 Service Canvas 的 owner。该 Service 注册了匹配的
+`key.on(key.HOME, ...)` 或 `app.on("key", ...)` 时，整次 HOME 手势会投递给
+Service，Canvas 保持显示且前台 App 不会同时收到；没有监听时由固件隐藏 Canvas。
+
+```lua
+local canvas = service_ui.acquire(0, 0, 320, 240)
+service_ui.show(canvas)
+
+key.on(key.HOME, function(evt_type, timestamp_ms)
+  if evt_type == key.SHORT then
+    -- Service 自己处理；需要关闭时主动调用 service_ui.hide(canvas)。
+    do_something()
+  end
+end)
+
+-- 取消监听后，HOME 恢复为由固件隐藏 Canvas。
+key.off(key.HOME)
+```
+
+Service 可收到 `key.START`、`key.SHORT`、`key.LONG_START`、`key.LONG_REPEAT` 和
+`key.LONG_END`。即使 `key.on()` 只指定其中一种事件类型，Service 也会接管整次
+HOME 手势；回调异步运行在 Service Lua 任务中，固件不会同步等待 Lua 返回。
+
+### device 设备凭据
+
+前台 App 和后台 Service 都可以使用 `device.credentials`。设备编号与设备密钥作为一条记录整体保存到 NVS，Flash 访问由系统 worker 执行。
+
+```lua
+local ok, err = device.credentials.set({
+  device_id = "device-001",
+  device_key = "secret-key"
+})
+
+local credentials, load_err = device.credentials.get()
+if credentials then
+  print(credentials.device_id)
+elseif load_err then
+  print("load failed", load_err)
+else
+  -- 首次开机或已经清除
+end
+
+local cleared, clear_err = device.credentials.clear()
+```
+
+- `set(credentials) -> true | nil, err`：`device_id`、`device_key` 必须同时为 1 字节以上的字符串，长度上限分别为 64、256 字节。
+- `get() -> credentials | nil [, err]`：首次开机或已清除时只返回 `nil`；存储错误返回 `nil, err`。
+- `clear() -> true | nil, err`：不存在凭据时也返回 `true`。
 
 ### sys 设备控制
 
@@ -532,16 +623,7 @@ key.on(key.HOME, function(evt_type)
 end)
 ```
 
-### nes
 
-- `nes.start(path[, opts]) -> true|nil, err`
-- `nes.stop() -> true`
-- `nes.state() -> table`
-- `nes.input.set_button(player, button_mask, pressed) -> bool`
-- `nes.input.set_mask(player, mask) -> bool`
-- `nes.input.clear([player]) -> true`
-
-常量：`nes.PLAYER_1`、`nes.PLAYER_2`、`nes.BTN_A`、`nes.BTN_B`、`nes.BTN_SELECT`、`nes.BTN_START`、`nes.BTN_UP`、`nes.BTN_DOWN`、`nes.BTN_LEFT`、`nes.BTN_RIGHT`。
 
 ### 全局辅助函数
 

@@ -622,10 +622,25 @@ function M.new(cfg, load_module)
     return out
   end
 
+  local function default_deny_apps()
+    return {
+      Spectrum = true,
+      mp3_player = true,
+      ["holo-retro-go"] = true,
+      FluidPendant = true,
+    }
+  end
+
+  local function default_service_config()
+    return { enabled = true, ui_mode = "app", deny_apps = default_deny_apps() }
+  end
+
   local function read_service_config()
-    if not file or not file.getcontents then return {} end
+    if not file or not file.getcontents then return default_service_config() end
     local ok, raw = pcall(file.getcontents, "/sd/apps/xiaozhi-service/service.json")
-    return decode_json(ok and raw or "{}") or { enabled = true, ui_mode = "app", deny_apps = {} }
+    local doc = decode_json(ok and raw or "{}") or default_service_config()
+    if type(doc.deny_apps) ~= "table" then doc.deny_apps = default_deny_apps() end
+    return doc
   end
 
   local function current_deny_apps()
@@ -651,11 +666,10 @@ function M.new(cfg, load_module)
         end
       end
     end
-    add("videos", "视频")
-    add("holo-retro-go", "Holo Retro Go")
-    add("mp3_player", "MP3 Player")
     add("Spectrum", "Spectrum")
-    add("2048", "2048")
+    add("mp3_player", "MP3 Player")
+    add("holo-retro-go", "Holo Retro Go")
+    add("FluidPendant", "FluidPendant")
     for id in pairs(deny_apps or {}) do add(id, id) end
     table.sort(options, function(a, b) return tostring(a.id) < tostring(b.id) end)
     return options
@@ -765,7 +779,7 @@ function M.new(cfg, load_module)
     end, "配置")
     if not saved then return false, err end
     local service_saved, service_err = update_json_file("/sd/apps/xiaozhi-service/service.json",
-      { enabled = true, ui_mode = "app", deny_apps = {} }, function(doc)
+      default_service_config(), function(doc)
         doc.enabled = doc.enabled ~= false
         doc.ui_mode = service_ui_mode
         doc.ui_type = service_ui_type
@@ -790,12 +804,12 @@ function M.new(cfg, load_module)
   function self:set_wake_enabled(enabled)
     enabled = enabled == true
     local saved, err = update_json_file("/sd/apps/xiaozhi-service/service.json",
-      { enabled = true, ui_mode = "app", deny_apps = {} }, function(doc)
+      default_service_config(), function(doc)
         doc.enabled = enabled
         doc.ui_mode = doc.ui_mode or "app"
         doc.ui_type = doc.ui_type or "window"
         doc.ui_character = doc.ui_character or "xiaozhi_chibi"
-        doc.deny_apps = type(doc.deny_apps) == "table" and doc.deny_apps or {}
+        doc.deny_apps = type(doc.deny_apps) == "table" and doc.deny_apps or default_deny_apps()
       end, "服务配置")
     if not saved then return false, err end
     return true, { wake_service_enabled = enabled }

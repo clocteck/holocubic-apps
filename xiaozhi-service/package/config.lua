@@ -1,5 +1,16 @@
 local M = {}
 
+local function default_deny_apps()
+  return {
+    Spectrum = true,
+    mp3_player = true,
+    ["holo-retro-go"] = true,
+    FluidPendant = true,
+  }
+end
+
+M.DEFAULT_DENY_APPS = default_deny_apps()
+
 M.VERSION = "2026-06-24-xiaozhi-lua-port-v2"
 M.FIRMWARE_VERSION = "1.7.5"
 M.BOARD_TYPE = "bread-compact-wifi-lcd"
@@ -97,6 +108,7 @@ M.ota = {
 
 M.wake_service = {
   enabled = false,
+  deny_apps = default_deny_apps(),
 }
 M.UI_MODE = "app"
 
@@ -162,7 +174,11 @@ local function read_wake_service_config()
   local raw = read_text("/sd/apps/xiaozhi-service/service.json")
   local obj = raw and decode_json(raw) or nil
   if type(obj) ~= "table" then
-    return { enabled = true, ui_mode = "app", deny_apps = {} }
+    return {
+      enabled = true,
+      ui_mode = "app",
+      deny_apps = default_deny_apps(),
+    }
   end
   return obj
 end
@@ -237,6 +253,13 @@ local apply_ui_config
 local function apply_wake_service(wake_service)
   if type(wake_service) == "table" and wake_service.enabled ~= nil then
     M.wake_service.enabled = wake_service.enabled and true or false
+  end
+  if type(wake_service) == "table" and type(wake_service.deny_apps) == "table" then
+    local deny_apps = {}
+    for app_id, enabled in pairs(wake_service.deny_apps) do
+      if type(app_id) == "string" and enabled == true then deny_apps[app_id] = true end
+    end
+    M.wake_service.deny_apps = deny_apps
   end
   local mode = type(wake_service) == "table" and wake_service.ui_mode or nil
   if mode == "floating" or mode == "service_ui" then

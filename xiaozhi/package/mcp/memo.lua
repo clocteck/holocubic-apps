@@ -1,6 +1,6 @@
 local M = {}
 
-local APP_ID = "assistant"
+local APP_ID = "time-calendar-weather-memo"
 local APP_DIR = "/sd/apps/" .. APP_ID
 local MEMO_FILE = APP_DIR .. "/memos.json"
 
@@ -135,6 +135,32 @@ local function normalize_memos(value)
   return out
 end
 
+local reload_error_reported = false
+
+local function notify_calendar_reload()
+  if not ipc or not ipc.send then
+    if not reload_error_reported then
+      reload_error_reported = true
+      print("[xiaozhi] ERROR: calendar memo reload IPC unavailable; memo was saved but the UI may remain stale")
+    end
+    return false
+  end
+  local ok, sent, send_err = pcall(function()
+    return ipc.send(APP_ID, "memos.reload", "{}")
+  end)
+  if not ok or not sent then
+    if not reload_error_reported then
+      reload_error_reported = true
+      print("[xiaozhi] ERROR: calendar memo reload IPC failed: "
+        .. tostring((ok and send_err) or sent or "endpoint unavailable")
+        .. "; memo was saved but the UI may remain stale")
+    end
+    return false
+  end
+  reload_error_reported = false
+  return true
+end
+
 local function read_memos()
   local raw = read_text(MEMO_FILE)
   local doc = decode_json(raw)
@@ -154,6 +180,7 @@ local function save_memos(memos)
   if not ok then
     return nil, write_err
   end
+  notify_calendar_reload()
   return true
 end
 

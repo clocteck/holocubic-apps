@@ -17,10 +17,18 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - `"app"`：唤醒时记录当前前台应用并启动 `/sd/apps/xiaozhi`，前台 app 只通过 IPC 呈现 UI；对话回到待命后自动跳回唤醒前应用。
 - `"floating"`：服务通过 `xiaozhi-service/ui.lua` 进入 UI 驱动，加载 `/sd/apps/xiaozhi-service/ui/<type>.lua`，并用固件 `service_ui` API 绘制悬浮 UI；服务启动时不显示，只有唤醒、验证码、对话或错误时显示。
 
-`deny_apps` 中的前台应用会独占性能、麦克风或扬声器。启动这些应用前 Launcher 会停止
-小智服务；绕过 Launcher 启动时，小智也会检测真实前台应用并自行退出。返回 Launcher
-后，只要 `enabled` 仍为 `true`，服务会自动恢复。MCP 的应用校验、结果返回和延迟启动
-流程保持不变。
+`deny_apps` 中的前台应用会独占性能、麦克风或扬声器。服务监听固件
+`app-lifecycle` IPC，并在 `app.started` 时静默暂停小智音频、在 `launcher.started` 或进入
+非退避 App 时恢复。自动退避不会播放告别语音。Service runtime 不会退出，因此不会触发常驻服务的自动重启。
+老固件没有生命周期 IPC 时会每约 10 秒从 `app.list()` 核对一次前台 App，并向串口输出英文错误，
+但不会中止服务。MCP 的应用校验、结果返回和延迟启动流程保持不变。
+
+唤醒或讲话期间短按 HOME 会停止当前录音/回答，通过 `listen.detect` 的 `[device_call]`
+入口请求服务端直接合成“好的，我先退下了”，并播放当前小智 TTS 音色返回的语音，
+随后回到待命并隐藏悬浮 UI；
+服务端请求失败或 15 秒超时时会向串口输出英文 ERROR，并静默退出当前唤醒状态。
+前台 App UI 模式会在 Service 进入待命后退出或返回唤醒前应用。空闲且悬浮 Canvas
+不可见时，HOME 仍由 Launcher 或当前前台 App 处理。
 
 ## API 配置
 
@@ -50,11 +58,10 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
   "ui_type": "window",
   "ui_character": "xiaozhi_chibi",
   "deny_apps": {
-    "videos": true,
-    "holo-retro-go": true,
-    "mp3_player": true,
     "Spectrum": true,
-    "2048": true
+    "mp3_player": true,
+    "holo-retro-go": true,
+    "FluidPendant": true
   }
 }
 ```
@@ -65,7 +72,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - `ui_mode`：`"app"` 表示唤醒后打开小智前台 App；`"floating"` 表示使用悬浮 UI。
 - `ui_type`：后台悬浮 UI 类型，对应 `/sd/apps/xiaozhi-service/ui/<type>.lua`。当前内置 `window` 小窗模式、`subtitle` 字幕模式、`wechat` 微信气泡、`assistant` 助手形象。
 - `ui_character`：`assistant` 样式使用的角色资源名，对应 `/sd/apps/xiaozhi-service/ui/character/<name>.rgb565`。
-- `deny_apps`：这些前台应用运行时暂停或停止小智服务，避免音频、性能或输入冲突。
+- `deny_apps`：这些前台应用运行时静默暂停小智服务，避免音频、性能或输入冲突；默认是 `Spectrum`、`mp3_player`、`holo-retro-go`、`FluidPendant`。
 
 服务 WebUI 提供两个 UI 配置区：
 
@@ -95,6 +102,13 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - `device.set_brightness`：设置屏幕亮度，范围 `0` 到 `100`。
 - `device.set_wifi_ap`：开启或关闭 Wi-Fi AP 热点模式。
 - `device.set_bluetooth`：开启或关闭蓝牙手柄服务，并返回当前蓝牙状态。
+- `memo.get`：读取 `/sd/apps/time-calendar-weather-memo/memos.json` 的三条备忘录。
+- `memo.set`：修改指定序号的一条备忘录。
+- `memo.set_all`：一次替换全部三条备忘录。
+
+备忘录写入成功后会向 `time-calendar-weather-memo` endpoint 发送 `memos.reload`，
+使正在前台运行的日历立即刷新。没有 IPC 或日历未运行时文件仍会保存，并在下次进入
+应用时加载；串口会输出英文兼容性提示。
 
 服务端必须支持小智协议的 MCP 消息转发，并在智能体中启用设备工具调用。启动应用会在工具结果发回后延迟执行，避免切换应用导致应答丢失。
 

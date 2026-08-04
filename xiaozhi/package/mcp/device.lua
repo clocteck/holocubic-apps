@@ -606,8 +606,17 @@ local function installed_apps()
 end
 
 local function read_wake_service_config()
-  return decode_json(read_text("/sd/apps/xiaozhi-service/service.json"))
-    or { enabled = true, ui_mode = "app", deny_apps = {} }
+  local cfg = decode_json(read_text("/sd/apps/xiaozhi-service/service.json"))
+    or { enabled = true, ui_mode = "app" }
+  if type(cfg.deny_apps) ~= "table" then
+    cfg.deny_apps = {
+      Spectrum = true,
+      mp3_player = true,
+      ["holo-retro-go"] = true,
+      FluidPendant = true,
+    }
+  end
+  return cfg
 end
 
 local function app_allows_wake_service(app_id)

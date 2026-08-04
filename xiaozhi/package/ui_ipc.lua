@@ -82,6 +82,8 @@ function M.new(cfg)
     last_emotion = nil,
     last_status = nil,
     ipc_listening = false,
+    home_exit_requested = false,
+    home_exit_timer = nil,
   }
 
   local function control(action, value)
@@ -123,6 +125,15 @@ function M.new(cfg)
     if type(snapshot.status) == "string" and snapshot.status ~= "" and snapshot.status ~= self.last_status then
       self.last_status = snapshot.status
       self.ui:set_status(snapshot.status)
+    end
+    if state == "idle" and self.home_exit_requested then
+      self.home_exit_requested = false
+      if self.home_exit_timer then
+        pcall(function() self.home_exit_timer:stop() end)
+        pcall(function() self.home_exit_timer:unregister() end)
+        self.home_exit_timer = nil
+      end
+      if app and app.exit then pcall(app.exit) end
     end
   end
 
@@ -198,12 +209,39 @@ function M.new(cfg)
       local down = key.DOWN or rawget(_G, "KEY_DOWN")
       local left = key.LEFT or rawget(_G, "KEY_LEFT")
       local right = key.RIGHT or rawget(_G, "KEY_RIGHT")
+      local home = key.HOME or rawget(_G, "KEY_HOME")
       local short = key.SHORT or rawget(_G, "KEY_EVENT_SHORT")
       local start = key.START or rawget(_G, "KEY_EVENT_START")
       local function fire(evt) return evt == short or evt == start end
       if down then pcall(function() key.on(down, function(evt) if fire(evt) then control("toggle") end end) end) end
       if left then pcall(function() key.on(left, function(evt) if fire(evt) then control("start", "manual") end end) end) end
       if right then pcall(function() key.on(right, function(evt) if fire(evt) then control("stop") end end) end) end
+      if home then
+        pcall(function()
+          key.on(home, function(evt)
+            if evt ~= short or self.home_exit_requested then return end
+            self.home_exit_requested = true
+            local transport_ok, accepted = control("dismiss")
+            if transport_ok == false or accepted == false then
+              print("[xiaozhi-ui] ERROR: HOME dismiss control failed; exiting foreground UI")
+              self.home_exit_requested = false
+              if app and app.exit then pcall(app.exit) end
+              return
+            end
+            if tmr and tmr.create then
+              self.home_exit_timer = tmr.create()
+              self.home_exit_timer:alarm(16000, tmr.ALARM_SINGLE, function(instance)
+                pcall(function() instance:unregister() end)
+                self.home_exit_timer = nil
+                if not self.home_exit_requested then return end
+                self.home_exit_requested = false
+                print("[xiaozhi-ui] ERROR: HOME dismiss timeout; exiting foreground UI")
+                if app and app.exit then pcall(app.exit) end
+              end)
+            end
+          end)
+        end)
+      end
     end
     return true
   end
@@ -223,10 +261,17 @@ function M.new(cfg)
       pcall(function() self.timer:unregister() end)
       self.timer = nil
     end
+    if self.home_exit_timer then
+      pcall(function() self.home_exit_timer:stop() end)
+      pcall(function() self.home_exit_timer:unregister() end)
+      self.home_exit_timer = nil
+    end
+    self.home_exit_requested = false
     if key and key.off then
       pcall(function() key.off(key.DOWN or rawget(_G, "KEY_DOWN")) end)
       pcall(function() key.off(key.LEFT or rawget(_G, "KEY_LEFT")) end)
       pcall(function() key.off(key.RIGHT or rawget(_G, "KEY_RIGHT")) end)
+      pcall(function() key.off(key.HOME or rawget(_G, "KEY_HOME")) end)
     end
     self.ui:stop()
     print("[xiaozhi-ui] stop", reason or "")

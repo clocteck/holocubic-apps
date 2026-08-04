@@ -11,6 +11,7 @@
 
     SETTINGS_PATH = "/sd/apps/settings.json",
     DEFAULT_TIMEZONE = "CST-8",
+    DEFAULT_WEATHER_LOCATION = "Shanghai",
     WEATHER_NOW_PATH = "/v1/weather/now",
     WEATHER_3D_PATH = "/v1/weather/3d",
     WEATHER_CITY_PATH = "/v1/weather/cities",
@@ -538,7 +539,21 @@
 
     APP.LANGUAGE, APP.WEATHER_API_LANG = normalize_language(doc.language or doc.locale or doc.lang)
 
-    apply_weather_address(doc.weather_address or doc.weatherAddress)
+    local weather_address = trim(doc.weather_address or doc.weatherAddress)
+    if weather_address == "" then
+        weather_address = APP.DEFAULT_WEATHER_LOCATION
+        doc.weather_address = weather_address
+        doc.weather_location_address = nil
+        doc.weather_location_raw = nil
+        doc.weather_location_id = nil
+        doc.weather_city = nil
+        local encoded = encode_json(doc)
+        if not encoded or not write_text(APP.SETTINGS_PATH, encoded) then
+        warn("default weather address write failed", APP.SETTINGS_PATH)
+        end
+        APP.settings_doc = doc
+    end
+    apply_weather_address(weather_address)
 
     local city = trim(doc.weather_city or doc.city_name or doc.city)
     local cached_address = trim(doc.weather_location_address or doc.weather_location_raw)
