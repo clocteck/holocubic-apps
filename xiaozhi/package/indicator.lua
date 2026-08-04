@@ -1,6 +1,8 @@
 local M = {}
 
-local ORANGE = { 255, 165, 0 }
+-- The device status LED has red/blue channels swapped at the board mapping.
+-- This calibrated value is physically orange on the target hardware.
+local ORANGE = { 0, 165, 239 }
 
 function M.new()
   local self = {
