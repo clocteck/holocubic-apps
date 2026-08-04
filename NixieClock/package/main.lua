@@ -4,7 +4,7 @@ if previous and previous.stop then
 end
 
 HOLO_TIME_APP = {
-  VERSION = "2026-08-04-holo-nixie-v15-launcher-input",
+  VERSION = "2026-08-04-holo-nixie-v16-release",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/NixieClock",
@@ -1455,7 +1455,9 @@ local function start_web()
     if not ok_take or not snapshot then
       return web_response(encode_json({ ok = false, error = tostring(take_err or snapshot or "snapshot failed") }), "application/json; charset=utf-8", "500 Internal Server Error")
     end
-    local path = APP.APP_DIR .. "/captures/face-" .. format("%02d", face) .. ".png"
+    local capture_dir = APP.APP_DIR .. "/captures"
+    if file and file.mkdir then pcall_fn(file.mkdir, capture_dir) end
+    local path = capture_dir .. "/face-" .. format("%02d", face) .. ".png"
     local ok_save, saved, save_err = pcall_fn(snapshot_save, snapshot, path)
     pcall_fn(snapshot_free, snapshot)
     if not ok_save or not saved then
