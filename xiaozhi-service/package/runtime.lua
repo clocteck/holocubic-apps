@@ -10,7 +10,6 @@ function M.new(cfg, load_module)
   local Mcp = load_module("mcp")
   local XIAOZHI_WAKE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
   local XIAOZHI_WAKE_TARGET_PATH = "/sd/apps/xiaozhi_wake/target_app_id.txt"
-  local HOME_GOODBYE_PROMPT = "[device_call]好的，我先退下了"
 
   local function default_deny_apps()
     local source = type(cfg.DEFAULT_DENY_APPS) == "table" and cfg.DEFAULT_DENY_APPS or {
@@ -41,10 +40,6 @@ function M.new(cfg, load_module)
     timer = nil,
     wake_open_timer = nil,
     external_return_timer = nil,
-    home_dismiss_timer = nil,
-    home_dismiss_pending = false,
-    home_dismiss_sent = false,
-    home_dismiss_tts_started = false,
     lifecycle_listening = false,
     foreground_poll_ticks = 0,
     listening_mode = State.LISTEN_AUTO,
@@ -375,22 +370,27 @@ function M.new(cfg, load_module)
   end
 
   notify_ipc = function()
-    if not self.ipc_subscribers then return end
+    local subscribers = self.ipc_subscribers
+    local endpoints = self.ipc_endpoint_subscribers
+    if (not subscribers or next(subscribers) == nil)
+        and (not endpoints or next(endpoints) == nil) then
+      return
+    end
     local snapshot = self.ui_snapshot and self:ui_snapshot() or nil
     if not snapshot then return end
-    for id, callback in pairs(self.ipc_subscribers) do
+    for id, callback in pairs(subscribers or {}) do
       local ok = pcall(callback, snapshot)
-      if not ok then self.ipc_subscribers[id] = nil end
+      if not ok then subscribers[id] = nil end
     end
     local lib = codec()
     if ipc and ipc.send and lib and lib.encode then
       local ok_encode, raw = pcall(lib.encode, snapshot)
       if ok_encode and type(raw) == "string" then
-        for endpoint in pairs(self.ipc_endpoint_subscribers or {}) do
+        for endpoint in pairs(endpoints or {}) do
           local ok_send = pcall(function()
             return ipc.send(endpoint, "snapshot", raw)
           end)
-          if not ok_send then self.ipc_endpoint_subscribers[endpoint] = nil end
+          if not ok_send then endpoints[endpoint] = nil end
         end
       end
     end
@@ -524,76 +524,12 @@ function M.new(cfg, load_module)
     end
   end
 
-  local function stop_home_dismiss_timer()
-    local timer = self.home_dismiss_timer
-    self.home_dismiss_timer = nil
-    if timer then
-      pcall(function() timer:stop() end)
-      pcall(function() timer:unregister() end)
-    end
-  end
-
-  local function finish_home_dismiss()
-    if not self.home_dismiss_pending then return end
-    stop_home_dismiss_timer()
-    self.home_dismiss_pending = false
-    self.home_dismiss_sent = false
-    self.home_dismiss_tts_started = false
-    if self.protocol then pcall(function() self.protocol:close_audio_channel(false) end) end
-    set_state(State.IDLE)
-    print("[xiaozhi] HOME dismiss completed")
-  end
-
-  local function start_home_dismiss_timeout()
-    stop_home_dismiss_timer()
-    if not tmr or not tmr.create then
-      print("[xiaozhi] ERROR: HOME goodbye timeout unavailable; server TTS may not dismiss automatically")
-      return false
-    end
-    local timer = tmr.create()
-    self.home_dismiss_timer = timer
-    timer:alarm(15000, tmr.ALARM_SINGLE, function(instance)
-      pcall(function() instance:unregister() end)
-      if self.home_dismiss_timer ~= timer then return end
-      self.home_dismiss_timer = nil
-      if not self.home_dismiss_pending then return end
-      print("[xiaozhi] ERROR: HOME goodbye server TTS timed out; dismissing without voice")
-      finish_home_dismiss()
-    end)
-    return true
-  end
-
-  local function request_home_dismiss_voice()
-    if not self.home_dismiss_pending or self.home_dismiss_sent then return true end
-    if not self.protocol or not self.protocol:is_audio_channel_opened() then return false end
-    if not self.protocol.send_text_input then
-      print("[xiaozhi] ERROR: server text input unavailable; HOME goodbye will be silent")
-      finish_home_dismiss()
-      return false
-    end
-    local ok, sent = pcall(function()
-      return self.protocol:send_text_input(HOME_GOODBYE_PROMPT)
-    end)
-    if not ok or sent == false or sent == nil then
-      print("[xiaozhi] ERROR: HOME goodbye server TTS request failed; dismissing without voice")
-      finish_home_dismiss()
-      return false
-    end
-    self.home_dismiss_sent = true
-    print("[xiaozhi] HOME goodbye server TTS requested")
-    return true
-  end
-
   local function dismiss_from_home()
     local state = self.state.state
-    if self.home_dismiss_pending then return true end
     if state ~= State.CONNECTING and state ~= State.LISTENING and state ~= State.SPEAKING then
       return false
     end
 
-    self.home_dismiss_pending = true
-    self.home_dismiss_sent = false
-    self.home_dismiss_tts_started = false
     cancel_external_return()
     cancel_tts_audio_timer()
     self.pending_wake_word = nil
@@ -604,19 +540,11 @@ function M.new(cfg, load_module)
       if state == State.SPEAKING then
         pcall(function() self.protocol:send_abort_speaking("none") end)
       end
+      pcall(function() self.protocol:close_audio_channel(false) end)
     end
     if self.audio then pcall(function() self.audio:set_mode("off") end) end
-    self.ui_status = "正在退出"
-    self.ui_role = "system"
-    self.ui_text = "正在请求小智告别"
-    self.ui_notice = self.ui_text
-    self.ui:set_status(self.ui_status)
-    self.ui:set_chat_message(self.ui_role, self.ui_text)
-    if state ~= State.CONNECTING then set_state(State.SPEAKING) end
-    notify_ipc()
-    print("[xiaozhi] HOME dismiss requested")
-    start_home_dismiss_timeout()
-    request_home_dismiss_voice()
+    set_state(State.IDLE)
+    print("[xiaozhi] HOME dismissed active session")
     return true
   end
 
@@ -967,10 +895,6 @@ function M.new(cfg, load_module)
     self.temporary_wake_backoff_source = nil
     cancel_external_return()
     cancel_tts_audio_timer()
-    stop_home_dismiss_timer()
-    self.home_dismiss_pending = false
-    self.home_dismiss_sent = false
-    self.home_dismiss_tts_started = false
     self.pending_wake_word = nil
     self.pending_goodbye = false
     self.tts_text_ready = false
@@ -1099,13 +1023,6 @@ function M.new(cfg, load_module)
 
   local function bind_protocol()
     self.protocol:on("opened", function()
-      if self.home_dismiss_pending then
-        if self.state.state == State.CONNECTING then set_state(State.LISTENING) end
-        if self.audio then pcall(function() self.audio:set_mode("off") end) end
-        request_home_dismiss_voice()
-        if self.home_dismiss_pending then set_state(State.SPEAKING) end
-        return
-      end
       if self.audio_suspended_by_app then
         if self.protocol then self.protocol:close_audio_channel(false) end
         return
@@ -1115,21 +1032,11 @@ function M.new(cfg, load_module)
       end
     end)
     self.protocol:on("closed", function()
-      if self.home_dismiss_pending then
-        print("[xiaozhi] ERROR: HOME goodbye channel closed before server TTS completed; dismissing without voice")
-        finish_home_dismiss()
-        return
-      end
       if self.state.state == State.CONNECTING or self.state.state == State.LISTENING or self.state.state == State.SPEAKING then
         set_state(State.IDLE)
       end
     end)
     self.protocol:on("error", function(message)
-      if self.home_dismiss_pending then
-        print("[xiaozhi] ERROR: HOME goodbye server TTS failed: " .. tostring(message or "unknown error"))
-        finish_home_dismiss()
-        return
-      end
       alert("错误", message, "cloud_slash")
       if self.state.state == State.CONNECTING then
         set_state(State.IDLE)
@@ -1137,7 +1044,6 @@ function M.new(cfg, load_module)
     end)
     self.protocol:on("audio", function(opus)
       if self.audio_suspended_by_app then return end
-      if self.home_dismiss_pending and not self.home_dismiss_tts_started then return end
       if self.external_return_timer then schedule_external_return() end
       if self.state.state ~= State.SPEAKING then
         set_state(State.SPEAKING)
@@ -1156,7 +1062,6 @@ function M.new(cfg, load_module)
     end)
     self.protocol:on("tts_start", function()
       if self.audio_suspended_by_app then return end
-      if self.home_dismiss_pending then self.home_dismiss_tts_started = true end
       cancel_external_return()
       cancel_tts_audio_timer()
       self.tts_text_ready = false
@@ -1165,11 +1070,8 @@ function M.new(cfg, load_module)
     end)
     self.protocol:on("tts_stop", function()
       if self.audio_suspended_by_app then return end
-      if self.home_dismiss_pending and not self.home_dismiss_tts_started then return end
       flush_tts_audio()
-      if self.home_dismiss_pending then
-        finish_home_dismiss()
-      elseif self.pending_goodbye then
+      if self.pending_goodbye then
         self.pending_goodbye = false
         set_state(State.IDLE)
       elseif self.external_wake_active then
@@ -1182,8 +1084,6 @@ function M.new(cfg, load_module)
       end
     end)
     self.protocol:on("chat", function(role, text)
-      if self.home_dismiss_pending
-          and (role ~= "assistant" or not self.home_dismiss_tts_started) then return end
       if role == "user" then cancel_external_return() end
       self.ui_role = tostring(role or "system")
       self.ui_text = tostring(text or "")
@@ -1192,7 +1092,6 @@ function M.new(cfg, load_module)
       if role == "assistant" and type(text) == "string" then
         self.tts_text_ready = true
         flush_tts_audio()
-        if self.home_dismiss_pending then return end
         local lower = text:lower()
         if text:find("拜拜", 1, true) or text:find("再见", 1, true)
             or text:find("下次见", 1, true) or lower:find("goodbye", 1, true)
@@ -1607,10 +1506,6 @@ function M.new(cfg, load_module)
       self.wake_open_timer = nil
     end
     clear_temporary_wake_backoff_timer()
-    stop_home_dismiss_timer()
-    self.home_dismiss_pending = false
-    self.home_dismiss_sent = false
-    self.home_dismiss_tts_started = false
     self.temporary_wake_backoff = false
     self.temporary_wake_backoff_source = nil
     cancel_external_return()
@@ -1934,7 +1829,6 @@ function M.new(cfg, load_module)
       audio_suspended_app_id = self.audio_suspended_app_id or "",
       temporary_wake_backoff = self.temporary_wake_backoff == true,
       temporary_wake_backoff_source = self.temporary_wake_backoff_source or "",
-      home_dismiss_pending = self.home_dismiss_pending == true,
     }
   end
 

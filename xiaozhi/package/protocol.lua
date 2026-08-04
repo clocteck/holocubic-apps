@@ -330,13 +330,9 @@ function M.new(cfg)
     return true
   end
 
-  function self:send_text_input(text)
-    return send_text("{" .. json_pair("session_id", self.session_id) ..
-      ',"type":"listen","state":"detect",' .. json_pair("text", text) .. "}")
-  end
-
   function self:send_wake_word_detected(wake_word)
-    return self:send_text_input(wake_word)
+    return send_text("{" .. json_pair("session_id", self.session_id) ..
+      ',"type":"listen","state":"detect",' .. json_pair("text", wake_word) .. "}")
   end
 
   function self:send_start_listening(mode)

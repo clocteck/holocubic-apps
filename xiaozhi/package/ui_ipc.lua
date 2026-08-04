@@ -230,7 +230,7 @@ function M.new(cfg)
             end
             if tmr and tmr.create then
               self.home_exit_timer = tmr.create()
-              self.home_exit_timer:alarm(16000, tmr.ALARM_SINGLE, function(instance)
+              self.home_exit_timer:alarm(3000, tmr.ALARM_SINGLE, function(instance)
                 pcall(function() instance:unregister() end)
                 self.home_exit_timer = nil
                 if not self.home_exit_requested then return end

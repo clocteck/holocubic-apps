@@ -623,7 +623,7 @@ function M.new(cfg)
       bits = 16,
       channel = i2s.CHANNEL_ONLY_LEFT,
       format = i2s.FORMAT_I2S,
-      buffer_count = 6,
+      buffer_count = cfg.AUDIO.tx_buffer_count or 6,
       buffer_len = 512,
       data_out_pin = 48,
     })
@@ -859,16 +859,22 @@ function M.new(cfg)
       end
       if self.mode == "wake" then
         local pack = pack_for_mode("wake")
-        push_pre_raw(raw)
+        if cfg.AUDIO.wake_bridge_enabled ~= false then
+          push_pre_raw(raw)
+        end
         if self.capture then
           feed_capture(raw, i2s32_to_s16(raw, pack, gain_shift))
         end
-        self.level = i2s32_level(raw, pack, gain_shift)
+        if cfg.AUDIO.level_enabled ~= false then
+          self.level = i2s32_level(raw, pack, gain_shift)
+        end
         self.pcm_bytes = self.pcm_bytes + math.floor(#raw / 2)
         feed_wake_i2s(raw, gain_shift)
       elseif self.mode == "bridge" then
         local pack = pack_for_mode("bridge")
-        self.level = i2s32_level(raw, pack, gain_shift)
+        if cfg.AUDIO.level_enabled ~= false then
+          self.level = i2s32_level(raw, pack, gain_shift)
+        end
         self.pcm_bytes = self.pcm_bytes + math.floor(#raw / 2)
         push_bridge_raw(raw)
       elseif self.mode == "listen" then
@@ -876,7 +882,9 @@ function M.new(cfg)
         if self.capture then
           feed_capture(raw, i2s32_to_s16(raw, pack, gain_shift))
         end
-        self.level = i2s32_level(raw, pack, gain_shift)
+        if cfg.AUDIO.level_enabled ~= false then
+          self.level = i2s32_level(raw, pack, gain_shift)
+        end
         self.pcm_bytes = self.pcm_bytes + math.floor(#raw / 2)
         send_raw_i2s(raw, gain_shift)
       end
