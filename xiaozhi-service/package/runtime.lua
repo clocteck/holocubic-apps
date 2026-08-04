@@ -8,6 +8,7 @@ function M.new(cfg, load_module)
   local Activation = load_module("activation")
   local Identity = load_module("identity")
   local Mcp = load_module("mcp")
+  local Indicator = load_module("indicator")
   local XIAOZHI_WAKE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
   local XIAOZHI_WAKE_TARGET_PATH = "/sd/apps/xiaozhi_wake/target_app_id.txt"
 
@@ -71,6 +72,7 @@ function M.new(cfg, load_module)
     tts_audio_queue = {},
     tts_audio_timer = nil,
     web = nil,
+    indicator = Indicator.new(),
     stopped = false,
   }
 
@@ -724,6 +726,7 @@ function M.new(cfg, load_module)
   end
 
   local function on_state_changed(old_state, new_state)
+    self.indicator:on_state(new_state)
     local labels = {
       starting = "正在启动",
       activating = "正在连接服务",
@@ -1524,6 +1527,9 @@ function M.new(cfg, load_module)
     end
     if self.ui then
       self.ui:stop()
+    end
+    if self.indicator then
+      self.indicator:restore()
     end
     if self.web then self.web:stop() end
     if rawget(_G, "XIAOZHI_SERVICE") == self.ipc then

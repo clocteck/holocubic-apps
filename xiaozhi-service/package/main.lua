@@ -49,6 +49,7 @@ local SHARED_MODULES = {
   activation = true,
   audio = true,
   identity = true,
+  indicator = true,
   mcp = true,
   mic_diag = true,
   protocol = true,

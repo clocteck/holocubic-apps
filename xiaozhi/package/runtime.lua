@@ -8,6 +8,7 @@ function M.new(cfg, load_module)
   local Activation = load_module("activation")
   local Mcp = load_module("mcp")
   local Identity = load_module("identity")
+  local Indicator = load_module("indicator")
 
   local self = {
     cfg = cfg,
@@ -21,6 +22,7 @@ function M.new(cfg, load_module)
     wake_open_timer = nil,
     listening_mode = State.LISTEN_AUTO,
     pending_wake_word = nil,
+    indicator = Indicator.new(),
     stopped = false,
   }
 
@@ -183,6 +185,7 @@ function M.new(cfg, load_module)
   end
 
   local function on_state_changed(_, new_state)
+    self.indicator:on_state(new_state)
     self.ui:on_state(new_state)
     if new_state == State.IDLE then
       self.ui:clear_chat_messages()
@@ -473,6 +476,9 @@ function M.new(cfg, load_module)
     end
     if self.ui then
       self.ui:stop()
+    end
+    if self.indicator then
+      self.indicator:restore()
     end
     print("[xiaozhi] stop", reason or "")
   end
