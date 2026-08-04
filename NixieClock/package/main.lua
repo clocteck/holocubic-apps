@@ -4,14 +4,13 @@ if previous and previous.stop then
 end
 
 HOLO_TIME_APP = {
-  VERSION = "2026-07-16-holo-nixie-v6",
+  VERSION = "2026-08-04-holo-nixie-v15-launcher-input",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/NixieClock",
   SETTINGS_PATH = "/sd/apps/settings.json",
   CONFIG_PATH = "/sd/apps/NixieClock/config.json",
   DEFAULT_TIMEZONE = "CST-8",
-  DEFAULT_WEATHER_LOCATION = "Shanghai",
   NTP_SERVER = "ntp.aliyun.com",
   WEATHER_NOW_PATH = "/v1/weather/now",
   WEATHER_3D_PATH = "/v1/weather/3d",
@@ -21,9 +20,9 @@ HOLO_TIME_APP = {
   MEMO_PATHS = {
     "/sd/apps/time-calendar-weather-memo/memos.json",
   },
-  FACE_COUNT = 8,
+  FACE_COUNT = 9,
   TICK_MS = 250,
-  KEY_DEBOUNCE_MS = 400,
+  KEY_MOVE_LOCK_MS = 360 + 30,
 }
 
 local APP = HOLO_TIME_APP
@@ -88,15 +87,15 @@ local C = {
 APP.running = true
 APP.canvas = nil
 APP.timers = {}
+APP.routes = {}
 APP.font_handles = {}
 APP.font = {}
 APP.hand_sources = {}
 APP.hands_ready = false
-APP.input = { imu = false, keys = false }
+APP.input = { keys = false }
 APP.state = {
   face = 1,
-  pending_dir = 0,
-  last_key_ms = -1000,
+  last_switch_source = "startup",
   last_switch_ms = -1000,
   last_auto_switch_ms = 0,
   default_face = 1,
@@ -107,6 +106,7 @@ APP.state = {
   last_minute = -1,
   last_render_face = 0,
   timezone = APP.DEFAULT_TIMEZONE,
+  language = "zh-CN",
   city = "SHANGHAI",
   weather_address = "",
   location_label = "SHANGHAI",
@@ -121,18 +121,25 @@ APP.state = {
   forecast_valid = false,
   forecast_inflight = false,
   forecast_days = {},
-  memos = { "请先安装 Assistant app", "", "" },
+  memos = { "INSTALL ASSISTANT APP", "", "" },
   memo_available = false,
   memo_source = "",
-  imu_base_roll = nil,
-  imu_base_pitch = nil,
-  imu_armed = true,
+  animating = false,
+  repeat_left = 0,
+  repeat_right = 0,
+  key_trigger_count = 0,
+  key_blocked_count = 0,
+  last_key_event = "",
+  last_key_ts_ms = 0,
+  fireworks_failed = false,
 }
 
 local FACE_NAMES = {
   "MERIDIAN", "PULSE WX", "NEON GIRL", "SOLAR WEATHER",
-  "TERMINAL", "LUNAR", "FOCUS MEMO", "NIXIE"
+  "TERMINAL", "LUNAR", "FOCUS MEMO", "NIXIE", "FIREWORKS"
 }
+
+local FIREWORKS_FACE = 9
 
 local WEEKDAYS = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" }
 local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
@@ -171,13 +178,6 @@ local function decode_json(raw)
   return nil
 end
 
-local function encode_json(value)
-  local codec = rawget(_G, "json") or rawget(_G, "sjson")
-  if not (codec and codec.encode) then return nil end
-  local ok, raw = pcall_fn(codec.encode, value)
-  return ok and type(raw) == "string" and raw or nil
-end
-
 local function trim(value)
   return tostring(value or ""):match("^%s*(.-)%s*$") or ""
 end
@@ -196,9 +196,25 @@ local function utf8_truncate(value, max_chars)
   return source:sub(1, last)
 end
 
+local function is_english()
+  return tostring(APP.state.language or ""):lower():match("^en") ~= nil
+end
+
+local function tr(zh, en)
+  return is_english() and en or zh
+end
+
+local function english_safe(value, fallback)
+  value = tostring(value or "")
+  if not is_english() then return value end
+  local cleaned = trim(value:gsub("[\128-\255]+", " "):gsub("[%c]+", " "):gsub("%s+", " "))
+  return cleaned ~= "" and cleaned or tostring(fallback or "")
+end
+
 local function sanitize_memo(value)
   local memo = trim(tostring(value or ""):gsub("[%c]+", " "):gsub("%s+", " "))
-  if memo == "" then return "暂无内容" end
+  if memo == "" then return tr("暂无内容", "NO CONTENT") end
+  memo = english_safe(memo, "NON-ENGLISH MEMO")
   return utf8_truncate(memo, 14)
 end
 
@@ -217,17 +233,18 @@ local function load_memos()
       return changed
     end
   end
-  local changed = APP.state.memo_available or APP.state.memo_source ~= "" or APP.state.memos[1] ~= "请先安装 Assistant app"
+  local fallback = tr("请先安装 Assistant app", "INSTALL ASSISTANT APP")
+  local changed = APP.state.memo_available or APP.state.memo_source ~= "" or APP.state.memos[1] ~= fallback
   APP.state.memo_available = false
   APP.state.memo_source = ""
-  APP.state.memos = { "请先安装 Assistant app", "", "" }
+  APP.state.memos = { fallback, "", "" }
   return changed
 end
 
 local function write_text(path, value)
   if file and file.putcontents then
     local ok, result = pcall_fn(file.putcontents, path, value)
-    return ok and result ~= false
+    return ok and result and true or false
   end
   return false
 end
@@ -290,25 +307,15 @@ end
 local function load_settings()
   local doc = decode_json(read_text(APP.SETTINGS_PATH)) or {}
   local state = APP.state
+  state.language = trim(doc.language or doc.lang or "zh-CN")
+  if state.language == "" then state.language = "zh-CN" end
   state.timezone = trim(doc.timezone)
   if state.timezone == "" then state.timezone = APP.DEFAULT_TIMEZONE end
   state.weather_address = trim(doc.weather_address or doc.weatherAddress)
-  if state.weather_address == "" then
-    state.weather_address = APP.DEFAULT_WEATHER_LOCATION
-    doc.weather_address = state.weather_address
-    doc.weather_location_address = nil
-    doc.weather_location_raw = nil
-    doc.weather_location_id = nil
-    doc.weather_city = nil
-    local encoded = encode_json(doc)
-    if not encoded or not write_text(APP.SETTINGS_PATH, encoded) then
-      warn("default weather address write failed", APP.SETTINGS_PATH)
-    end
-  end
   state.weather_location_id = trim(doc.weather_location_id)
   local city = state.weather_address ~= "" and state.weather_address or trim(doc.weather_city or doc.city_name or doc.city)
   if city ~= "" then
-    state.city = safe_city_label(city)
+    state.city = is_english() and ascii_city_label(city) or safe_city_label(city)
     state.location_label = ascii_city_label(city)
   end
 end
@@ -645,11 +652,11 @@ local function draw_meridian(t)
   -- Device fonts sit above browser glyphs; use matched visual baselines.
   text(17, 34, 90, day .. " · " .. month .. " " .. date, APP.font.en12, 0xBFC7D0)
   text(17, 67, 82, temp_text(), APP.font.n28, C.white)
-  text(17, 107, 88, APP.state.city, APP.font.ui14, 0x8D99A6)
+  text(17, 107, 88, english_safe(APP.state.city, "LOCAL"), APP.font.ui14, 0x8D99A6)
   if not draw_ui_asset(18, 175, "mini-" .. weather_kind(APP.state.weather_code, APP.state.weather_text)) then
     draw_sun(28, 185, 8, C.orange)
   end
-  text(43, 178, 52, APP.state.weather_valid and APP.state.weather_text or "天气", APP.font.ui12, C.orange)
+  text(43, 178, 52, english_safe(APP.state.weather_valid and APP.state.weather_text or tr("天气", "WEATHER"), "WEATHER"), APP.font.ui12, C.orange)
   -- Match the 210 px HTML dial and allow its right bezel to clip at x=320.
   local cx, cy, r = 212, 120, 105
   -- Browser-rendered transparent ring preserves the HTML gradients and edge
@@ -725,7 +732,7 @@ local function draw_weather_card(x, y)
   disc(x + 37, y + 30, 12, 0x16343D, 255)
   rect(x + 18, y + 30, 42, 14, 0x16343D, 255, 7, C.cyan, 1)
   text(x + 10, y + 49, 86, temp_text(), APP.font.n28, C.white)
-  text(x + 10, y + 91, 86, APP.state.weather_valid and APP.state.weather_text or "晴间多云", APP.font.ui12, C.cyan)
+  text(x + 10, y + 91, 86, english_safe(APP.state.weather_valid and APP.state.weather_text or tr("晴间多云", "PARTLY CLOUDY"), "WEATHER"), APP.font.ui12, C.cyan)
 end
 
 local function draw_modular(t)
@@ -803,14 +810,23 @@ local function draw_neon_girl(t)
   local day, month, date = date_parts(t)
   local date_label = (FULL_DAY_NAMES[day] or day) .. ", " .. (FULL_MONTH_NAMES[month] or month) .. " " .. date
   text(20, 31, 190, date_label, APP.font.en9, 0xA8D8EE, nil, nil, 4)
-  text(18, 68, 84, format("%02d", t.hour), APP.font.n69, C.white, nil, nil, -7)
+  local hh = format("%02d", t.hour)
+  local mm = format("%02d", t.min)
+  -- Draw each digit in its own slot. A single 84 px clip box can truncate
+  -- wide pairs such as "00", while narrower pairs such as "15" look fine.
+  text(14, 68, 42, hh:sub(1, 1), APP.font.n69, C.white, ALIGN_CENTER)
+  text(54, 68, 42, hh:sub(2, 2), APP.font.n69, C.white, ALIGN_CENTER)
   local colon_color = floor((t.sec or 0) / 2) % 2 == 0 and C.white or 0x181C20
-  text(93, 60, 24, ":", APP.font.n69, colon_color)
-  text(117, 68, 90, format("%02d", t.min), APP.font.n69, C.white, nil, nil, -7)
+  text(94, 60, 24, ":", APP.font.n69, colon_color, ALIGN_CENTER)
+  text(116, 68, 42, mm:sub(1, 1), APP.font.n69, C.white, ALIGN_CENTER)
+  text(156, 68, 42, mm:sub(2, 2), APP.font.n69, C.white, ALIGN_CENTER)
   text(19, 142, 40, temp_text(), APP.font.en20, C.white, nil, nil, -1)
   line(60, 144, 60, 163, 0x56CBE2, 255, 1)
   text(71, 148, 76, ascii_city_label(APP.state.city) .. " " .. string.char(194, 183), APP.font.en12, 0x8EB9CA, nil, nil, 1)
-  text(148, 148, 40, APP.state.weather_valid and APP.state.weather_text or "晴", APP.font.cn12, 0x8EB9CA)
+  local neon_weather = is_english()
+      and weather_kind(APP.state.weather_code, APP.state.weather_text):upper()
+      or (APP.state.weather_valid and APP.state.weather_text or "晴")
+  text(148, 148, 40, neon_weather, APP.font.ui12, 0x8EB9CA)
   for i = 0, 11 do
     local x1 = 18 + i * 24
     local x2 = 37 + i * 24
@@ -849,9 +865,9 @@ local function draw_solar_weather(t)
   local today = APP.state.forecast_days[1]
   local high = today and today.temp_max and floor(today.temp_max + 0.5) or (current and current + 4)
   local low = today and today.temp_min and floor(today.temp_min + 0.5) or (current and current - 4)
-  local weather = APP.state.weather_valid and APP.state.weather_text or "等待天气"
+  local weather = english_safe(APP.state.weather_valid and APP.state.weather_text or tr("等待天气", "WAITING FOR WEATHER"), "WEATHER")
   local feels = current and tostring(current + 2) or "--"
-  text(15, 133, 190, weather .. " · 体感 " .. feels .. "°", APP.font.cn11, 0xAAA397)
+  text(15, 133, 190, weather .. " · " .. tr("体感 ", "FEELS ") .. feels .. "°", APP.font.cn11, 0xAAA397)
   local range = high and low and format("H %d° · L %d°", high, low) or "H --° · L --°"
   text(224, 112, 82, range, APP.font.en11, 0xC39A56, ALIGN_RIGHT)
 
@@ -964,7 +980,7 @@ local function draw_focus_memo(t)
     rect(120, 63, 187, 112, 0x0C0D11, 255)
     rect(120, 63, 3, 112, C.orange, 255)
     text(133, 83, 162, "MEMO SYNC", APP.font.en10, C.orange, nil, nil, 1)
-    text(133, 111, 162, "请先安装 Assistant app", APP.font.cn12, C.white)
+    text(133, 111, 162, tr("请先安装 Assistant app", "INSTALL ASSISTANT APP"), APP.font.cn12, C.white)
     text(133, 139, 162, "time-calendar-weather-memo", APP.font.en8, 0x737B85)
     return
   end
@@ -1020,11 +1036,11 @@ local function draw_calendar(t)
   text(145, 22, 160, format("%02d:%02d", t.hour, t.min), APP.font.n40, C.white)
   draw_sun(158, 98, 7, C.orange)
   text(177, 86, 72, temp_text(), APP.font.n28, C.white)
-  text(177, 119, 125, (APP.state.weather_valid and APP.state.weather_text or "晴") .. " · 体感", APP.font.ui12, C.muted)
+  text(177, 119, 125, english_safe(APP.state.weather_valid and APP.state.weather_text or tr("晴", "CLEAR"), "WEATHER") .. " · " .. tr("体感", "FEELS"), APP.font.ui12, C.muted)
   line(145, 154, 304, 154, C.border, 255, 1)
   text(145, 164, 60, "NEXT", APP.font.ui12, C.violet)
   text(145, 183, 80, "10:30", APP.font.n28, C.white)
-  text(232, 196, 70, "专注时间", APP.font.ui12, C.muted, ALIGN_RIGHT)
+  text(232, 196, 70, tr("专注时间", "FOCUS TIME"), APP.font.ui12, C.muted, ALIGN_RIGHT)
 end
 
 local function draw_flip_card(x, digit, accent)
@@ -1076,9 +1092,16 @@ local function draw_glow(t)
   text(252, 208, 52, "82%", APP.font.ui12, C.cyan, ALIGN_RIGHT)
 end
 
+local function draw_fireworks_placeholder()
+  fill(C.black)
+  text(0, 90, APP.SCREEN_W, "FIREWORKS", APP.font.en20, C.orange, ALIGN_CENTER)
+  text(0, 126, APP.SCREEN_W, "STARTING...", APP.font.en11, C.muted, ALIGN_CENTER)
+end
+
 local DRAW_FACE = {
   draw_meridian, draw_mono, draw_neon_girl, draw_solar_weather,
-  draw_terminal, draw_lunar, draw_focus_memo, draw_nixie
+  draw_terminal, draw_lunar, draw_focus_memo, draw_nixie,
+  draw_fireworks_placeholder
 }
 
 local function draw_hud()
@@ -1092,6 +1115,8 @@ end
 
 local function render()
   if not APP.running or not APP.canvas then return end
+  local fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+  if APP.state.face == FIREWORKS_FACE and fireworks and fireworks.running then return end
   local t = local_time()
   frame_begin()
   local fn = DRAW_FACE[APP.state.face] or draw_meridian
@@ -1103,72 +1128,83 @@ local function render()
   APP.state.last_render_face = APP.state.face
 end
 
-local function switch_face(direction)
+local set_face
+
+local function switch_face(direction, source)
   local next_face = APP.state.face + direction
   if next_face < 1 then next_face = APP.FACE_COUNT end
   if next_face > APP.FACE_COUNT then next_face = 1 end
-  APP.state.face = next_face
-  APP.state.last_switch_ms = now_ms()
-  APP.state.last_auto_switch_ms = APP.state.last_switch_ms
-  APP.state.hud_until_ms = APP.state.last_switch_ms + 900
-  render()
+  APP.state.last_switch_source = source or "unknown"
+  set_face(next_face, true)
 end
 
-local function angle_delta(value, base)
-  local delta = (tonumber(value) or 0) - (tonumber(base) or 0)
-  while delta > 180 do delta = delta - 360 end
-  while delta < -180 do delta = delta + 360 end
-  return delta
-end
-
-local function on_imu(_, roll, pitch)
-  if not APP.running then return end
+local function move_face(direction, source)
   local state = APP.state
-  roll = tonumber(roll) or 0
-  pitch = tonumber(pitch) or 0
-  if state.imu_base_roll == nil then
-    state.imu_base_roll = roll
-    state.imu_base_pitch = pitch
-    return
+  if state.animating then
+    state.key_blocked_count = state.key_blocked_count + 1
+    return false
   end
-  local dr = angle_delta(roll, state.imu_base_roll)
-  local dp = angle_delta(pitch, state.imu_base_pitch)
-  local motion = abs(dp) >= abs(dr) and dp or dr
-  if state.imu_armed then
-    if abs(motion) >= 27 and now_ms() - state.last_switch_ms >= 650 then
-      state.pending_dir = motion > 0 and 1 or -1
-      state.imu_armed = false
-    elseif abs(dr) < 7 and abs(dp) < 7 then
-      state.imu_base_roll = state.imu_base_roll * 0.97 + roll * 0.03
-      state.imu_base_pitch = state.imu_base_pitch * 0.97 + pitch * 0.03
-    end
-  elseif abs(dr) < 10 and abs(dp) < 10 then
-    state.imu_armed = true
-    state.imu_base_roll = roll
-    state.imu_base_pitch = pitch
+
+  -- Keep the same input lock as launcher: 360 ms animation plus 30 ms margin.
+  state.animating = true
+  state.key_trigger_count = state.key_trigger_count + 1
+  switch_face(direction, source or "key")
+
+  if tmr and tmr.create then
+    local timer = tmr.create()
+    APP.timers.input_lock = timer
+    timer:alarm(APP.KEY_MOVE_LOCK_MS, tmr.ALARM_SINGLE, function(self)
+      pcall_fn(function() self:unregister() end)
+      if APP.timers.input_lock == self then APP.timers.input_lock = nil end
+      state.animating = false
+    end)
+  else
+    state.animating = false
   end
+  return true
 end
 
 local function bind_input()
-  local app_mod = rawget(_G, "app")
-  if app_mod and app_mod.on then
-    app_mod.on("imu", on_imu)
-    APP.input.imu = true
-  end
   local key_mod = rawget(_G, "key")
   if key_mod and key_mod.on then
-    local function request_key_switch(direction, evt)
-      if evt ~= key_mod.SHORT and evt ~= key_mod.START then return end
-      local now = now_ms()
-      if APP.state.pending_dir ~= 0 or now - APP.state.last_key_ms < APP.KEY_DEBOUNCE_MS then return end
-      APP.state.last_key_ms = now
-      APP.state.pending_dir = direction
+    local function record_key_event(evt, ts_ms)
+      local state = APP.state
+      state.last_key_event = tostring(evt)
+      state.last_key_ts_ms = tonumber(ts_ms) or now_ms()
     end
-    key_mod.on(key_mod.LEFT, function(evt)
-      request_key_switch(-1, evt)
+
+    key_mod.on(key_mod.LEFT, function(evt, ts_ms)
+      record_key_event(evt, ts_ms)
+      if evt == key_mod.START then
+        move_face(-1, "key-start")
+      elseif evt == key_mod.LONG_START then
+        APP.state.repeat_left = 0
+        move_face(-1, "key-long-start")
+      elseif evt == key_mod.LONG_REPEAT then
+        APP.state.repeat_left = APP.state.repeat_left + 1
+        if (APP.state.repeat_left % 3) == 0 then
+          move_face(-1, "key-long-repeat")
+        end
+      elseif evt == key_mod.LONG_END then
+        APP.state.repeat_left = 0
+      end
     end)
-    key_mod.on(key_mod.RIGHT, function(evt)
-      request_key_switch(1, evt)
+
+    key_mod.on(key_mod.RIGHT, function(evt, ts_ms)
+      record_key_event(evt, ts_ms)
+      if evt == key_mod.START then
+        move_face(1, "key-start")
+      elseif evt == key_mod.LONG_START then
+        APP.state.repeat_right = 0
+        move_face(1, "key-long-start")
+      elseif evt == key_mod.LONG_REPEAT then
+        APP.state.repeat_right = APP.state.repeat_right + 1
+        if (APP.state.repeat_right % 3) == 0 then
+          move_face(1, "key-long-repeat")
+        end
+      elseif evt == key_mod.LONG_END then
+        APP.state.repeat_right = 0
+      end
     end)
     APP.input.keys = true
   end
@@ -1197,7 +1233,7 @@ local function parse_weather(status, body)
   APP.state.humidity = tonumber(current.humidity)
   APP.state.wind_speed = tonumber(current.windSpeed)
   APP.state.weather_code = tostring(current.icon or "103")
-  APP.state.weather_text = tostring(current.text or "--")
+  APP.state.weather_text = english_safe(current.text or "--", "WEATHER")
   APP.state.weather_valid = APP.state.temp ~= nil
   render()
   return APP.state.weather_valid
@@ -1236,7 +1272,7 @@ local function request_forecast_for(location)
     return
   end
   APP.state.forecast_inflight = true
-  local url = APP.WEATHER_3D_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=zh"
+  local url = APP.WEATHER_3D_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. (is_english() and "en" or "zh")
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     APP.state.forecast_inflight = false
     if APP.running then parse_forecast(status, body) end
@@ -1249,7 +1285,7 @@ local function request_weather_for(location)
     APP.state.weather_inflight = false
     return
   end
-  local url = APP.WEATHER_NOW_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=zh"
+  local url = APP.WEATHER_NOW_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. (is_english() and "en" or "zh")
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     APP.state.weather_inflight = false
     if APP.running then parse_weather(status, body) end
@@ -1270,14 +1306,16 @@ local function request_weather()
   end
   if raw_location == "" then return end
   APP.state.weather_inflight = true
-  local url = APP.WEATHER_CITY_PATH .. "?location=" .. url_encode(raw_location) .. "&number=1&lang=zh"
+  local url = APP.WEATHER_CITY_PATH .. "?location=" .. url_encode(raw_location) .. "&number=1&lang=" .. (is_english() and "en" or "zh")
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     if not APP.running then return end
     local doc = status == 200 and decode_json(maybe_gunzip(body)) or nil
     local locations = doc and (doc.locations or doc.location)
     local first = type(locations) == "table" and locations[1] or nil
     local id = type(first) == "table" and trim(first.id) or ""
-    if APP.state.weather_address == "" and type(first) == "table" and trim(first.name) ~= "" then APP.state.city = safe_city_label(first.name) end
+    if APP.state.weather_address == "" and type(first) == "table" and trim(first.name) ~= "" then
+      APP.state.city = is_english() and ascii_city_label(first.name) or safe_city_label(first.name)
+    end
     if id == "" then APP.state.weather_inflight = false; return end
     APP.state.weather_location_id = id
     request_weather_for(id)
@@ -1292,10 +1330,10 @@ local function request_forecast()
   if location ~= "" then request_forecast_for(location) end
 end
 
-local WEB_HTML = [=[<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Holo Clock 表盘</title><style>
+local WEB_HTML = [=[<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Holo Clock Faces</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#020406;color:#f7f9fc;font-family:Inter,"Microsoft YaHei",system-ui,sans-serif}.page{max-width:1100px;margin:auto;padding:24px 16px 48px}header{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:16px}h1{margin:0;font-size:28px;letter-spacing:-.03em}header p{margin:6px 0 0;color:#8995a1}.state{color:#53e6ff;font:600 13px ui-monospace,monospace}.settings{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;margin-bottom:20px;padding:14px;border:1px solid #26303a;border-radius:14px;background:#080b0f}.field{display:grid;gap:6px}.field label{color:#aeb7c2;font-size:13px}.field select{width:100%;min-height:44px;padding:0 12px;border:1px solid #36424e;border-radius:9px;background:#10151b;color:#f7f9fc;font-size:14px}.save{min-height:44px;padding:0 20px;border:0;border-radius:9px;background:#53e6ff;color:#001014;font-weight:800;cursor:pointer}.save:disabled{opacity:.5;cursor:default}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}.face{appearance:none;width:100%;padding:8px;border:1px solid #26303a;border-radius:14px;background:#080b0f;color:inherit;text-align:left;cursor:pointer;transition:border-color .16s,transform .16s,background .16s}.face:hover{transform:translateY(-2px);border-color:#53606d}.face:focus-visible,.save:focus-visible,.field select:focus-visible{outline:2px solid #53e6ff;outline-offset:2px}.face.selected{border-color:#53e6ff;background:#0a151a;box-shadow:0 0 0 1px #53e6ff,0 0 24px #53e6ff20}.face img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:#000}.meta{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 4px}.meta b{font-size:14px}.meta span{color:#75818d;font:600 11px ui-monospace,monospace}.face.selected .meta span{color:#53e6ff}@media(max-width:560px){header{align-items:start;flex-direction:column}.page{padding-top:18px}.settings{grid-template-columns:1fr}.save{width:100%}.grid{grid-template-columns:1fr 1fr;gap:8px}.face{padding:5px;border-radius:10px}.meta b{font-size:12px}.meta span{font-size:9px}}
-</style></head><body><main class="page"><header><div><h1>Holo Clock</h1><p>选择表盘会立即切换设备显示。</p></div><div id="state" class="state" aria-live="polite">正在连接设备</div></header><section class="settings" aria-label="表盘设置"><div class="field"><label for="defaultFace">开机默认表盘</label><select id="defaultFace"></select></div><div class="field"><label for="autoSwitch">自动切换表盘</label><select id="autoSwitch"><option value="0">不切换</option><option value="600000">每 10 分钟</option><option value="3600000">每 1 小时</option></select></div><button id="save" class="save" type="button">保存设置</button></section><section id="grid" class="grid"></section></main><script>
-const faces=['Meridian','Pulse WX','Neon Girl','Solar Weather','Terminal','Lunar','Focus Memo','Nixie'];const count=faces.length,grid=document.getElementById('grid'),state=document.getElementById('state'),defaultFace=document.getElementById('defaultFace'),autoSwitch=document.getElementById('autoSwitch'),save=document.getElementById('save');const base=location.pathname.replace(/\/?$/,'/'),faceApi=base+'api/face',settingsApi=base+'api/settings';faces.forEach((name,i)=>{const option=document.createElement('option');option.value=i+1;option.textContent=`${String(i+1).padStart(2,'0')} · ${name}`;defaultFace.appendChild(option);const b=document.createElement('button');b.className='face';b.dataset.face=i+1;b.innerHTML=`<img src="/apps/NixieClock/previews/${String(i+1).padStart(2,'0')}.png" alt="${name} 表盘预览"><span class="meta"><b>${name}</b><span>${String(i+1).padStart(2,'0')} / ${String(count).padStart(2,'0')}</span></span>`;b.onclick=()=>select(i+1);grid.appendChild(b)});function paint(face){document.querySelectorAll('.face').forEach(e=>e.classList.toggle('selected',Number(e.dataset.face)===face));state.textContent=`当前表盘 ${String(face).padStart(2,'0')} / ${String(count).padStart(2,'0')}`}async function load(){const [fr,sr]=await Promise.all([fetch(faceApi,{cache:'no-store'}),fetch(settingsApi,{cache:'no-store'})]),f=await fr.json(),s=await sr.json();if(!f.ok||!s.ok)throw Error(f.error||s.error||'读取失败');paint(f.face);defaultFace.value=s.default_face;autoSwitch.value=s.auto_switch_ms}async function select(face){state.textContent='正在切换';try{const r=await fetch(faceApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({face})}),d=await r.json();if(!d.ok)throw Error(d.error||'切换失败');paint(d.face)}catch(e){state.textContent=e.message}}save.onclick=async()=>{save.disabled=true;state.textContent='正在保存设置';try{const r=await fetch(settingsApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_face:Number(defaultFace.value),auto_switch_ms:Number(autoSwitch.value)})}),d=await r.json();if(!d.ok)throw Error(d.error||'保存失败');state.textContent='设置已保存'}catch(e){state.textContent=e.message}finally{save.disabled=false}};load().catch(e=>state.textContent=e.message);
+</style></head><body><main class="page"><header><div><h1>Holo Clock</h1><p id="subtitle">Select a face to switch the device immediately.</p></div><div id="state" class="state" aria-live="polite">Connecting to device</div></header><section id="settings" class="settings" aria-label="Face settings"><div class="field"><label id="defaultLabel" for="defaultFace">Default face at startup</label><select id="defaultFace"></select></div><div class="field"><label id="autoLabel" for="autoSwitch">Automatic face switching</label><select id="autoSwitch"><option value="0">Off</option><option value="600000">Every 10 minutes</option><option value="3600000">Every hour</option></select></div><button id="save" class="save" type="button">Save settings</button></section><section id="grid" class="grid"></section></main><script>
+const faces=['Meridian','Pulse WX','Neon Girl','Solar Weather','Terminal','Lunar','Focus Memo','Nixie','Fireworks'];const count=faces.length,grid=document.getElementById('grid'),state=document.getElementById('state'),settings=document.getElementById('settings'),defaultLabel=document.getElementById('defaultLabel'),autoLabel=document.getElementById('autoLabel'),defaultFace=document.getElementById('defaultFace'),autoSwitch=document.getElementById('autoSwitch'),save=document.getElementById('save'),subtitle=document.getElementById('subtitle');const base=location.pathname.replace(/\/?$/,'/'),faceApi=base+'api/face',settingsApi=base+'api/settings';let locale='en';const I={en:{title:'Holo Clock Faces',subtitle:'Select a face to switch the device immediately.',connecting:'Connecting to device',settings:'Face settings',defaultFace:'Default face at startup',autoSwitch:'Automatic face switching',off:'Off',tenMinutes:'Every 10 minutes',hour:'Every hour',save:'Save settings',current:'Current face',loading:'Loading failed',switching:'Switching',switchFailed:'Switch failed',saving:'Saving settings',saveFailed:'Save failed',saved:'Settings saved',preview:'face preview'},zh:{title:'Holo Clock 表盘',subtitle:'选择表盘会立即切换设备显示。',connecting:'正在连接设备',settings:'表盘设置',defaultFace:'开机默认表盘',autoSwitch:'自动切换表盘',off:'不切换',tenMinutes:'每 10 分钟',hour:'每 1 小时',save:'保存设置',current:'当前表盘',loading:'读取失败',switching:'正在切换',switchFailed:'切换失败',saving:'正在保存设置',saveFailed:'保存失败',saved:'设置已保存',preview:'表盘预览'}};const t=k=>I[locale][k];function applyLanguage(value){locale=String(value||'').toLowerCase().startsWith('en')?'en':'zh';document.documentElement.lang=locale==='en'?'en':'zh-CN';document.title=t('title');subtitle.textContent=t('subtitle');settings.setAttribute('aria-label',t('settings'));defaultLabel.textContent=t('defaultFace');autoLabel.textContent=t('autoSwitch');autoSwitch.options[0].textContent=t('off');autoSwitch.options[1].textContent=t('tenMinutes');autoSwitch.options[2].textContent=t('hour');save.textContent=t('save');document.querySelectorAll('.face img').forEach((img,i)=>img.alt=`${faces[i]} ${t('preview')}`)}faces.forEach((name,i)=>{const option=document.createElement('option');option.value=i+1;option.textContent=`${String(i+1).padStart(2,'0')} · ${name}`;defaultFace.appendChild(option);const b=document.createElement('button');b.className='face';b.dataset.face=i+1;const preview=`${String(i+1).padStart(2,'0')}.png`;b.innerHTML=`<img src="/apps/NixieClock/previews/${preview}" alt="${name} face preview"><span class="meta"><b>${name}</b><span>${String(i+1).padStart(2,'0')} / ${String(count).padStart(2,'0')}</span></span>`;b.onclick=()=>select(i+1);grid.appendChild(b)});function paint(face){document.querySelectorAll('.face').forEach(e=>e.classList.toggle('selected',Number(e.dataset.face)===face));state.textContent=`${t('current')} ${String(face).padStart(2,'0')} / ${String(count).padStart(2,'0')}`}async function load(){const [fr,sr]=await Promise.all([fetch(faceApi,{cache:'no-store'}),fetch(settingsApi,{cache:'no-store'})]),f=await fr.json(),s=await sr.json();applyLanguage(s.language);if(!f.ok||!s.ok)throw Error(f.error||s.error||t('loading'));paint(f.face);defaultFace.value=s.default_face;autoSwitch.value=s.auto_switch_ms}async function select(face){state.textContent=t('switching');try{const r=await fetch(faceApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({face})}),d=await r.json();if(!d.ok)throw Error(d.error||t('switchFailed'));paint(d.face)}catch(e){state.textContent=e.message}}save.onclick=async()=>{save.disabled=true;state.textContent=t('saving');try{const r=await fetch(settingsApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_face:Number(defaultFace.value),auto_switch_ms:Number(autoSwitch.value)})}),d=await r.json();if(!d.ok)throw Error(d.error||t('saveFailed'));state.textContent=t('saved')}catch(e){state.textContent=e.message}finally{save.disabled=false}};applyLanguage('en');load().catch(e=>state.textContent=e.message);
 </script></body></html>]=]
 
 local function encode_json(value)
@@ -1326,9 +1364,14 @@ end
 local function start_web()
   local server = rawget(_G, "httpd")
   if not (server and server.start and server.dynamic) then return end
-  pcall_fn(server.stop)
-  pcall_fn(server.start, { webroot = "/sd", auto_index = server.INDEX_NONE, max_handlers = 16 })
-  local function route(method, path, handler) pcall_fn(server.dynamic, method, path, handler) end
+  pcall_fn(server.start, { webroot = "/sd", auto_index = server.INDEX_NONE, max_handlers = 256 })
+  APP.routes = {}
+  local function route(method, path, handler)
+    local ok, err = pcall_fn(server.dynamic, method, path, handler)
+    if ok and not err then
+      APP.routes[#APP.routes + 1] = { method = method, path = path }
+    end
+  end
   local function index() return web_response(WEB_HTML, "text/html; charset=utf-8") end
   local function face_api(req)
     if req and req.method == server.POST then
@@ -1340,13 +1383,10 @@ local function start_web()
       local doc = decode_json(raw or "")
       local face = type(doc) == "table" and tonumber(doc.face) or nil
       if not face or face < 1 or face > APP.FACE_COUNT then
-        return web_response(encode_json({ ok = false, error = "表盘编号无效" }), "application/json; charset=utf-8", "400 Bad Request")
+        return web_response(encode_json({ ok = false, error = tr("表盘编号无效", "Invalid face number") }), "application/json; charset=utf-8", "400 Bad Request")
       end
-      APP.state.face = floor(face)
-      APP.state.last_render_face = 0
-      APP.state.hud_until_ms = 0
-      APP.state.last_auto_switch_ms = now_ms()
-      render()
+      APP.state.last_switch_source = "web"
+      set_face(floor(face), false)
     end
     return web_response(encode_json({ ok = true, face = APP.state.face, count = APP.FACE_COUNT, names = FACE_NAMES }), "application/json; charset=utf-8")
   end
@@ -1361,16 +1401,34 @@ local function start_web()
       local face = type(doc) == "table" and floor(tonumber(doc.default_face) or 0) or 0
       local interval = type(doc) == "table" and tonumber(doc.auto_switch_ms) or -1
       if face < 1 or face > APP.FACE_COUNT or (interval ~= 0 and interval ~= 600000 and interval ~= 3600000) then
-        return web_response(encode_json({ ok = false, error = "设置值无效" }), "application/json; charset=utf-8", "400 Bad Request")
+        return web_response(encode_json({ ok = false, error = tr("设置值无效", "Invalid setting value") }), "application/json; charset=utf-8", "400 Bad Request")
       end
       APP.state.default_face = face
       APP.state.auto_switch_ms = interval
       APP.state.last_auto_switch_ms = now_ms()
       if not save_app_config() then
-        return web_response(encode_json({ ok = false, error = "设置保存失败" }), "application/json; charset=utf-8", "500 Internal Server Error")
+        return web_response(encode_json({ ok = false, error = tr("设置保存失败", "Failed to save settings") }), "application/json; charset=utf-8", "500 Internal Server Error")
       end
     end
-    return web_response(encode_json({ ok = true, default_face = APP.state.default_face, auto_switch_ms = APP.state.auto_switch_ms }), "application/json; charset=utf-8")
+    return web_response(encode_json({ ok = true, default_face = APP.state.default_face, auto_switch_ms = APP.state.auto_switch_ms, language = APP.state.language }), "application/json; charset=utf-8")
+  end
+  local function imu_api()
+    local state = APP.state
+    return web_response(encode_json({
+      ok = true,
+      mode = "launcher-key-start",
+      face = state.face,
+      last_switch_source = state.last_switch_source,
+      animating = state.animating,
+      move_lock_ms = APP.KEY_MOVE_LOCK_MS,
+      repeat_every = 3,
+      repeat_left = state.repeat_left,
+      repeat_right = state.repeat_right,
+      key_trigger_count = state.key_trigger_count,
+      key_blocked_count = state.key_blocked_count,
+      last_key_event = state.last_key_event,
+      last_key_ts_ms = state.last_key_ts_ms,
+    }), "application/json; charset=utf-8")
   end
   local function snapshot_api(req)
     local raw = req and (req.body or req.payload) or nil
@@ -1381,7 +1439,7 @@ local function start_web()
     local doc = decode_json(raw or "")
     local face = type(doc) == "table" and tonumber(doc.face) or APP.state.face
     if not face or face < 1 or face > APP.FACE_COUNT then
-      return web_response(encode_json({ ok = false, error = "表盘编号无效" }), "application/json; charset=utf-8", "400 Bad Request")
+      return web_response(encode_json({ ok = false, error = tr("表盘编号无效", "Invalid face number") }), "application/json; charset=utf-8", "400 Bad Request")
     end
     local snapshot_take = rawget(_G, "lv_snapshot_take")
     local snapshot_save = rawget(_G, "lv_snapshot_save_to_png")
@@ -1390,13 +1448,10 @@ local function start_web()
       return web_response(encode_json({ ok = false, error = "snapshot API unavailable" }), "application/json; charset=utf-8", "501 Not Implemented")
     end
     local requested_face = floor(face)
-    if APP.state.face ~= requested_face then
-      APP.state.face = requested_face
-      APP.state.last_render_face = 0
-      APP.state.hud_until_ms = 0
-      render()
-    end
-    local ok_take, snapshot, take_err = pcall_fn(snapshot_take, APP.canvas)
+    if APP.state.face ~= requested_face then set_face(requested_face, false) end
+    local fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+    local snapshot_canvas = requested_face == FIREWORKS_FACE and fireworks and fireworks.canvas or APP.canvas
+    local ok_take, snapshot, take_err = pcall_fn(snapshot_take, snapshot_canvas)
     if not ok_take or not snapshot then
       return web_response(encode_json({ ok = false, error = tostring(take_err or snapshot or "snapshot failed") }), "application/json; charset=utf-8", "500 Internal Server Error")
     end
@@ -1426,6 +1481,7 @@ local function start_web()
     route(server.POST, base .. "/api/face", face_api)
     route(server.GET, base .. "/api/settings", settings_api)
     route(server.POST, base .. "/api/settings", settings_api)
+    route(server.GET, base .. "/api/imu", imu_api)
     route(server.POST, base .. "/api/snapshot", snapshot_api)
   end
   APP.web_started = true
@@ -1440,17 +1496,22 @@ local function maybe_stop_for_exit()
   return false
 end
 
+local init_ui
+
 local function tick()
   if not APP.running or maybe_stop_for_exit() then return end
   local now = now_ms()
   if APP.state.auto_switch_ms > 0 and now - APP.state.last_auto_switch_ms >= APP.state.auto_switch_ms then
-    switch_face(1)
+    switch_face(1, "auto")
     return
   end
-  if APP.state.pending_dir ~= 0 then
-    local direction = APP.state.pending_dir
-    APP.state.pending_dir = 0
-    switch_face(direction)
+  if APP.state.face == FIREWORKS_FACE then
+    local fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+    if (not fireworks or not fireworks.running) and not APP.state.fireworks_failed then
+      APP.state.fireworks_failed = true
+      init_ui()
+      render()
+    end
     return
   end
   local t = local_time()
@@ -1462,7 +1523,7 @@ local function tick()
   if APP.state.face ~= APP.state.last_render_face or time_changed or hud_visible ~= APP.state.hud_was_visible then render() end
 end
 
-local function init_ui()
+init_ui = function()
   local root = lv_scr_act()
   lv_obj_clean(root)
   APP.root = root
@@ -1471,6 +1532,51 @@ local function init_ui()
   if CANVAS_FMT then APP.canvas = canvas_create(root, APP.SCREEN_W, APP.SCREEN_H, CANVAS_FMT)
   else APP.canvas = canvas_create(root, APP.SCREEN_W, APP.SCREEN_H) end
   if obj_pos and APP.canvas then pcall_fn(obj_pos, APP.canvas, 0, 0) end
+end
+
+local function stop_fireworks()
+  local fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+  if fireworks and fireworks.stop then pcall_fn(fireworks.stop, "face-switch") end
+end
+
+local function start_fireworks()
+  local fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+  if fireworks and fireworks.running then return true end
+  local ok, err = pcall_fn(dofile, APP.APP_DIR .. "/fireworks.lua")
+  if not ok then
+    APP.state.fireworks_failed = true
+    warn("fireworks face failed", tostring(err))
+    return false
+  end
+  fireworks = rawget(_G, "FIREWORKS_CLOCK_APP")
+  local started = fireworks and fireworks.running == true
+  APP.state.fireworks_failed = not started
+  return started
+end
+
+set_face = function(face, show_hud)
+  face = floor(tonumber(face) or 1)
+  if face < 1 or face > APP.FACE_COUNT then face = 1 end
+  local previous_face = APP.state.face
+  if previous_face == FIREWORKS_FACE and face ~= FIREWORKS_FACE then
+    stop_fireworks()
+    init_ui()
+  end
+  APP.state.face = face
+  APP.state.last_render_face = 0
+  APP.state.last_switch_ms = now_ms()
+  APP.state.last_auto_switch_ms = APP.state.last_switch_ms
+  APP.state.hud_until_ms = show_hud and (APP.state.last_switch_ms + 900) or 0
+  if face == FIREWORKS_FACE then
+    APP.state.fireworks_failed = false
+    if not start_fireworks() then
+      init_ui()
+      render()
+    end
+  else
+    APP.state.fireworks_failed = false
+    render()
+  end
 end
 
 local function start_timers()
@@ -1487,9 +1593,9 @@ local function start_timers()
       APP.stop("controller-exit")
       if app and app.exit then pcall(function() app.exit() end) end
     elseif (pressed & 4) ~= 0 then
-      switch_face(-1)
+      switch_face(-1, "controller")
     elseif (pressed & 8) ~= 0 then
-      switch_face(1)
+      switch_face(1, "controller")
     end
   end)
   APP.timers.tick = tmr.create()
@@ -1522,20 +1628,25 @@ end
 function APP.stop(reason)
   if not APP.running then return end
   APP.running = false
+  stop_fireworks()
   for _, timer in pairs(APP.timers) do
     pcall_fn(function() timer:stop() end)
     pcall_fn(function() timer:unregister() end)
   end
   APP.timers = {}
-  local app_mod = rawget(_G, "app")
-  if APP.input.imu and app_mod and app_mod.on then pcall_fn(app_mod.on, "imu", nil) end
   local key_mod = rawget(_G, "key")
   if APP.input.keys and key_mod and key_mod.off then
     pcall_fn(key_mod.off, key_mod.LEFT)
     pcall_fn(key_mod.off, key_mod.RIGHT)
   end
   local server = rawget(_G, "httpd")
-  if APP.web_started and server and server.stop then pcall_fn(server.stop) end
+  if APP.web_started and server and server.unregister then
+    for i = #(APP.routes or {}), 1, -1 do
+      local item = APP.routes[i]
+      pcall_fn(server.unregister, item.method, item.path)
+    end
+  end
+  APP.routes = {}
   APP.web_started = false
   if lv_font_free then
     for _, handle in ipairs(APP.font_handles) do pcall_fn(lv_font_free, handle) end
@@ -1560,4 +1671,5 @@ if APP.canvas then
   render()
   start_web()
   start_timers()
+  if APP.state.face == FIREWORKS_FACE then set_face(FIREWORKS_FACE, false) end
 end
