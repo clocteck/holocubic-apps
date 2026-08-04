@@ -8,7 +8,7 @@ end
 DEVTOOLS = {}
 local APP = DEVTOOLS
 
-APP.VERSION = "2026-07-28-devtools-max-handlers-256-v7"
+APP.VERSION = "2026-08-04-devtools-app-rescan-v8"
 APP.ROOT_PATH = "/sd"
 APP.APPS_PATH = "/sd/apps"
 APP.SERVICE_ID = "devtools"
@@ -990,6 +990,31 @@ function APP.api_apps()
     current_app_id = current_app_id ~= "" and current_app_id or nil,
     run_app_id = APP.RUN_APP_ID,
     run_app_main = APP.RUN_APP_MAIN
+  })
+end
+
+function APP.api_apps_rescan()
+  if not app or type(app.rescan) ~= "function" then
+    return error_response("501 Not Implemented", "app.rescan API unavailable")
+  end
+
+  local ok_call, ok_rescan, rescan_err = pcall(app.rescan)
+  if not ok_call then
+    return error_response("500 Internal Server Error", "app rescan failed: " .. text_or(ok_rescan, "unknown error"))
+  end
+  if not ok_rescan then
+    return error_response("500 Internal Server Error", "app rescan failed: " .. text_or(rescan_err, "unknown error"))
+  end
+
+  local apps, current_app_id = editable_apps_snapshot()
+  mark_action("apps-rescan", tostring(#apps))
+  update_screen()
+  return json_response("200 OK", {
+    ok = true,
+    rescanned = true,
+    apps = apps,
+    app_count = #apps,
+    current_app_id = current_app_id ~= "" and current_app_id or nil
   })
 end
 
@@ -2313,6 +2338,7 @@ APP.register_route(httpd.GET, APP.API_PREFIX .. "/code/read", APP.api_read_run_c
 
 APP.register_route(httpd.POST, APP.API_PREFIX .. "/mkdir", APP.api_mkdir)
 APP.register_route(httpd.POST, APP.API_PREFIX .. "/rename", APP.api_rename)
+APP.register_route(httpd.POST, APP.API_PREFIX .. "/apps/rescan", APP.api_apps_rescan)
 APP.register_route(httpd.POST, APP.API_PREFIX .. "/reload", APP.api_reload)
 APP.register_route(httpd.POST, APP.API_PREFIX .. "/code/save", APP.route_save_code)
 APP.register_route(httpd.POST, APP.API_PREFIX .. "/code/run", APP.route_run_code)

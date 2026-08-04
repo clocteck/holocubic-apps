@@ -3,5 +3,5 @@ entry = main.lua
 kind = service
 allow_webui = true
 autostart_service = true
-description = 开发工具服务，支持 SD 文件管理、代码运行和调试接口
-version = 1.0.2
+description = 开发工具服务，支持 SD 文件管理、应用重扫、代码运行和调试接口
+version = 1.0.3
