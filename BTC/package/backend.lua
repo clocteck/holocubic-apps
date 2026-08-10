@@ -6,10 +6,12 @@ local DEFAULT_LIMIT = 64
 local MAIN_REFRESH_MS = 20000
 local ERROR_RETRY_MS = 6000
 local HTTP_TIMEOUT_MS = 12000
+local FX_HTTP_TIMEOUT_MS = 25000
 local FX_REFRESH_MS = 30 * 60 * 1000
 local FX_FALLBACK_USD_CNY = 7.20
 local FX_FALLBACK_USD_TWD = 32.50
 local FX_URL = "https://open.er-api.com/v6/latest/USD"
+local FX_HISTORY_URL = "https://api.frankfurter.dev/v2/rates"
 local TROY_OUNCE_GRAMS = 31.1034768
 local POUND_GRAMS = 453.59237
 
@@ -20,13 +22,17 @@ local CURRENCIES = {
 }
 
 local INTERVALS = {
-  { label = "5m", api_binance = "5m", api_yahoo = "5m", range_yahoo = "5d", klt_em = "5", em_span = "month" },
-  { label = "1h", api_binance = "1h", api_yahoo = "60m", range_yahoo = "1mo", klt_em = "60", em_span = "year" },
-  { label = "1day", api_binance = "1d", api_yahoo = "1d", range_yahoo = "6mo", klt_em = "101", em_span = "prev_year" },
-  { label = "7day", api_binance = "1w", api_yahoo = "1wk", range_yahoo = "5y", klt_em = "102", em_span = "three_year" },
+  { label = "5m", api_binance = "5m", api_yahoo = "5m", range_yahoo = "5d", klt_em = "5", em_span = "month", fx_days = 7, fx_label = "7D" },
+  { label = "1h", api_binance = "1h", api_yahoo = "60m", range_yahoo = "1mo", klt_em = "60", em_span = "year", fx_days = 30, fx_label = "30D" },
+  { label = "1day", api_binance = "1d", api_yahoo = "1d", range_yahoo = "6mo", klt_em = "101", em_span = "prev_year", fx_days = 90, fx_label = "90D" },
+  { label = "7day", api_binance = "1w", api_yahoo = "1wk", range_yahoo = "5y", klt_em = "102", em_span = "three_year", fx_days = 365, fx_label = "1Y" },
 }
 
 local PRESET_ASSETS = {
+  { id = "fx:USDCNY", group = "fx", source = "fx", symbol = "USDCNY", base = "USD", quote = "CNY", text = "USD / CNY" },
+  { id = "fx:EURCNY", group = "fx", source = "fx", symbol = "EURCNY", base = "EUR", quote = "CNY", text = "EUR / CNY" },
+  { id = "fx:USDJPY", group = "fx", source = "fx", symbol = "USDJPY", base = "USD", quote = "JPY", text = "USD / JPY" },
+  { id = "fx:EURUSD", group = "fx", source = "fx", symbol = "EURUSD", base = "EUR", quote = "USD", text = "EUR / USD" },
   { id = "crypto:BTCUSDT", group = "crypto", source = "binance", symbol = "BTCUSDT", text = "BTC / USDT", quote = "USD" },
   { id = "crypto:ETHUSDT", group = "crypto", source = "binance", symbol = "ETHUSDT", text = "ETH / USDT", quote = "USD" },
   { id = "crypto:SOLUSDT", group = "crypto", source = "binance", symbol = "SOLUSDT", text = "SOL / USDT", quote = "USD" },
@@ -133,6 +139,44 @@ local function local_date_parts()
   return year, month, day
 end
 
+local function days_in_month(year, month)
+  if month == 2 then
+    local leap = (year % 4 == 0 and year % 100 ~= 0) or year % 400 == 0
+    return leap and 29 or 28
+  end
+  if month == 4 or month == 6 or month == 9 or month == 11 then
+    return 30
+  end
+  return 31
+end
+
+-- 嵌入式 Lua 不保证提供 os.time；直接按日回退生成历史查询起始日期。
+local function date_days_ago(days)
+  local year, month, day = local_date_parts()
+  days = math.max(0, math.floor(tonumber(days) or 0))
+  while days > 0 do
+    if day > 1 then
+      local step = math.min(days, day - 1)
+      day = day - step
+      days = days - step
+    else
+      month = month - 1
+      if month < 1 then
+        month = 12
+        year = year - 1
+      end
+      day = days_in_month(year, month)
+      days = days - 1
+    end
+  end
+  return string.format("%04d-%02d-%02d", year, month, day)
+end
+
+local function local_date_text()
+  local year, month, day = local_date_parts()
+  return string.format("%04d-%02d-%02d", year, month, day)
+end
+
 -- 东方财富日线如果 beg=0 会返回几十万字节历史数据，设备 JSON 解码会 NoMemory。
 local function eastmoney_begin(interval)
   local year, month = local_date_parts()
@@ -180,6 +224,23 @@ local function fmt_price(value)
     return "--"
   end
   return string.format("%.2f", value)
+end
+
+-- 汇率需要保留足够的小数位，避免 JPY/USD 等小汇率被四舍五入成 0.01。
+local function fmt_rate(value)
+  value = tonumber(value)
+  if not value then
+    return "--"
+  end
+  local text
+  if math.abs(value) >= 100 then
+    text = string.format("%.3f", value)
+  elseif math.abs(value) >= 1 then
+    text = string.format("%.4f", value)
+  else
+    text = string.format("%.6f", value)
+  end
+  return text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
 end
 
 -- 带正负号的涨跌额格式化，统一保留 2 位小数。
@@ -253,7 +314,20 @@ local function normalize_currency(value)
   return "USD"
 end
 
+-- 自定义汇率使用 ISO 4217 三字母代码，不限制为行情换算所用的三种币种。
+local function normalize_currency_code(value)
+  local code = trim(value):upper()
+  if code:match("^[A-Z][A-Z][A-Z]$") then
+    return code
+  end
+  return nil
+end
+
 local function currency_text(value)
+  local code = normalize_currency_code(value)
+  if code and code ~= "USD" and code ~= "CNY" and code ~= "TWD" then
+    return code
+  end
   local currency = normalize_currency(value)
   if currency == "CNY" then
     return "人民币"
@@ -333,6 +407,10 @@ local function display_price(asset, value, target_currency, usd_cny, usd_twd)
     return nil
   end
 
+  if asset and asset.group == "fx" then
+    return v
+  end
+
   local base_currency = asset and asset.quote or "USD"
   if asset and asset.group == "metal" then
     if metal_unit(asset) == "lb" then
@@ -359,6 +437,7 @@ local function public_asset(asset)
     secid = asset.secid,
     text = asset.text,
     quote = asset.quote,
+    base = asset.base,
     metal_unit = asset.metal_unit,
   }
 end
@@ -438,13 +517,26 @@ local function restore_custom_asset(value)
   if id == "" or source == "" or symbol == "" then
     return nil
   end
-  if source ~= "binance" and source ~= "yahoo" and source ~= "eastmoney" and source ~= "twse" then
+  if source ~= "binance" and source ~= "yahoo" and source ~= "eastmoney" and source ~= "twse" and source ~= "fx" then
     return nil
   end
 
   local group = tostring(value.group or "")
-  if group ~= "crypto" and group ~= "nasdaq" and group ~= "metal" and group ~= "ashare" and group ~= "taiwan" then
+  if group ~= "crypto" and group ~= "nasdaq" and group ~= "metal" and group ~= "ashare" and group ~= "taiwan" and group ~= "fx" then
     group = "crypto"
+  end
+
+  local base = nil
+  local quote = nil
+  if source == "fx" then
+    base = normalize_currency_code(value.base)
+    quote = normalize_currency_code(value.quote)
+    if not base or not quote or base == quote then
+      return nil
+    end
+    group = "fx"
+    symbol = base .. quote
+    id = "custom:fx:" .. symbol
   end
 
   local migrated_secid = nil
@@ -462,7 +554,8 @@ local function restore_custom_asset(value)
     source = source,
     symbol = symbol,
     text = tostring(value.text or symbol),
-    quote = normalize_currency(value.quote or (group == "ashare" and "CNY" or (group == "taiwan" and "TWD" or "USD"))),
+    quote = quote or normalize_currency(value.quote or (group == "ashare" and "CNY" or (group == "taiwan" and "TWD" or "USD"))),
+    base = base,
   }
   if migrated_secid or value.secid then
     asset.secid = migrated_secid or tostring(value.secid)
@@ -483,6 +576,69 @@ local function parse_fx_rates(doc)
     return cny, twd, nil
   end
   return nil, nil, "fx CNY/TWD missing"
+end
+
+-- 解析任意货币对的每日历史汇率，并均匀压缩为屏幕可绘制的点数。
+local function parse_fx_pair(doc, asset)
+  if type(doc) ~= "table" then
+    return nil, "fx history missing"
+  end
+  local quote = asset and normalize_currency_code(asset.quote)
+  local raw = {}
+  for i = 1, #doc do
+    local row = doc[i]
+    local rate = type(row) == "table" and tonumber(row.rate)
+    local row_quote = type(row) == "table" and normalize_currency_code(row.quote)
+    if rate and rate > 0 and row_quote == quote then
+      raw[#raw + 1] = {
+        time = tostring(row.date or clock_text()),
+        open = rate,
+        high = rate,
+        low = rate,
+        close = rate,
+      }
+    end
+  end
+
+  if #raw == 0 then
+    return nil, "fx rate missing: " .. tostring(quote or "?")
+  end
+
+  local candles = raw
+  if #raw > DEFAULT_LIMIT then
+    candles = {}
+    local last_index = 0
+    for i = 0, DEFAULT_LIMIT - 1 do
+      local index = math.floor(i * (#raw - 1) / (DEFAULT_LIMIT - 1)) + 1
+      if index ~= last_index then
+        candles[#candles + 1] = raw[index]
+        last_index = index
+      end
+    end
+  end
+
+  local closes = {}
+  local min_rate = nil
+  local max_rate = nil
+  for i = 1, #candles do
+    local rate = candles[i].close
+    closes[#closes + 1] = rate
+    min_rate = not min_rate and rate or math.min(min_rate, rate)
+    max_rate = not max_rate and rate or math.max(max_rate, rate)
+  end
+  local current = closes[#closes]
+  local previous = closes[#closes - 1] or current
+  return {
+    current_price = current,
+    prev_close = previous,
+    first_price = closes[1],
+    candles = candles,
+    closes = closes,
+    min_price = min_rate,
+    max_price = max_rate,
+    currency = quote,
+    live_source = "Frankfurter daily FX",
+  }, nil
 end
 
 -- 简单 CSV 行拆分，东方财富 K 线字段不含引号。
@@ -516,7 +672,10 @@ local function chart_time_value(value)
   local doy = math.floor((153 * mp + 2) / 5) + d - 1
   local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
   local days = era * 146097 + doe - 719468
-  return (days * 86400 + hh * 3600 + mm * 60) * 1000
+  -- Keep date-derived values in seconds.  The device Lua runtime stores integers
+  -- as signed 32-bit values, so Unix milliseconds overflow and can make the
+  -- chart X axis run backwards.  Ratios only need a monotonic time value.
+  return days * 86400 + hh * 3600 + mm * 60
 end
 
 -- 统计 K 线范围和收盘序列。
@@ -863,6 +1022,17 @@ local function build_url(asset, interval)
       .. "&fields2=f51,f52,f53,f54,f55,f56,f57,f58"
       .. "&klt=" .. interval.klt_em
       .. "&fqt=1&beg=" .. eastmoney_begin(interval) .. "&end=20500101&lmt=" .. tostring(DEFAULT_LIMIT)
+  elseif asset.source == "fx" then
+    local base = normalize_currency_code(asset.base)
+    local quote = normalize_currency_code(asset.quote)
+    if not base or not quote then
+      return nil, "bad currency pair"
+    end
+    return FX_HISTORY_URL
+      .. "?from=" .. date_days_ago(interval.fx_days or 30)
+      .. "&to=" .. local_date_text()
+      .. "&base=" .. url_encode(base)
+      .. "&quotes=" .. url_encode(quote)
   end
   return nil, "source unsupported"
 end
@@ -875,6 +1045,8 @@ local function parse_by_source(asset, doc)
     return parse_yahoo(doc, asset)
   elseif asset.source == "eastmoney" then
     return parse_eastmoney(doc, asset)
+  elseif asset.source == "fx" then
+    return parse_fx_pair(doc, asset)
   end
   return nil, "source unsupported"
 end
@@ -914,8 +1086,33 @@ end
 local function make_custom_asset(params)
   local source = trim(params.source)
   local symbol = trim(params.symbol)
-  if source == "" or symbol == "" then
-    return nil, "source/symbol required"
+  if source == "" then
+    return nil, "source required"
+  end
+
+  if source == "fx" then
+    local base = normalize_currency_code(params.base_currency or params.base)
+    local quote = normalize_currency_code(params.quote_currency or params.quote)
+    if not base or not quote then
+      return nil, "currency code must be 3 letters"
+    end
+    if base == quote then
+      return nil, "base and quote currencies must differ"
+    end
+    local pair = base .. quote
+    return {
+      id = "custom:fx:" .. pair,
+      group = "fx",
+      source = "fx",
+      symbol = pair,
+      base = base,
+      quote = quote,
+      text = base .. " / " .. quote,
+    }
+  end
+
+  if symbol == "" then
+    return nil, "symbol required"
   end
 
   local text = trim(params.name)
@@ -1490,7 +1687,8 @@ function Backend.new(opts)
 
     local req_asset_id = asset.id
     local req_interval = interval.label
-    return self:request_json(asset.source, url, function(ok, doc, err, code)
+    local request_job = asset.source == "fx" and "fx_pair" or asset.source
+    return self:request_json(request_job, url, function(ok, doc, err, code)
       if req_asset_id ~= self.settings.asset_id or req_interval ~= self.settings.interval then
         return
       end
@@ -1504,6 +1702,16 @@ function Backend.new(opts)
         end
       else
         history_error = tostring(err or ("http " .. tostring(code)))
+      end
+
+      if asset.source == "fx" then
+        if parsed then
+          self:apply_parsed(asset, parsed)
+          self.state.next_fetch_at = now_ms() + FX_REFRESH_MS
+        else
+          self:fail(history_error, code)
+        end
+        return
       end
 
       if asset.group ~= "taiwan" then
@@ -1674,7 +1882,8 @@ function Backend.new(opts)
   function self:tick()
     local s = self.state
     if s.http_busy then
-      if s.http_started_ms > 0 and (now_ms() - s.http_started_ms) > HTTP_TIMEOUT_MS then
+      local timeout_ms = s.http_job == "fx_pair" and FX_HTTP_TIMEOUT_MS or HTTP_TIMEOUT_MS
+      if s.http_started_ms > 0 and (now_ms() - s.http_started_ms) > timeout_ms then
         s.http_busy = false
         local timeout_job = s.http_job
         s.http_job = ""
@@ -1725,6 +1934,9 @@ function Backend.new(opts)
   -- 切换图表模式，按键长按和 Web 选择共用。
   function self:set_mode(mode)
     local normalized = normalize_mode(mode)
+    if self:current_asset().group == "fx" then
+      normalized = "line"
+    end
     if normalized and normalized ~= self.settings.mode then
       self.settings.mode = normalized
       self.state.chart_dirty = true
@@ -1748,7 +1960,9 @@ function Backend.new(opts)
     local chart_changed = false
     local settings_changed = false
 
-    if params.source and params.symbol and trim(params.symbol) ~= "" then
+    local custom_requested = params.source
+      and (trim(params.source) == "fx" or (params.symbol and trim(params.symbol) ~= ""))
+    if custom_requested then
       local custom, err = make_custom_asset(params)
       if custom then
         self.custom_asset = custom
@@ -1811,6 +2025,19 @@ function Backend.new(opts)
       end
     end
 
+    if self:current_asset().group == "fx" then
+      if self.settings.mode ~= "line" then
+        self.settings.mode = "line"
+        chart_changed = true
+        settings_changed = true
+      end
+      if self.settings.ma_period ~= 0 then
+        self.settings.ma_period = 0
+        chart_changed = true
+        settings_changed = true
+      end
+    end
+
     if data_changed then
       self:clear_data("switching")
     elseif chart_changed then
@@ -1840,10 +2067,15 @@ function Backend.new(opts)
 
     local intervals = {}
     for i = 1, #self.intervals do
-      intervals[#intervals + 1] = { label = self.intervals[i].label }
+      intervals[#intervals + 1] = {
+        label = self.intervals[i].label,
+        fx_label = self.intervals[i].fx_label,
+      }
     end
 
-    local target_currency = normalize_currency(self.settings.currency)
+    local target_currency = asset.group == "fx"
+      and (normalize_currency_code(asset.quote) or "USD")
+      or normalize_currency(self.settings.currency)
     local fx_rate = tonumber(s.fx_rate) or FX_FALLBACK_USD_CNY
     local fx_twd_rate = tonumber(s.fx_twd_rate) or FX_FALLBACK_USD_TWD
     local points = {}
@@ -1903,6 +2135,7 @@ function Backend.new(opts)
       settings = {
         asset = asset.id,
         interval = interval.label,
+        interval_text = asset.group == "fx" and (interval.fx_label or interval.label) or interval.label,
         mode = self.settings.mode,
         currency = target_currency,
         ma = self.settings.ma_period > 0 and tostring(self.settings.ma_period) or "off",
@@ -1916,7 +2149,7 @@ function Backend.new(opts)
       error = s.last_error,
       http_code = s.last_http_code,
       price = display_current,
-      price_text = fmt_price(display_current),
+      price_text = asset.group == "fx" and fmt_rate(display_current) or fmt_price(display_current),
       change = display_change,
       change_text = fmt_signed(display_change),
       change_pct = display_pct,
@@ -1928,8 +2161,8 @@ function Backend.new(opts)
       unit_text = unit_text(asset),
       min_price = display_min,
       max_price = display_max,
-      min_price_text = fmt_price(display_min),
-      max_price_text = fmt_price(display_max),
+      min_price_text = asset.group == "fx" and fmt_rate(display_min) or fmt_price(display_min),
+      max_price_text = asset.group == "fx" and fmt_rate(display_max) or fmt_price(display_max),
       updated_text = s.last_update_text,
       now_text = clock_text(),
       fx_rate = fx_rate,

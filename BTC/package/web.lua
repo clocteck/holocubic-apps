@@ -194,7 +194,7 @@ canvas{display:block;width:100%;height:100%}
 .stat strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .controls{padding:16px;display:grid;gap:14px}
 .seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-#groupButtons{grid-template-columns:repeat(5,minmax(0,1fr))}
+#groupButtons{grid-template-columns:repeat(3,minmax(0,1fr))}
 .currency-seg{grid-template-columns:repeat(3,minmax(0,1fr))}
 .seg button,.actions button{
   min-height:38px;
@@ -219,6 +219,7 @@ select,input{
 }
 select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);box-shadow:0 0 0 4px rgba(10,132,255,.12)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.custom-section{display:grid;gap:14px}
 .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
 .actions .primary{background:linear-gradient(135deg,#0a84ff,#45b2ff);border-color:transparent;color:#fff;font-weight:750;box-shadow:0 10px 24px rgba(10,132,255,.2)}
 .actions .secondary{color:var(--text)}
@@ -248,6 +249,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
   .price{font-size:34px}
   .chart-wrap{min-height:230px}
   .seg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #groupButtons{grid-template-columns:repeat(2,minmax(0,1fr))}
   .grid2,.actions{grid-template-columns:1fr}
 }
 </style>
@@ -293,6 +295,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
 
     <aside class="panel controls">
       <div class="seg" id="groupButtons">
+        <button data-group="fx" data-i18n="fx">汇率</button>
         <button data-group="crypto" data-i18n="crypto">币价</button>
         <button data-group="nasdaq" data-i18n="nasdaq">纳斯达克</button>
         <button data-group="metal" data-i18n="metal">金银铜</button>
@@ -300,7 +303,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         <button data-group="taiwan" data-i18n="taiwan">台股</button>
       </div>
 
-      <div class="field">
+      <div class="field" id="currencyField">
         <label data-i18n="currency">显示币种</label>
         <div class="seg currency-seg" id="currencyButtons">
           <button data-currency="USD" data-i18n="usd">美金</button>
@@ -310,9 +313,20 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         <select class="hidden" id="currencySelect"></select>
       </div>
 
-      <div class="field">
+      <div class="field" id="assetField">
         <label for="assetSelect" data-i18n="asset">标的</label>
         <select id="assetSelect"></select>
+      </div>
+
+      <div class="grid2 hidden" id="fxPairField">
+        <div class="field">
+          <label for="baseCurrencyInput" data-i18n="base_currency">原货币</label>
+          <select id="baseCurrencyInput"></select>
+        </div>
+        <div class="field">
+          <label for="quoteCurrencyInput" data-i18n="quote_currency">目标货币</label>
+          <select id="quoteCurrencyInput"></select>
+        </div>
       </div>
 
       <div class="field">
@@ -320,7 +334,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         <select id="intervalSelect"></select>
       </div>
 
-      <div class="field">
+      <div class="field" id="modeField">
         <label for="modeSelect" data-i18n="chart">图表</label>
         <select id="modeSelect">
           <option value="line" data-i18n="line">折线</option>
@@ -328,7 +342,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         </select>
       </div>
 
-      <div class="field">
+      <div class="field" id="maField">
         <label for="maSelect" data-i18n="ma">均线</label>
         <select id="maSelect">
           <option value="off" data-i18n="off">不显示</option>
@@ -341,6 +355,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         <button class="secondary" id="refreshNow" data-i18n="refresh">刷新</button>
       </div>
 
+      <div class="custom-section" id="customSection">
       <div class="divider"></div>
 
       <div class="subhead" data-i18n="custom">自定义</div>
@@ -364,7 +379,7 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
           </select>
         </div>
       </div>
-      <div class="grid2">
+      <div class="grid2" id="symbolFields">
         <div class="field">
           <label for="symbolInput" data-i18n="symbol">代码</label>
           <input id="symbolInput" value="BTCUSDT" autocomplete="off">
@@ -378,12 +393,13 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         <button class="primary" id="applyCustom" data-i18n="add_view">添加并查看</button>
         <button class="secondary" id="clearCustom" data-i18n="clear">清空</button>
       </div>
+      </div>
       <div class="hint" id="hint"></div>
     </aside>
   </section>
   <footer class="site-footer">
     <div>Copyright &copy; 2026 clocteck. Licensed under GPL-3.0. Open source: <a href="https://github.com/clocteck" target="_blank" rel="noopener">github.com/clocteck</a>.</div>
-    <div>Data sources: Binance, Eastmoney, TWSE MIS, and open.er-api.com FX rates. For display only; not financial advice.</div>
+    <div>Data sources: Binance, Eastmoney, TWSE MIS, Open ER-API, and Frankfurter daily FX history. For display only; not financial advice.</div>
   </footer>
 </main>
 
@@ -391,10 +407,10 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
 const API = "]=], api_prefix, [=[";
 const LANG = "]=], language, [=[";
 const MESSAGES = {
-  "zh-CN": {main:"主页",interval:"周期",high:"最高",low:"最低",updated:"更新",crypto:"币价",nasdaq:"纳斯达克",metal:"金银铜",ashare:"A股",taiwan:"台股",currency:"显示币种",usd:"美金",cny:"人民币",twd:"新台币",asset:"标的",trend_interval:"走势周期",chart:"图表",line:"折线",candle:"K线",ma:"均线",off:"不显示",refresh:"刷新",custom:"自定义",source:"来源",eastmoney:"Eastmoney公开",yahoo:"Yahoo Finance",twse:"台湾行情 (TWSE MIS)",market:"市场",shanghai:"沪市/指数",shenzhen:"深市",nasdaq_index:"纳斯达克指数",us_stock:"美股",metal_futures:"金银铜期货",symbol:"代码",name:"名称",add_view:"添加并查看",clear:"清空",loading:"加载中",ready:"就绪",cold:"启动中",error:"错误"},
-  en: {main:"Main",interval:"Interval",high:"High",low:"Low",updated:"Updated",crypto:"Crypto",nasdaq:"Nasdaq",metal:"Metals",ashare:"A-shares",taiwan:"Taiwan",currency:"Display currency",usd:"USD",cny:"CNY",twd:"TWD",asset:"Asset",trend_interval:"Trend interval",chart:"Chart",line:"Line",candle:"Candles",ma:"Moving average",off:"Off",refresh:"Refresh",custom:"Custom",source:"Source",eastmoney:"Eastmoney public",yahoo:"Yahoo Finance",twse:"Taiwan quotes (TWSE MIS)",market:"Market",shanghai:"Shanghai / Index",shenzhen:"Shenzhen",nasdaq_index:"Nasdaq index",us_stock:"US stocks",metal_futures:"Metal futures",symbol:"Symbol",name:"Name",add_view:"Add and view",clear:"Clear",loading:"Loading",ready:"Ready",cold:"Starting",error:"Error"},
-  ja: {main:"メイン",interval:"期間",high:"高値",low:"安値",updated:"更新",crypto:"暗号資産",nasdaq:"ナスダック",metal:"金銀銅",ashare:"中国A株",taiwan:"台湾株",currency:"表示通貨",usd:"米ドル",cny:"人民元",twd:"台湾ドル",asset:"銘柄",trend_interval:"表示期間",chart:"チャート",line:"折線",candle:"ローソク",ma:"移動平均",off:"表示しない",refresh:"更新",custom:"カスタム",source:"データ元",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"台湾相場 (TWSE MIS)",market:"市場",shanghai:"上海 / 指数",shenzhen:"深圳",nasdaq_index:"ナスダック指数",us_stock:"米国株",metal_futures:"金属先物",symbol:"コード",name:"名称",add_view:"追加して表示",clear:"クリア",loading:"読込中",ready:"準備完了",cold:"起動中",error:"エラー"},
-  "zh-TW": {main:"主頁",interval:"週期",high:"最高",low:"最低",updated:"更新",crypto:"幣價",nasdaq:"那斯達克",metal:"金銀銅",ashare:"A股",taiwan:"台股",currency:"顯示幣別",usd:"美元",cny:"人民幣",twd:"新台幣",asset:"標的",trend_interval:"走勢週期",chart:"圖表",line:"折線",candle:"K線",ma:"均線",off:"不顯示",refresh:"重新整理",custom:"自訂",source:"來源",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"臺灣行情 (TWSE MIS)",market:"市場",shanghai:"滬市/指數",shenzhen:"深市",nasdaq_index:"那斯達克指數",us_stock:"美股",metal_futures:"金銀銅期貨",symbol:"代碼",name:"名稱",add_view:"新增並檢視",clear:"清除",loading:"載入中",ready:"就緒",cold:"啟動中",error:"錯誤"}
+  "zh-CN": {main:"主页",interval:"周期",high:"最高",low:"最低",updated:"更新",fx:"汇率",crypto:"币价",nasdaq:"纳斯达克",metal:"金银铜",ashare:"A股",taiwan:"台股",currency:"显示币种",usd:"美金",cny:"人民币",twd:"新台币",asset:"标的",trend_interval:"走势周期",chart:"图表",line:"折线",candle:"K线",ma:"均线",off:"不显示",refresh:"刷新",custom:"自定义",source:"来源",fx_source:"公开汇率",base_currency:"原货币",quote_currency:"目标货币",eastmoney:"Eastmoney公开",yahoo:"Yahoo Finance",twse:"台湾行情 (TWSE MIS)",market:"市场",shanghai:"沪市/指数",shenzhen:"深市",nasdaq_index:"纳斯达克指数",us_stock:"美股",metal_futures:"金银铜期货",symbol:"代码",name:"名称",add_view:"添加并查看",clear:"清空",loading:"加载中",ready:"就绪",cold:"启动中",error:"错误"},
+  en: {main:"Main",interval:"Interval",high:"High",low:"Low",updated:"Updated",fx:"FX",crypto:"Crypto",nasdaq:"Nasdaq",metal:"Metals",ashare:"A-shares",taiwan:"Taiwan",currency:"Display currency",usd:"USD",cny:"CNY",twd:"TWD",asset:"Asset",trend_interval:"Trend interval",chart:"Chart",line:"Line",candle:"Candles",ma:"Moving average",off:"Off",refresh:"Refresh",custom:"Custom",source:"Source",fx_source:"Public FX rates",base_currency:"Base currency",quote_currency:"Quote currency",eastmoney:"Eastmoney public",yahoo:"Yahoo Finance",twse:"Taiwan quotes (TWSE MIS)",market:"Market",shanghai:"Shanghai / Index",shenzhen:"Shenzhen",nasdaq_index:"Nasdaq index",us_stock:"US stocks",metal_futures:"Metal futures",symbol:"Symbol",name:"Name",add_view:"Add and view",clear:"Clear",loading:"Loading",ready:"Ready",cold:"Starting",error:"Error"},
+  ja: {main:"メイン",interval:"期間",high:"高値",low:"安値",updated:"更新",fx:"為替",crypto:"暗号資産",nasdaq:"ナスダック",metal:"金銀銅",ashare:"中国A株",taiwan:"台湾株",currency:"表示通貨",usd:"米ドル",cny:"人民元",twd:"台湾ドル",asset:"銘柄",trend_interval:"表示期間",chart:"チャート",line:"折線",candle:"ローソク",ma:"移動平均",off:"表示しない",refresh:"更新",custom:"カスタム",source:"データ元",fx_source:"公開為替レート",base_currency:"基準通貨",quote_currency:"換算先通貨",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"台湾相場 (TWSE MIS)",market:"市場",shanghai:"上海 / 指数",shenzhen:"深圳",nasdaq_index:"ナスダック指数",us_stock:"米国株",metal_futures:"金属先物",symbol:"コード",name:"名称",add_view:"追加して表示",clear:"クリア",loading:"読込中",ready:"準備完了",cold:"起動中",error:"エラー"},
+  "zh-TW": {main:"主頁",interval:"週期",high:"最高",low:"最低",updated:"更新",fx:"匯率",crypto:"幣價",nasdaq:"那斯達克",metal:"金銀銅",ashare:"A股",taiwan:"台股",currency:"顯示幣別",usd:"美元",cny:"人民幣",twd:"新台幣",asset:"標的",trend_interval:"走勢週期",chart:"圖表",line:"折線",candle:"K線",ma:"均線",off:"不顯示",refresh:"重新整理",custom:"自訂",source:"來源",fx_source:"公開匯率",base_currency:"來源貨幣",quote_currency:"目標貨幣",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"臺灣行情 (TWSE MIS)",market:"市場",shanghai:"滬市/指數",shenzhen:"深市",nasdaq_index:"那斯達克指數",us_stock:"美股",metal_futures:"金銀銅期貨",symbol:"代碼",name:"名稱",add_view:"新增並檢視",clear:"清除",loading:"載入中",ready:"就緒",cold:"啟動中",error:"錯誤"}
 };
 const MSG = MESSAGES[LANG] || MESSAGES["zh-CN"];
 const tr = (key) => MSG[key] || MESSAGES["zh-CN"][key] || key;
@@ -407,7 +423,7 @@ const ERROR_TEXT = {
 const errText = ERROR_TEXT[LANG] || ERROR_TEXT["zh-CN"];
 document.documentElement.lang = LANG;
 document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = tr(node.dataset.i18n); });
-const groupText = { crypto: tr("crypto"), nasdaq: tr("nasdaq"), metal: tr("metal"), ashare: tr("ashare"), taiwan: tr("taiwan") };
+const groupText = { fx: tr("fx"), crypto: tr("crypto"), nasdaq: tr("nasdaq"), metal: tr("metal"), ashare: tr("ashare"), taiwan: tr("taiwan") };
 const els = {
   routeMeta: document.getElementById("routeMeta"),
   statusBadge: document.getElementById("statusBadge"),
@@ -420,16 +436,25 @@ const els = {
   statLow: document.getElementById("statLow"),
   statUpdate: document.getElementById("statUpdate"),
   chart: document.getElementById("chart"),
+  assetField: document.getElementById("assetField"),
   assetSelect: document.getElementById("assetSelect"),
+  fxPairField: document.getElementById("fxPairField"),
   intervalSelect: document.getElementById("intervalSelect"),
+  modeField: document.getElementById("modeField"),
   modeSelect: document.getElementById("modeSelect"),
+  maField: document.getElementById("maField"),
   maSelect: document.getElementById("maSelect"),
   currencySelect: document.getElementById("currencySelect"),
+  currencyField: document.getElementById("currencyField"),
   sourceSelect: document.getElementById("sourceSelect"),
+  customSection: document.getElementById("customSection"),
   marketField: document.getElementById("marketField"),
   marketSelect: document.getElementById("marketSelect"),
   symbolInput: document.getElementById("symbolInput"),
   nameInput: document.getElementById("nameInput"),
+  symbolFields: document.getElementById("symbolFields"),
+  baseCurrencyInput: document.getElementById("baseCurrencyInput"),
+  quoteCurrencyInput: document.getElementById("quoteCurrencyInput"),
   hint: document.getElementById("hint")
 };
 
@@ -481,7 +506,50 @@ function rateLabel(value){
 function currencyLabel(value){
   if(value === "CNY") return tr("cny");
   if(value === "TWD") return tr("twd");
-  return tr("usd");
+  if(value === "USD") return tr("usd");
+  return safe(value, "--");
+}
+
+const FX_CURRENCIES = [
+  {code:"CNY", zh:"人民币", en:"Chinese Yuan", ja:"中国人民元", tw:"人民幣"},
+  {code:"USD", zh:"美元", en:"US Dollar", ja:"米ドル", tw:"美元"},
+  {code:"EUR", zh:"欧元", en:"Euro", ja:"ユーロ", tw:"歐元"},
+  {code:"JPY", zh:"日元", en:"Japanese Yen", ja:"日本円", tw:"日圓"},
+  {code:"GBP", zh:"英镑", en:"British Pound", ja:"英ポンド", tw:"英鎊"},
+  {code:"HKD", zh:"港币", en:"Hong Kong Dollar", ja:"香港ドル", tw:"港幣"},
+  {code:"TWD", zh:"新台币", en:"Taiwan Dollar", ja:"台湾ドル", tw:"新台幣"},
+  {code:"KRW", zh:"韩元", en:"South Korean Won", ja:"韓国ウォン", tw:"韓元"},
+  {code:"AUD", zh:"澳元", en:"Australian Dollar", ja:"豪ドル", tw:"澳元"},
+  {code:"CAD", zh:"加元", en:"Canadian Dollar", ja:"カナダドル", tw:"加元"},
+  {code:"CHF", zh:"瑞士法郎", en:"Swiss Franc", ja:"スイスフラン", tw:"瑞士法郎"},
+  {code:"SGD", zh:"新加坡元", en:"Singapore Dollar", ja:"シンガポールドル", tw:"新加坡元"},
+  {code:"NZD", zh:"新西兰元", en:"New Zealand Dollar", ja:"NZドル", tw:"紐西蘭元"},
+  {code:"THB", zh:"泰铢", en:"Thai Baht", ja:"タイバーツ", tw:"泰銖"},
+  {code:"INR", zh:"印度卢比", en:"Indian Rupee", ja:"インドルピー", tw:"印度盧比"},
+  {code:"AED", zh:"阿联酋迪拉姆", en:"UAE Dirham", ja:"UAEディルハム", tw:"阿聯酋迪拉姆"},
+  {code:"MYR", zh:"马来西亚林吉特", en:"Malaysian Ringgit", ja:"マレーシアリンギット", tw:"馬來西亞令吉"},
+  {code:"PHP", zh:"菲律宾比索", en:"Philippine Peso", ja:"フィリピンペソ", tw:"菲律賓披索"}
+];
+
+function fxCurrencyName(item){
+  if(LANG === "en") return item.en;
+  if(LANG === "ja") return item.ja;
+  if(LANG === "zh-TW") return item.tw;
+  return item.zh;
+}
+
+function populateFxCurrencies(){
+  [els.baseCurrencyInput, els.quoteCurrencyInput].forEach((select) => {
+    select.innerHTML = "";
+    FX_CURRENCIES.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.code;
+      option.textContent = item.code + " · " + fxCurrencyName(item);
+      select.appendChild(option);
+    });
+  });
+  els.baseCurrencyInput.value = "USD";
+  els.quoteCurrencyInput.value = "CNY";
 }
 
 function redUpMarket(state){
@@ -573,7 +641,7 @@ function renderOptions(state){
   const assets = Array.isArray(state.assets) ? state.assets : [];
   const intervals = Array.isArray(state.intervals) ? state.intervals : [];
   const currencies = Array.isArray(state.currencies) ? state.currencies : [];
-  const signature = activeGroup + "|" + assets.map((a) => a.id + ":" + a.group).join(",") + "|" + intervals.map((i) => i.label).join(",") + "|" + currencies.map((c) => c.value).join(",");
+  const signature = activeGroup + "|" + assets.map((a) => a.id + ":" + a.group).join(",") + "|" + intervals.map((i) => i.label + ":" + safe(i.fx_label, "")).join(",") + "|" + currencies.map((c) => c.value).join(",");
   if(signature === optionsSignature){
     return;
   }
@@ -591,7 +659,7 @@ function renderOptions(state){
   intervals.forEach((item) => {
     const option = document.createElement("option");
     option.value = item.label;
-    option.textContent = item.label;
+    option.textContent = activeGroup === "fx" ? safe(item.fx_label, item.label) : item.label;
     els.intervalSelect.appendChild(option);
   });
 
@@ -825,13 +893,24 @@ function renderState(state){
   els.maSelect.value = state.settings && state.settings.ma || "off";
   els.currencySelect.value = state.settings && state.settings.currency || "USD";
   currencyButtons();
+  const isFx = active.group === "fx";
+  els.currencyField.classList.toggle("hidden", isFx);
+  els.assetField.classList.toggle("hidden", isFx);
+  els.fxPairField.classList.toggle("hidden", !isFx);
+  els.modeField.classList.toggle("hidden", isFx);
+  els.maField.classList.toggle("hidden", isFx);
+  els.customSection.classList.toggle("hidden", isFx);
+  if(isFx){
+    els.baseCurrencyInput.value = safe(active.base, "USD");
+    els.quoteCurrencyInput.value = safe(active.quote, "CNY");
+  }
 
   setBadge(state.tone, state.loading ? tr("loading") : tr(state.status), state);
   const unit = safe(state.unit_text, "");
   const currency = currencyLabel(state.currency) + unit;
-  const fx = state.currency === "CNY"
+  const fx = active.group === "fx" ? "" : (state.currency === "CNY"
     ? " · USD/CNY " + rateLabel(state.fx_rate)
-    : (state.currency === "TWD" ? " · USD/TWD " + rateLabel(state.fx_twd_rate) : "");
+    : (state.currency === "TWD" ? " · USD/TWD " + rateLabel(state.fx_twd_rate) : ""));
   els.routeMeta.textContent = safe(state.live_source || active.source, "--") + " · " + safe(active.symbol || active.secid, "--") + fx;
   els.assetName.textContent = assetDisplayName(active);
   els.assetMeta.textContent = (groupText[active.group] || safe(active.group, "--")) + " · " + currency;
@@ -844,7 +923,7 @@ function renderState(state){
   els.changeText.style.background = toneSoftColor(state, state.tone);
   const maText = maLabel(els.maSelect && els.maSelect.value);
   const maSuffix = maText === tr("off") ? "" : " · " + maText;
-  els.statInterval.textContent = safe(state.settings && state.settings.interval, "--") + " · " + modeLabel(state.settings && state.settings.mode) + maSuffix + " · " + safe(state.currency, "--") + unit;
+  els.statInterval.textContent = safe(state.settings && (state.settings.interval_text || state.settings.interval), "--") + " · " + modeLabel(state.settings && state.settings.mode) + maSuffix + " · " + safe(state.currency, "--") + unit;
   els.statHigh.textContent = safe(state.max_price_text, "--");
   els.statLow.textContent = safe(state.min_price_text, "--");
   els.statUpdate.textContent = safe(state.updated_text, "--");
@@ -878,6 +957,32 @@ async function applySelectedAsset(){
     mode: els.modeSelect.value,
     ma: els.maSelect.value,
     currency: els.currencySelect.value
+  });
+  renderState(await getJson("/set?" + query.toString()));
+  window.setTimeout(refreshState, 260);
+}
+
+async function applyFxPair(changed){
+  let base = els.baseCurrencyInput.value || "USD";
+  let quote = els.quoteCurrencyInput.value || "CNY";
+  if(base === quote){
+    const replacement = FX_CURRENCIES.find((item) => item.code !== base);
+    if(changed === "base"){
+      quote = replacement ? replacement.code : "CNY";
+      els.quoteCurrencyInput.value = quote;
+    }else{
+      base = replacement ? replacement.code : "USD";
+      els.baseCurrencyInput.value = base;
+    }
+  }
+  const query = new URLSearchParams({
+    source: "fx",
+    group: "fx",
+    base_currency: base,
+    quote_currency: quote,
+    interval: els.intervalSelect.value,
+    mode: "line",
+    ma: "off"
   });
   renderState(await getJson("/set?" + query.toString()));
   window.setTimeout(refreshState, 260);
@@ -951,6 +1056,10 @@ document.querySelectorAll("[data-group]").forEach((button) => {
       els.assetSelect.selectedIndex = 0;
     }
     els.sourceSelect.value = activeGroup === "crypto" ? "binance" : (activeGroup === "taiwan" ? "twse" : "eastmoney");
+    if(activeGroup === "fx"){
+      els.modeSelect.value = "line";
+      els.maSelect.value = "off";
+    }
     if(activeGroup === "taiwan"){
       els.currencySelect.value = "TWD";
       currencyButtons();
@@ -980,6 +1089,12 @@ document.getElementById("clearCustom").addEventListener("click", () => {
   setHint("");
 });
 els.sourceSelect.addEventListener("change", syncSourceFields);
+els.baseCurrencyInput.addEventListener("change", () => {
+  applyFxPair("base").catch((err) => setHint(errText.switch + err.message, true));
+});
+els.quoteCurrencyInput.addEventListener("change", () => {
+  applyFxPair("quote").catch((err) => setHint(errText.switch + err.message, true));
+});
 els.assetSelect.addEventListener("change", () => {
   applySelectedAsset().catch((err) => setHint(errText.switch + err.message, true));
 });
@@ -994,6 +1109,7 @@ els.maSelect.addEventListener("change", () => {
 });
 window.addEventListener("resize", () => current && drawChart(current));
 
+populateFxCurrencies();
 syncSourceFields();
 refreshState();
 setInterval(refreshState, 2000);

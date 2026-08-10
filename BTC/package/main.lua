@@ -15,7 +15,7 @@ end
 local Backend = load_module("backend")
 
 local app_obj = {
-  VERSION = "1.2.1",
+  VERSION = "2.0.0",
   APP_ID = "btc",
   APP_DIR = APP_DIR,
   route_base = (app and app.route_base and app.route_base()) or "/btc",

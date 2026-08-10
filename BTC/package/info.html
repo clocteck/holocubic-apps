@@ -308,7 +308,7 @@
       <div>
         <p class="kicker" data-i18n="kicker">多市场行情工具</p>
         <h1 id="title">Ticker</h1>
-        <p class="summary" data-i18n="summary">查看加密货币、美股/A 股、台股、指数和金银铜走势，支持折线与 K 线视图。</p>
+        <p class="summary" data-i18n="summary">查看自定义货币汇率、加密货币、美股/A 股、台股、指数和金银铜走势。</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -317,7 +317,7 @@
       <section class="panel" aria-labelledby="support-title">
         <h2 id="support-title" data-i18n="supportTitle">支持标的</h2>
         <div class="chips" id="supported-assets" aria-label="内置标的"></div>
-        <p class="note" data-i18n="customNote">Web 控制页还可添加自定义 Binance 交易对，或通过 Eastmoney 添加沪深 A 股、台股、指数和金银铜期货代码。</p>
+        <p class="note" data-i18n="customNote">Web 控制页可输入任意 ISO 4217 三字母货币对，也可添加自定义 Binance 交易对或 Eastmoney 行情代码。</p>
       </section>
 
       <section class="panel" aria-labelledby="source-title">
@@ -332,8 +332,8 @@
             <strong>Eastmoney public market data</strong>
           </div>
           <div class="source">
-            <span data-i18n="fxLabel">美元/人民币/新台币汇率</span>
-            <strong>open.er-api.com</strong>
+            <span data-i18n="fxLabel">自定义货币对汇率</span>
+            <strong>Frankfurter history + Open ER-API</strong>
           </div>
           <div class="source">
             <span data-i18n="backupMarketLabel">兼容/备用证券来源</span>
@@ -344,7 +344,7 @@
             <strong data-i18n="backupFxValue">内置 USD/CNY 与 USD/TWD 参考值</strong>
           </div>
         </div>
-        <p class="note" data-i18n="sourceNote">台股实时价与昨收使用 TWSE MIS，历史 K 线和其他内置证券使用 Eastmoney。Yahoo Finance 仅用于兼容旧版自定义配置；汇率接口不可用时采用内置参考值维持显示。</p>
+        <p class="note" data-i18n="sourceNote">汇率当前值与折线图统一使用 Frankfurter 每日历史数据；行情币种换算仍由 Open ER-API 提供。其他市场来源保持不变。</p>
         <p class="note" data-i18n="riskNote">行情仅用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。</p>
       </section>
 
@@ -365,7 +365,7 @@
           </li>
           <li>
             <span class="badge">4</span>
-            <span><strong data-i18n="featureFourTitle">1.2.1 更新说明</strong><span data-i18n="featureFourText">修复盘中涨跌基准、台股周线及折线缩放与时间轴；实时价同步到最新图表点，历史接口异常时仍显示实时行情。</span></span>
+            <span><strong data-i18n="featureFourTitle">2.0.0 更新说明</strong><span data-i18n="featureFourText">汇率改为包含 18 种常用货币的双下拉框，新增真实历史折线，并修复 32 位时间戳溢出导致的绘图问题。</span></span>
           </li>
         </ul>
       </section>
@@ -374,11 +374,11 @@
         <div class="meta">
           <div class="meta-item">
             <span class="label" data-i18n="sizeLabel">安装包大小</span>
-            <span class="value" data-i18n="sizeValue">约 878 KB</span>
+            <span class="value" data-i18n="sizeValue">约 912 KB</span>
           </div>
           <div class="meta-item">
             <span class="label" data-i18n="versionLabel">版本号</span>
-            <span class="value">1.2.1</span>
+            <span class="value">2.0.0</span>
           </div>
         </div>
       </section>    </div>
@@ -399,17 +399,17 @@
           toggleText: "EN",
           iconAlt: "Ticker 应用图标",
           kicker: "多市场行情工具",
-          summary: "查看加密货币、美股/A 股、台股、指数和金银铜走势，支持折线与 K 线视图。",
+          summary: "查看自定义货币汇率、加密货币、美股/A 股、台股、指数和金银铜走势。",
           supportTitle: "支持标的",
-          customNote: "Web 控制页还可添加自定义 Binance 交易对，或通过 Eastmoney 添加沪深 A 股、台股、指数和金银铜期货代码。",
+          customNote: "Web 控制页可输入任意 ISO 4217 三字母货币对，也可添加自定义 Binance 交易对或 Eastmoney 行情代码。",
           sourceTitle: "信息来源",
           binanceLabel: "币价",
           eastmoneyLabel: "股票、指数、金银铜与历史 K 线",
-          fxLabel: "美元/人民币/新台币汇率",
+          fxLabel: "自定义货币对汇率",
           backupMarketLabel: "兼容/备用证券来源",
           backupFxLabel: "离线汇率兜底",
           backupFxValue: "内置 USD/CNY 与 USD/TWD 参考值",
-          sourceNote: "台股实时价与昨收使用 TWSE MIS，历史 K 线和其他内置证券使用 Eastmoney。Yahoo Finance 仅用于兼容旧版自定义配置；汇率接口不可用时采用内置参考值维持显示。",
+          sourceNote: "汇率当前值与折线图统一使用 Frankfurter 每日历史数据；行情币种换算仍由 Open ER-API 提供。其他市场来源保持不变。",
           riskNote: "行情仅用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。",
           featureTitle: "功能说明",
           featureOneTitle: "多周期走势",
@@ -418,11 +418,11 @@
           featureTwoText: "支持折线、K 线，以及 MA10 / MA20 均线。",
           featureThreeTitle: "币种显示",
           featureThreeText: "支持 USD、CNY 与 TWD 显示，金银铜按每克换算。",
-          featureFourTitle: "1.2.1 更新说明",
-          featureFourText: "修复盘中涨跌基准、台股周线及折线缩放与时间轴；实时价同步到最新图表点，历史接口异常时仍显示实时行情。",
+          featureFourTitle: "2.0.0 更新说明",
+          featureFourText: "汇率改为包含 18 种常用货币的双下拉框，新增真实历史折线，并修复 32 位时间戳溢出导致的绘图问题。",
           appInfoTitle: "应用信息",
           sizeLabel: "安装包大小",
-          sizeValue: "约 878 KB",
+          sizeValue: "约 912 KB",
           versionLabel: "版本号",
           licenseText: "开源协议：GPL-3.0",
           repoLabel: "Git 地址："
@@ -433,17 +433,17 @@
           toggleText: "中文",
           iconAlt: "Ticker app icon",
           kicker: "Multi-market quote tool",
-          summary: "Track crypto, US and A-share stocks, Taiwan stocks, indexes, and metal futures with line or candlestick views.",
+          summary: "Track custom FX pairs, crypto, US and A-share stocks, Taiwan stocks, indexes, and metal futures.",
           supportTitle: "Supported Symbols",
-          customNote: "The Web console can also add custom Binance pairs, or Eastmoney symbols for A-shares, Taiwan stocks, indexes, and metal futures.",
+          customNote: "The Web console accepts any ISO 4217 three-letter FX pair, custom Binance pairs, and Eastmoney market symbols.",
           sourceTitle: "Data Sources",
           binanceLabel: "Crypto quotes",
           eastmoneyLabel: "Stocks, indexes, metals, and historical charts",
-          fxLabel: "USD/CNY/TWD FX rates",
+          fxLabel: "Custom currency-pair rates",
           backupMarketLabel: "Compatible / backup market source",
           backupFxLabel: "Offline FX fallback",
           backupFxValue: "Built-in USD/CNY and USD/TWD reference rates",
-          sourceNote: "Taiwan real-time quotes and previous closes use TWSE MIS. Historical charts and other built-in securities use Eastmoney. Yahoo Finance is retained only for legacy custom settings.",
+          sourceNote: "FX values and charts use the same Frankfurter daily history. Open ER-API remains the conversion source for other market quotes.",
           riskNote: "Quotes are for display and observation only, not financial advice. Data may be delayed when the network or public APIs fail.",
           featureTitle: "Features",
           featureOneTitle: "Multiple intervals",
@@ -452,11 +452,11 @@
           featureTwoText: "Supports line charts, candlesticks, and MA10 / MA20 moving averages.",
           featureThreeTitle: "Display currency",
           featureThreeText: "Supports USD, CNY, and TWD display. Gold, silver, and copper are converted to price per gram.",
-          featureFourTitle: "Version 1.2.1",
-          featureFourText: "Fixes intraday change baselines, Taiwan weekly bars, line scaling, and time spacing; merges live quotes into charts and keeps quotes visible when history is unavailable.",
+          featureFourTitle: "Version 2.0.0",
+          featureFourText: "Adds two FX dropdowns with 18 common currencies and real history charts, and fixes chart rendering caused by 32-bit timestamp overflow.",
           appInfoTitle: "App Info",
           sizeLabel: "Package size",
-          sizeValue: "About 878 KB",
+          sizeValue: "About 912 KB",
           versionLabel: "Version",
           licenseText: "Open source license: GPL-3.0",
           repoLabel: "Git: "
@@ -493,6 +493,10 @@
       }
 
       var supportedAssets = [
+        { logo: createLogoImage("FX"), label: "USD/CNY" },
+        { logo: createLogoImage("FX"), label: "EUR/CNY" },
+        { logo: createLogoImage("FX"), label: "USD/JPY" },
+        { logo: createLogoImage("FX"), label: "Custom FX" },
         { logo: createLogoImage("B"), label: "BTC" },
         { logo: createLogoImage("E"), label: "ETH" },
         { logo: createLogoImage("S"), label: "SOL" },

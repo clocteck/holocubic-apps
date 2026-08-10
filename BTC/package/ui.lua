@@ -638,7 +638,7 @@ function Ui.new(backend, i18n)
     local ma = ma_text(snap.settings and snap.settings.ma_period)
     local ma_suffix = ma ~= "" and ("  " .. ma) or ""
     local localized_mode = mode == "candle" and "K" or (self.i18n and self.i18n:t("line") or mode_text(mode))
-    set_text(self.detail, (snap.settings.interval or "--") .. "  " .. localized_mode .. ma_suffix .. "  " .. (snap.currency or "") .. unit)
+    set_text(self.detail, (snap.settings.interval_text or snap.settings.interval or "--") .. "  " .. localized_mode .. ma_suffix .. "  " .. (snap.currency or "") .. unit)
     set_text(self.updated, snap.error ~= "" and snap.error or ((self.i18n and self.i18n:t("updated") or "UPD") .. " " .. tostring(snap.now_text or snap.updated_text or "--")))
     set_color(self.updated, snap.error ~= "" and C.warn or C.dim)
 
