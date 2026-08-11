@@ -1,9 +1,9 @@
 # XiaoZhi Service
 
-这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。`xiaozhi-service`
-作为 `xiaozhi` 的扩展服务运行：服务持有唤醒、音频、激活、协议、MCP
-等非 UI 资源。前台 App UI 从 `/sd/apps/xiaozhi/ui` 读取，后台悬浮 UI 从
-`/sd/apps/xiaozhi-service/ui` 读取。
+这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。`xiaozhi-service` 是可独立部署的
+后台服务包，自带唤醒、音频、激活、协议、MCP、native 模块、唤醒模型和悬浮 UI
+资源。若另行安装前台 `xiaozhi` App，二者可通过 IPC 联动；前台 App 不存在或启动失败
+不会阻止 service 运行。
 
 ## 单 Service 模式
 
@@ -14,7 +14,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 `/sd/apps/xiaozhi-service/service.json` 启停服务并读取音频资源冲突黑名单。
 `ui_mode` 控制唤醒后的 UI 呈现：
 
-- `"app"`：唤醒时记录当前前台应用并启动 `/sd/apps/xiaozhi`，前台 app 只通过 IPC 呈现 UI；对话回到待命后自动跳回唤醒前应用。
+- `"app"`：唤醒时记录当前前台应用并尝试启动 `/sd/apps/xiaozhi`，前台 app 只通过 IPC 呈现 UI；对话回到待命后自动跳回唤醒前应用。前台 App 不可用时，本次运行自动退回 service 悬浮 UI。
 - `"floating"`：服务通过 `xiaozhi-service/ui.lua` 进入 UI 驱动，加载 `/sd/apps/xiaozhi-service/ui/<type>.lua`，并用固件 `service_ui` API 绘制悬浮 UI；服务启动时不显示，只有唤醒、验证码、对话或错误时显示。
 
 `deny_apps` 中的前台应用会独占性能、麦克风或扬声器。服务监听固件
@@ -37,19 +37,21 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 
 设备端不直接填写 OpenAI / DeepSeek API Key。小智协议要求设备连接“小智服务端”，由服务端配置 ASR、LLM、TTS 的 API Key。
 
-`xiaozhi-service` 不再保存协议配置。`websocket.url/token/version`、`ota`、音量、唤醒词和主应用 UI 风格都读取并写回主应用配置：
+`xiaozhi-service` 的 `websocket.url/token/version`、`ota`、音量和唤醒词保存在自己的运行配置：
 
 ```text
-/sd/apps/xiaozhi/config.json
+/sd/apps/xiaozhi-service/config.json
 ```
 
-服务目录只保留服务配置：
+首次升级且 service 配置不存在时，会兼容读取 `/sd/apps/xiaozhi/config.json`；该文件不存在时静默使用内置默认值。前台 App 的 UI 风格仍只在前台 App 已安装时读写其配置。
+
+后台开关和呈现方式使用独立的服务配置：
 
 ```text
 /sd/apps/xiaozhi-service/service.json
 ```
 
-`service.json` 只控制后台服务开关、后台 UI 呈现模式、后台 UI 类型和资源冲突黑名单；不要在这里放 token、音量或小智协议参数。
+`service.json` 只控制后台服务开关、后台 UI 呈现模式、后台 UI 类型和资源冲突黑名单；不要在这里放 token、音量或小智协议参数。协议配置示例见 `/sd/apps/xiaozhi-service/config.example.json`。
 
 示例文件见 `/sd/apps/xiaozhi-service/service.example.json`；设备实际读取
 `/sd/apps/xiaozhi-service/service.json`。示例：
@@ -83,7 +85,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - “启用后台唤醒”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `enabled`。关闭后立即停止后台唤醒监听和当前后台对话；再次开启后在空闲状态恢复唤醒监听。
 - “后台服务 UI”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `ui_mode`、`ui_type` 和 `ui_character`，控制后台唤醒后打开 App 还是使用悬浮 UI。
 - “退避 App”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `deny_apps`。勾选的 App 在前台运行时会暂停小智后台唤醒/音频，避免音频、性能或输入冲突。
-- “自定义服务”：写入 `/sd/apps/xiaozhi/config.json` 的 `ota.url` 和可选 `websocket.url/token/version`。这里只要求 OTA 地址必填；WebSocket 地址可留空，由 OTA 激活流程下发。
+- “自定义服务”：写入 `/sd/apps/xiaozhi-service/config.json` 的 `ota.url` 和可选 `websocket.url/token/version`。这里只要求 OTA 地址必填；WebSocket 地址可留空，由 OTA 激活流程下发。
 
 ## 回复流程
 
@@ -117,10 +119,10 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 
 ### MCP 插件
 
-默认工具也以插件形式放在 `xiaozhi/mcp/device.lua`。启动时会扫描：
+默认工具也以插件形式放在 `xiaozhi-service/mcp/device.lua`。启动时会扫描：
 
 ```text
-/sd/apps/xiaozhi/mcp/*.lua
+/sd/apps/xiaozhi-service/mcp/*.lua
 ```
 
 每个插件文件应 `return` 一个 table。文件名只允许字母、数字、下划线、点和横线，并以 `.lua` 结尾；`init.lua` 会被忽略。插件工具名不能和默认工具或其他插件重复。
@@ -174,18 +176,17 @@ return {
 
 ## 本地资源布局
 
-部署时复制整个 `package/` 到 `/sd/apps/xiaozhi-service/`。服务包只保留服务壳、
-配置、Web 管理、IPC runtime 和服务专属 MCP 插件。小智公共逻辑和 native 资源从
-`/sd/apps/xiaozhi/` 读取：
+部署时复制整个 `package/` 到 `/sd/apps/xiaozhi-service/`。服务运行所需资源全部位于
+该目录，不从其他 App 目录加载 Lua 或 native 模块：
 
 ```text
-/sd/apps/xiaozhi/audio.lua
-/sd/apps/xiaozhi/protocol.lua
-/sd/apps/xiaozhi/activation.lua
-/sd/apps/xiaozhi/mcp.lua
-/sd/apps/xiaozhi/xiaozhi.so
-/sd/apps/xiaozhi/wake.so
-/sd/apps/xiaozhi/wake/wn9s_nihaoxiaozhi/*
+/sd/apps/xiaozhi-service/audio.lua
+/sd/apps/xiaozhi-service/protocol.lua
+/sd/apps/xiaozhi-service/activation.lua
+/sd/apps/xiaozhi-service/mcp.lua
+/sd/apps/xiaozhi-service/xiaozhi.so
+/sd/apps/xiaozhi-service/wake.so
+/sd/apps/xiaozhi-service/wake/wn9s_nihaoxiaozhi/*
 ```
 
 ## UI 资源和插件化适配
@@ -196,7 +197,7 @@ return {
 /sd/apps/xiaozhi/ui/<type>.lua                 # 前台 App UI
 /sd/apps/xiaozhi-service/ui/<type>.lua         # 后台悬浮 UI
 /sd/apps/xiaozhi-service/ui/character/*.rgb565 # 助手形象角色
-/sd/apps/xiaozhi/assets/fonts/xiaozhi_common3500_16.bin
+/sd/apps/xiaozhi-service/assets/fonts/xiaozhi_common3500_16.bin
 ```
 
 WebUI 会扫描 `/sd/apps/xiaozhi/ui/*.lua` 生成“主应用 UI”选项，并过滤 `driver.lua`、`headless.lua`。WebUI 会扫描 `/sd/apps/xiaozhi-service/ui/*.lua` 生成“悬浮界面类型”选项，文件名就是 `ui_type`。

@@ -379,7 +379,7 @@ function M.new(cfg)
 
   function self:setup()
     self.stopped = false
-    self.native_font_path = (cfg.UI_APP_DIR or cfg.APP_DIR or "/sd/apps/xiaozhi")
+    self.native_font_path = (cfg.SERVICE_DIR or cfg.APP_DIR or "/sd/apps/xiaozhi-service")
       .. "/assets/fonts/xiaozhi_common3500_16.bin"
     if not self.native_font and type(rawget(_G, "lv_font_load")) == "function" then
       local ok, handle = pcall(lv_font_load, self.native_font_path)

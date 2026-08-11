@@ -266,11 +266,12 @@ function M.new(runtime, cfg)
     end
 
     local function repair()
-      local path = cfg.CONFIG_PATH or "/sd/apps/xiaozhi/config.json"
-      local raw = file.getcontents(path)
+      local path = cfg.CONFIG_PATH or "/sd/apps/xiaozhi-service/config.json"
+      local ok_read, raw = pcall(file.getcontents, path)
+      if not ok_read then raw = "{}" end
       local doc = decode(raw)
       if type(doc) ~= "table" then
-        return json_response("500 Internal Server Error", { ok = false, error = "配置读取失败" })
+        doc = {}
       end
       doc.ota = doc.ota or {}
       doc.ota.url = "https://api.tenclass.net/xiaozhi/ota/"
@@ -280,7 +281,10 @@ function M.new(runtime, cfg)
       doc.websocket.url = ""
       doc.websocket.token = ""
       doc.websocket.version = 1
-      file.putcontents(path, encode(doc))
+      local ok_write, saved = pcall(file.putcontents, path, encode(doc))
+      if not ok_write or not saved then
+        return json_response("500 Internal Server Error", { ok = false, error = "配置保存失败" })
+      end
       local t = tmr.create()
       t:alarm(300, tmr.ALARM_SINGLE, function(x)
         pcall(function() x:unregister() end)

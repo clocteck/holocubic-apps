@@ -17,12 +17,14 @@ M.BOARD_TYPE = "bread-compact-wifi-lcd"
 M.BOARD_NAME = "bread-compact-wifi-lcd"
 M.SERVICE_DIR = "/sd/apps/xiaozhi-service"
 M.UI_APP_DIR = "/sd/apps/xiaozhi"
-M.APP_DIR = M.UI_APP_DIR
-M.XZ_MODULE = M.UI_APP_DIR .. "/xiaozhi.so"
-M.WAKE_MODULE = M.UI_APP_DIR .. "/wake.so"
-M.CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
-M.MCP_DIR = M.UI_APP_DIR .. "/mcp"
-M.WAKE_MODEL_DIR = M.UI_APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
+M.APP_DIR = M.SERVICE_DIR
+M.XZ_MODULE = M.SERVICE_DIR .. "/xiaozhi.so"
+M.WAKE_MODULE = M.SERVICE_DIR .. "/wake.so"
+M.CONFIG_PATH = M.SERVICE_DIR .. "/config.json"
+M.APP_UI_CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
+M.COMPAT_CONFIG_PATH = M.APP_UI_CONFIG_PATH
+M.MCP_DIR = M.SERVICE_DIR .. "/mcp"
+M.WAKE_MODEL_DIR = M.SERVICE_DIR .. "/wake/wn9s_nihaoxiaozhi"
 M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
@@ -30,7 +32,7 @@ M.TIMEZONE = "CST-8"
 M.UI_TYPE = nil
 M.APP_UI_TYPE = nil
 M.UI_CHARACTER = nil
-M.ASSET_DIR = M.UI_APP_DIR .. "/assets"
+M.ASSET_DIR = M.SERVICE_DIR .. "/assets"
 M.EMOJI_GIF_DIR = M.ASSET_DIR .. "/emojis/gif"
 M.EMOJI_PNG_DIR = M.ASSET_DIR .. "/emojis/png"
 M.TEXT_FONT_PATH = M.ASSET_DIR .. "/fonts/noto_sans_sc_medium_16_2bpp_common4000.bin"
@@ -300,10 +302,26 @@ apply_ui_config = function(ui, target)
   end
 end
 
+local function apply_optional_app_ui_config()
+  local raw = read_text(M.APP_UI_CONFIG_PATH)
+  if not raw then return end
+  local obj = decode_json(raw)
+  if type(obj) == "table" then
+    apply_ui_config(obj.ui, "app")
+    apply_ui_config({ type = obj.ui_type }, "app")
+    return
+  end
+  apply_ui_config({ type = pick_string(raw, "ui_type") }, "app")
+end
+
 function M.load()
   local raw = read_text(M.CONFIG_PATH)
   if not raw then
+    raw = read_text(M.COMPAT_CONFIG_PATH)
+  end
+  if not raw then
     apply_wake_service(read_wake_service_config())
+    apply_optional_app_ui_config()
     return M
   end
 
@@ -315,6 +333,7 @@ function M.load()
     apply_ui_config(obj.ui, "app")
     apply_ui_config({ type = obj.ui_type }, "app")
     apply_wake_service(read_wake_service_config())
+    apply_optional_app_ui_config()
     if type(obj.wake_word) == "string" and obj.wake_word ~= "" then
       M.WAKE_WORD = obj.wake_word
     end
@@ -379,6 +398,7 @@ function M.load()
   if wake_cfg then
     apply_wake_service(wake_cfg)
   end
+  apply_optional_app_ui_config()
 
   return M
 end

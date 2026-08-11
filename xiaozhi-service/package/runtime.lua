@@ -292,6 +292,16 @@ function M.new(cfg, load_module)
     return true
   end
 
+  local function use_floating_ui_fallback(reason)
+    if cfg.UI_MODE ~= "app" then return false end
+    cfg.UI_MODE = "floating"
+    cfg.UI_TYPE = cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "window"
+    cfg.UI = type(cfg.UI) == "table" and cfg.UI or {}
+    cfg.UI.type = cfg.UI_TYPE
+    print("[xiaozhi] foreground UI unavailable; using service floating UI", tostring(reason or ""))
+    return rebuild_service_ui("foreground UI unavailable")
+  end
+
   local function consume_service_wake()
     local service = wake_service()
     if service and service.take_pending_wake then
@@ -551,17 +561,22 @@ function M.new(cfg, load_module)
   end
 
   local function launch_xiaozhi_ui(reason)
-    if cfg.UI_MODE ~= "app" or not app or not app.launch then return false end
+    if cfg.UI_MODE ~= "app" then return false end
+    if not app or not app.launch then
+      use_floating_ui_fallback("app.launch unavailable")
+      return false
+    end
     local foreground = foreground_app_id()
     if foreground == "xiaozhi" then
       self.current_app_id = "xiaozhi"
       apply_service_ui_suppression()
-      return false
+      return true
     end
     local origin_app_id = returnable_app_id(foreground)
     local ok, launched, err = pcall(function() return app.launch("xiaozhi") end)
     if not ok or not launched then
       print("[xiaozhi] xiaozhi UI launch failed", tostring(reason or ""), tostring(err or launched or ""))
+      use_floating_ui_fallback(err or launched or "launch failed")
       return false
     end
     if origin_app_id then
@@ -1554,27 +1569,37 @@ function M.new(cfg, load_module)
   self.stop_listening = stop_listening
   self.wake_word_invoke = wake_word_invoke
 
-  local function update_saved_config(mutator)
+  local function update_json_config(path, mutator, label)
     local codec = rawget(_G, "json") or rawget(_G, "sjson")
     if not codec or not codec.decode or not codec.encode or not file
         or not file.getcontents or not file.putcontents then
-      return false, "配置存储接口不可用"
+      return false, (label or "配置") .. "存储接口不可用"
     end
-    local ok_read, raw = pcall(file.getcontents, cfg.CONFIG_PATH)
+    local ok_read, raw = pcall(file.getcontents, path)
     local ok_decode, doc = pcall(codec.decode, ok_read and raw or "{}")
     if not ok_decode or type(doc) ~= "table" then
-      return false, "配置读取失败"
+      doc = {}
     end
     mutator(doc)
     local ok_encode, encoded = pcall(codec.encode, doc)
     if not ok_encode or type(encoded) ~= "string" then
-      return false, "配置编码失败"
+      return false, (label or "配置") .. "编码失败"
     end
-    local ok_write, saved = pcall(file.putcontents, cfg.CONFIG_PATH, encoded .. "\n")
+    local ok_write, saved = pcall(file.putcontents, path, encoded .. "\n")
     if not ok_write or not saved then
-      return false, "配置保存失败"
+      return false, (label or "配置") .. "保存失败"
     end
     return true
+  end
+
+  local function update_saved_config(mutator)
+    return update_json_config(cfg.CONFIG_PATH, mutator, "配置")
+  end
+
+  local function update_saved_app_ui_config(mutator)
+    local path = cfg.APP_UI_CONFIG_PATH
+    if type(path) ~= "string" or path == "" then return true end
+    return update_json_config(path, mutator, "主应用配置")
   end
 
   local function update_saved_service_config(mutator)
@@ -1781,6 +1806,7 @@ function M.new(cfg, load_module)
         and cfg.websocket.token ~= "" or false,
       ota_url = cfg.ota and cfg.ota.url or "",
       app_ui_type = cfg.APP_UI_TYPE or (cfg.app_ui and cfg.app_ui.type) or "subtitle",
+      app_ui_installed = path_exists((cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info"),
       service_ui_mode = cfg.UI_MODE or "app",
       service_ui_type = cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "window",
       service_ui_character = cfg.UI_CHARACTER or (cfg.UI and cfg.UI.character) or "xiaozhi_chibi",
@@ -1925,11 +1951,16 @@ function M.new(cfg, load_module)
     service_ui_type = clean_ui_type(service_ui_type)
     service_ui_character = clean_ui_type(service_ui_character) or "xiaozhi_chibi"
     service_ui_mode = tostring(service_ui_mode or ""):lower()
-    if not app_ui_type then
-      return false, "主应用 UI 类型无效"
-    end
-    if not ui_style_exists("app", app_ui_type) then
-      return false, "主应用 UI 文件不存在"
+    local app_ui_installed = path_exists((cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info")
+    if app_ui_installed then
+      if not app_ui_type then
+        return false, "主应用 UI 类型无效"
+      end
+      if not ui_style_exists("app", app_ui_type) then
+        return false, "主应用 UI 文件不存在"
+      end
+    else
+      app_ui_type = app_ui_type or cfg.APP_UI_TYPE or (cfg.app_ui and cfg.app_ui.type) or "subtitle"
     end
     if service_ui_mode ~= "app" and service_ui_mode ~= "floating" then
       return false, "后台 UI 模式仅支持 app 或 floating"
@@ -1944,12 +1975,14 @@ function M.new(cfg, load_module)
       return false, "悬浮角色文件不存在"
     end
 
-    local saved, save_err = update_saved_config(function(doc)
-      doc.ui = type(doc.ui) == "table" and doc.ui or {}
-      doc.ui.type = app_ui_type
-      doc.ui_type = nil
-    end)
-    if not saved then return false, save_err end
+    if app_ui_installed then
+      local saved, save_err = update_saved_app_ui_config(function(doc)
+        doc.ui = type(doc.ui) == "table" and doc.ui or {}
+        doc.ui.type = app_ui_type
+        doc.ui_type = nil
+      end)
+      if not saved then return false, save_err end
+    end
 
     local next_deny_apps = deny_apps ~= nil and normalize_deny_apps(deny_apps) or service_deny_apps()
     local service_saved, service_err = update_saved_service_config(function(doc)
