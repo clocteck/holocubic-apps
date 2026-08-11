@@ -215,7 +215,7 @@
       <div>
         <p class="kicker">首次联网引导</p>
         <h1 id="title">WiFi Setting Guide</h1>
-        <p class="summary">为 HoloCubic 提供清晰的首次配网步骤，并在联网后展示设备控制入口。</p>
+        <p class="summary">支持设备热点与 PC USB 串口两种配网方式，并在联网后展示设备控制入口。</p>
       </div>
     </section>
 
@@ -225,10 +225,11 @@
           <h2 id="feature-title">功能说明</h2>
           <ul class="features">
             <li><span class="badge">1</span><span><strong>等待配网</strong><p>显示设备热点、配网地址和分步操作说明，引导手机或电脑连接设备。</p></span></li>
-            <li><span class="badge">2</span><span><strong>自动识别联网状态</strong><p>持续检测 Station IP，联网成功后自动切换到网络信息界面。</p></span></li>
-            <li><span class="badge">3</span><span><strong>实时网络信息</strong><p>展示当前 WiFi、RSSI 信号强度、设备 IP 和本地域名。</p></span></li>
-            <li><span class="badge">4</span><span><strong>离线生成二维码</strong><p>由 Lua 本地编码控制地址并通过 LVGL Canvas 绘制，无需二维码接口或外部服务。</p></span></li>
-            <li><span class="badge">5</span><span><strong>中英文界面</strong><p>读取 Web 控制页保存的语言设置；简体中文显示中文，其他情况默认英文。</p></span></li>
+            <li><span class="badge">2</span><span><strong>USB 串口配网</strong><p>PCAPP 握手成功后自动显示独立串口页面，原生扫描热点并校验实际联网结果。</p></span></li>
+            <li><span class="badge">3</span><span><strong>自动识别联网状态</strong><p>持续检测 Station IP，联网成功后自动切换到网络信息界面。</p></span></li>
+            <li><span class="badge">4</span><span><strong>实时网络信息</strong><p>展示当前 WiFi、RSSI 信号强度、设备 IP 和本地域名。</p></span></li>
+            <li><span class="badge">5</span><span><strong>离线生成二维码</strong><p>由 Lua 本地编码控制地址并通过 LVGL Canvas 绘制，无需二维码接口或外部服务。</p></span></li>
+            <li><span class="badge">6</span><span><strong>中英文界面</strong><p>读取 Web 控制页保存的语言设置；简体中文显示中文，其他情况默认英文。</p></span></li>
           </ul>
         </section>
 
@@ -245,7 +246,7 @@
       <section class="panel" aria-labelledby="info-title">
         <h2 id="info-title">应用信息</h2>
         <div class="meta">
-          <div class="meta-item"><span class="label">版本号</span><span class="value">2.0.1</span></div>
+          <div class="meta-item"><span class="label">版本号</span><span class="value">2.2.1</span></div>
           <div class="meta-item"><span class="label">屏幕尺寸</span><span class="value">320 × 240</span></div>
           <div class="meta-item"><span class="label">安装包大小</span><span class="value">约 530 KB</span></div>
           <div class="meta-item"><span class="label">设备控制域名</span><span class="value">clocteck-cubic.local</span></div>
@@ -256,6 +257,5 @@
 
     <footer class="opensource">项目地址：<a href="https://github.com/clocteck/holocubic-apps" target="_blank" rel="noopener">github.com/clocteck/holocubic-apps</a></footer>
   </main>
-<section class="controller-support" style="width:calc(100% - 28px);max-width:932px;margin:14px auto 0;padding:14px 16px;border:1px solid rgba(59,130,246,.22);border-left:4px solid #3b82f6;border-radius:12px;background:linear-gradient(135deg,rgba(239,246,255,.98),rgba(255,255,255,.98));box-shadow:0 8px 24px rgba(37,99,235,.08)"><h2 style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">蓝牙手柄控制</h2><p style="margin:0;color:#475569;font-size:13px;line-height:1.65">Select/Home：退出引导并返回桌面。</p></section>
 </body>
 </html>

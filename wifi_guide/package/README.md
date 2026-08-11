@@ -1,10 +1,21 @@
 # WiFi Setting Guide
 
-WiFi Setting Guide 是适配 HoloCubic 320 × 240 屏幕的首次联网引导 app。设备未联网时显示热点与配网地址；获得 Station IP 后自动切换到成功页，展示 WiFi、RSSI、IP、域名和控制网页二维码。
+WiFi Setting Guide 是适配 HoloCubic 320 × 240 屏幕的首次联网引导 app。设备未联网时显示热点与配网地址；PCAPP 完成 USB 串口握手后自动切换到独立串口配网页；获得 Station IP 后自动切换到成功页，展示 WiFi、RSSI、IP、域名和控制网页二维码。
+
+## 2.2.1 更新内容
+
+- 将经过实机验证的 USB 串口配网功能整合到 WiFi Setting Guide，无需再打开独立配网 App。
+- PCAPP 串口握手成功后自动切换到独立串口配网页面。
+- 使用原生 `wifi.sta.scan/config/connect` 完成热点扫描和联网，设备离线时也可工作。
+- 串口配网页面新增当前 WiFi SSID 和 IP 地址；未联网时明确显示“未连接”。
+- 根据 WiFi 鉴权断连原因识别常见密码错误，并在设备与 PCAPP 中显示“WiFi 密码错误”。
+- 修复串口已连接但设备未响应时的引导文字，提示用户在设备上打开 WiFi Setting Guide App。
+- 联网成功后自动返回配网成功页面，并继续显示信号、IP、域名及控制页面二维码。
 
 ## 主要功能
 
 - 等待配网与配网成功两套纯黑界面，全部使用 LVGL 绝对坐标布局。
+- 集成原生串口配网页面，使用 `wifi.sta.scan/config/connect` 完成离线扫描、鉴权和联网，不依赖设备 HTTP 接口。
 - 读取 `/sd/apps/settings.json` 的 `language`、`locale` 或 `lang`；仅 `zh-CN` / `zh-Hans` 使用中文，缺失或其他语言默认英文。
 - 通过设备本地 `/api/system/state` 获取网络状态。
 - RSSI 规则与 Web 控制页一致：优先使用扫描列表第一条同名 SSID 的 `rssi`，缺失时回退到 `sta_rssi`。
