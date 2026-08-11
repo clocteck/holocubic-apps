@@ -1,5 +1,9 @@
 # XiaoZhi Service
 
+Wake-word capture runs in `wake.so`'s native capture task when available, so WakeNet inference does not block Lua timers or HTTP handlers. The foreground XiaoZhi App and this service keep separate runtime globals; launching either one no longer stops the other as a stale instance.
+
+The checked-in `wake.so` is prebuilt with `/sd/apps/xiaozhi/wake` as its model base. During initialization the service checks the three WakeNet model files there and copies any missing files from its own package. This creates only the native model cache path; it does not load foreground-app Lua or configuration.
+
 这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。`xiaozhi-service` 是可独立部署的
 后台服务包，自带唤醒、音频、激活、协议、MCP、native 模块、唤醒模型和悬浮 UI
 资源。若另行安装前台 `xiaozhi` App，二者可通过 IPC 联动；前台 App 不存在或启动失败

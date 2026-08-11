@@ -24,7 +24,10 @@ M.CONFIG_PATH = M.SERVICE_DIR .. "/config.json"
 M.APP_UI_CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
 M.COMPAT_CONFIG_PATH = M.APP_UI_CONFIG_PATH
 M.MCP_DIR = M.SERVICE_DIR .. "/mcp"
-M.WAKE_MODEL_DIR = M.SERVICE_DIR .. "/wake/wn9s_nihaoxiaozhi"
+-- wake.so is prebuilt with /sd/apps/xiaozhi/wake as its model base path.
+-- Keep the Lua preflight check aligned with that native path even when the
+-- foreground app is not installed; deployment creates the model-only path.
+M.WAKE_MODEL_DIR = M.UI_APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
 M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"

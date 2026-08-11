@@ -1,5 +1,7 @@
 # xiaozhi Lua App
 
+This foreground app keeps its own runtime and takes ownership of the microphone while open. XiaoZhi Service releases background wake capture before launching it, and the optional wake handoff is ignored safely when the service is absent.
+
 这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。底层动态模块只负责唤醒、Opus 编解码和音频播放；联网协议、状态机和 LVGL UI 放在 Lua。
 
 ## API 配置

@@ -75,7 +75,7 @@ local PAGE = [=[<!doctype html>
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="appUiCard">
     <b>主应用 UI</b>
     <!--p class="muted">这里写入 /sd/apps/xiaozhi/config.json，控制打开小智前台 App 时使用的界面。</p-->
     <label class="field">界面类型
@@ -91,7 +91,7 @@ local PAGE = [=[<!doctype html>
     <div class="grid2">
       <label class="field">呈现模式
         <select id="serviceUiMode">
-          <option value="app">打开小智 App</option>
+          <option value="app" id="serviceUiAppOption">打开小智 App</option>
           <option value="floating">悬浮显示</option>
         </select>
       </label>
@@ -113,13 +113,13 @@ local PAGE = [=[<!doctype html>
 </main>
 <script>
 const q=s=>document.querySelector(s);
-let volume=100,volumeTimer=0,serverLoaded=false,uiLoaded=false;
+let volume=100,volumeTimer=0,serverLoaded=false,uiLoaded=false,appInstalled=false;
 async function api(p,o){let r=await fetch(p,o);let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j}
 function optionLabel(v){return v==='window'?'小窗模式':(v==='subtitle'?'字幕模式':(v==='wechat'?'微信气泡':(v==='assistant'?'助手形象':v)))}
 function fillOptions(el,items,value,fallback){items=Array.isArray(items)?items:[];if(!items.length)items=[fallback||'subtitle'];el.innerHTML='';let seen={};items.forEach(v=>{v=String(v||'').trim();if(!v||seen[v])return;seen[v]=1;let o=document.createElement('option');o.value=v;o.textContent=optionLabel(v);el.appendChild(o)});if(value&&seen[value])el.value=value;else if(seen[fallback])el.value=fallback;else el.selectedIndex=0}
 function fillDenyApps(options,selected){let box=q('#denyApps');options=Array.isArray(options)?options:[];selected=selected||{};box.innerHTML='';options.forEach(item=>{let id=String((item&&item.id)||item||'').trim();if(!id)return;let name=String((item&&item.name)||id);let label=document.createElement('label');label.className='check';let input=document.createElement('input');input.type='checkbox';input.value=id;input.checked=selected[id]===true;let span=document.createElement('span');span.textContent=name===id?id:(name+' · '+id);label.appendChild(input);label.appendChild(span);box.appendChild(label)})}
 function collectDenyApps(){let out={};document.querySelectorAll('#denyApps input[type=checkbox]').forEach(i=>{if(i.checked)out[i.value]=true});return out}
-function syncServiceUiDisabled(){let floating=q('#serviceUiMode').value==='floating';q('#serviceUiType').disabled=!floating;q('#serviceUiCharacter').disabled=!floating||q('#serviceUiType').value!=='assistant'}
+function syncServiceUiDisabled(){let mode=q('#serviceUiMode'),appOption=q('#serviceUiAppOption');if(appOption){appOption.disabled=!appInstalled;appOption.hidden=!appInstalled}if(!appInstalled&&mode.value==='app')mode.value='floating';let floating=mode.value==='floating';q('#serviceUiType').disabled=!floating;q('#serviceUiCharacter').disabled=!floating||q('#serviceUiType').value!=='assistant'}
 async function pushWakeEnabled(v){try{let s=await api('./api/wake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:v})});q('#wakeEnabled').checked=s.wake_service_enabled===true;q('#message').textContent=s.wake_service_enabled?'后台唤醒已开启':'后台唤醒已关闭'}catch(e){q('#message').textContent=e.message;refresh()}}
 function showVolume(v){volume=Math.max(0,Math.min(100,Number(v)||0));q('#volumeSlider').value=String(volume);q('#volume').textContent=volume+'%'}
 function pushVolume(v){fetch('./api/volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({volume:v}),keepalive:true}).catch(()=>{})}
@@ -133,6 +133,9 @@ async function refresh(){
     q('#code').textContent=s.pairing_code||'';
     q('#server').textContent=s.websocket_url?'服务器：'+s.websocket_url:'尚未绑定设备';
     if(document.activeElement!==q('#volumeSlider'))showVolume(s.volume==null?100:s.volume);
+    appInstalled=s.app_ui_installed===true;
+    q('#appUiCard').hidden=!appInstalled;
+    syncServiceUiDisabled();
     if(!serverLoaded){
       q('#customOtaUrl').value=s.ota_url||'https://api.tenclass.net/xiaozhi/ota/';
       q('#customUrl').value=s.websocket_url||'';

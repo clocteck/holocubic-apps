@@ -321,6 +321,11 @@ function M.new(cfg, load_module)
         self.protocol:start()
         self.ui:show_notification("小智已就绪", 1600)
         set_state(State.IDLE)
+        if self.startup_wake_word then
+          local wake_word = self.startup_wake_word
+          self.startup_wake_word = nil
+          wake_word_invoke(wake_word)
+        end
         refresh_metrics()
       elseif event == "failed" then
         alert("激活失败", data or "activation failed", "cloud_slash")
@@ -434,6 +439,11 @@ function M.new(cfg, load_module)
       self.protocol:start()
       self.ui:show_notification("xiaozhi lua port", 1200)
       set_state(State.IDLE)
+      if self.startup_wake_word then
+        local wake_word = self.startup_wake_word
+        self.startup_wake_word = nil
+        wake_word_invoke(wake_word)
+      end
     end
     refresh_metrics()
     return true
@@ -444,6 +454,9 @@ function M.new(cfg, load_module)
       return
     end
     self.stopped = true
+    if rawget(_G, "XIAOZHI_UI_APP") == self then
+      _G.XIAOZHI_UI_APP = nil
+    end
     if self.timer then
       pcall(function() self.timer:stop() end)
       pcall(function() self.timer:unregister() end)

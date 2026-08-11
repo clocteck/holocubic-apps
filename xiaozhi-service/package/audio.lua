@@ -240,6 +240,7 @@ function M.new(cfg)
     bridge_started = false,
     wake_ready = false,
     wake_missing = false,
+    wake_capture_active = false,
     voice_ready = false,
     frame_pcm_bytes = math.floor(((cfg.AUDIO.rate or 16000) * (cfg.AUDIO.frame_ms or 60) / 1000)) * 2,
     wake_chunk_bytes = 1024,
@@ -341,6 +342,7 @@ function M.new(cfg)
       mode = self.mode,
       wake_ready = self.wake_ready,
       wake_missing = self.wake_missing,
+      wake_capture_active = self.wake_capture_active,
       voice_ready = self.voice_ready,
       pcm_bytes = self.pcm_bytes,
       send_frames = self.send_frames,
@@ -562,6 +564,12 @@ function M.new(cfg)
   end
 
   local function stop_i2s()
+    local native_wake_stopped = false
+    if self.wake_capture_active and self.wake and self.wake.capture_stop then
+      local ok, ret = pcall(self.wake.capture_stop)
+      native_wake_stopped = ok and ret ~= false
+      self.wake_capture_active = false
+    end
     if self.capture then
       finish_capture("stop")
     end
@@ -569,10 +577,10 @@ function M.new(cfg)
       pcall(function() self.voice.capture_stop() end)
       self.capture_active = false
     end
-    if i2s and i2s.mute then
+    if not native_wake_stopped and i2s and i2s.mute then
       pcall(function() i2s.mute(cfg.AUDIO.i2s_id) end)
     end
-    if i2s and i2s.stop then
+    if not native_wake_stopped and i2s and i2s.stop then
       pcall(function() i2s.stop(cfg.AUDIO.i2s_id) end)
     end
   end
@@ -810,6 +818,28 @@ function M.new(cfg)
       return
     end
 
+    if self.mode == "wake" and self.wake_capture_active
+        and self.wake and self.wake.capture_read then
+      local ok, status = pcall(self.wake.capture_read)
+      if not ok or type(status) ~= "table" then
+        set_error(tostring(status or "wake.capture_read failed"))
+        self:stop_i2s()
+        return
+      end
+      self.wake_frames = tonumber(status.frames) or self.wake_frames
+      if status.ok == false or status.running == false then
+        set_error(tostring(status.error or "wake capture stopped"))
+        self:stop_i2s()
+        return
+      end
+      local detections = tonumber(status.detections) or 0
+      if status.detected or detections > 0 then
+        self.detect_count = self.detect_count + (detections > 0 and detections or 1)
+        if self.on_wake then pcall(self.on_wake, cfg.WAKE_WORD) end
+      end
+      return
+    end
+
     if self.mode == "listen" and self.capture_active and self.voice and self.voice.capture_read then
       local max_frames = tonumber(cfg.AUDIO.max_rx_frames_per_poll) or 1
       for _ = 1, max_frames do
@@ -962,6 +992,30 @@ function M.new(cfg)
       if not self:start_wake_model() then
         return false
       end
+      if self.wake.capture_start and self.wake.capture_read
+          and not cfg.AUDIO.wake_capture_lua_fallback
+          and cfg.AUDIO.wake_bridge_enabled == false then
+        local ok, ret, err = pcall(self.wake.capture_start, {
+          bits = cfg.AUDIO.mic_bits,
+          i2s_id = cfg.AUDIO.i2s_id,
+          bclk_pin = 41,
+          ws_pin = 45,
+          din_pin = 42,
+          buffer_count = cfg.AUDIO.rx_buffer_count or 4,
+          pack = cfg.AUDIO.wake_mic_pack or cfg.AUDIO.mic_pack or "b23",
+          gain_shift = cfg.AUDIO.wake_gain_shift or cfg.AUDIO.mic_gain_shift or 0,
+          task_stack = cfg.AUDIO.wake_capture_task_stack or 8192,
+          priority = cfg.AUDIO.wake_capture_task_priority or 2,
+          core = cfg.AUDIO.wake_capture_task_core,
+          read_timeout_ms = cfg.AUDIO.wake_capture_read_timeout_ms or 100,
+        })
+        if ok and ret then
+          self.wake_capture_active = true
+          self.mode = mode
+          return start_poll_timer(mode)
+        end
+        print("[xiaozhi] wake capture_start fallback", tostring(err or ret))
+      end
       local samples = math.max(256, math.floor(self.wake_chunk_bytes / 2))
       self.read_raw_bytes = samples * 4
       if not start_rx(samples, cfg.AUDIO.wake_rate or 16000) then
@@ -1051,6 +1105,7 @@ function M.new(cfg)
       pcall(self.voice.stop)
     end
     self.wake_ready = false
+    self.wake_capture_active = false
     self.voice_ready = false
   end
 

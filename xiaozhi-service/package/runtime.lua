@@ -11,6 +11,7 @@ function M.new(cfg, load_module)
   local Indicator = load_module("indicator")
   local XIAOZHI_WAKE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
   local XIAOZHI_WAKE_TARGET_PATH = "/sd/apps/xiaozhi_wake/target_app_id.txt"
+  local FOREGROUND_HANDOFF_PATH = "/sd/apps/xiaozhi-service/pending-wake.json"
 
   local function default_deny_apps()
     local source = type(cfg.DEFAULT_DENY_APPS) == "table" and cfg.DEFAULT_DENY_APPS or {
@@ -45,6 +46,8 @@ function M.new(cfg, load_module)
     foreground_poll_ticks = 0,
     listening_mode = State.LISTEN_AUTO,
     pending_wake_word = nil,
+    pending_foreground_wake = nil,
+    pending_foreground_return_app_id = nil,
     startup_wake_word = nil,
     startup_wake_from_service = false,
     return_app_id = nil,
@@ -117,6 +120,29 @@ function M.new(cfg, load_module)
     return written and true or false
   end
 
+  local function clear_foreground_handoff()
+    self.pending_foreground_wake = nil
+    self.pending_foreground_return_app_id = nil
+    if file and file.remove then
+      pcall(function() file.remove(FOREGROUND_HANDOFF_PATH) end)
+    elseif file and file.putcontents then
+      pcall(function() file.putcontents(FOREGROUND_HANDOFF_PATH, "") end)
+    end
+  end
+
+  local function xiaozhi_app_installed()
+    local path = (cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info"
+    if file and file.exists then
+      local ok, exists = pcall(function() return file.exists(path) end)
+      if ok then return exists == true end
+    end
+    if file and file.stat then
+      local ok, stat = pcall(function() return file.stat(path) end)
+      if ok then return stat ~= nil and stat ~= false end
+    end
+    return false
+  end
+
   local function read_wake_service_config()
     local wake_cfg = decode(read_text(XIAOZHI_WAKE_CONFIG_PATH))
       or cfg.wake_service
@@ -155,8 +181,9 @@ function M.new(cfg, load_module)
   end
 
   local function encode(value)
-    if not sjson or not sjson.encode then return nil end
-    local ok, raw = pcall(sjson.encode, value)
+    local lib = codec()
+    if not lib or not lib.encode then return nil end
+    local ok, raw = pcall(lib.encode, value)
     if ok and type(raw) == "string" then return raw end
     return nil
   end
@@ -254,6 +281,7 @@ function M.new(cfg, load_module)
   end
 
   local refresh_metrics
+  local suspend_audio_for_app
 
   local function xiaozhi_is_foreground()
     if self.current_app_id == "xiaozhi" then return true end
@@ -562,6 +590,10 @@ function M.new(cfg, load_module)
 
   local function launch_xiaozhi_ui(reason)
     if cfg.UI_MODE ~= "app" then return false end
+    if not xiaozhi_app_installed() then
+      use_floating_ui_fallback("xiaozhi app not installed")
+      return false
+    end
     if not app or not app.launch then
       use_floating_ui_fallback("app.launch unavailable")
       return false
@@ -607,7 +639,26 @@ function M.new(cfg, load_module)
     local foreground_xiaozhi = xiaozhi_is_foreground()
     apply_service_ui_suppression()
     if s == State.IDLE and not foreground_xiaozhi then
-      launch_xiaozhi_ui("wake")
+      local handoff_word = self.pending_wake_word
+      local origin_app_id = returnable_app_id(foreground_app_id())
+      if cfg.UI_MODE == "app" and xiaozhi_app_installed() then
+        self.pending_foreground_wake = handoff_word
+        self.pending_foreground_return_app_id = origin_app_id
+        local handoff_raw = encode({
+          wake_word = handoff_word,
+          return_app_id = origin_app_id,
+        })
+        if handoff_raw then write_text(FOREGROUND_HANDOFF_PATH, handoff_raw) end
+        -- The foreground app owns I2S. Release native wake capture before launch.
+        if self.audio then pcall(function() self.audio:stop_i2s() end) end
+        if launch_xiaozhi_ui("wake") then
+          if suspend_audio_for_app then suspend_audio_for_app("xiaozhi") end
+          return true
+        end
+        clear_foreground_handoff()
+      else
+        launch_xiaozhi_ui("wake")
+      end
     end
     if not cfg.websocket or not cfg.websocket.url or cfg.websocket.url == "" then
       return show_pairing_code()
@@ -895,7 +946,7 @@ function M.new(cfg, load_module)
     return true, { active = true, duration_ms = duration_ms }
   end
 
-  local function suspend_audio_for_app(app_id)
+  suspend_audio_for_app = function(app_id)
     if not cfg.SERVICE_MODE then return false end
     self.current_app_id = app_id
     if self.audio_suspended_by_app and self.audio_suspended_app_id == app_id then
@@ -958,7 +1009,10 @@ function M.new(cfg, load_module)
   on_app_change = function(app_id, source)
     app_id = type(app_id) == "string" and app_id ~= "" and app_id or "launcher"
     if not cfg.SERVICE_MODE then return true end
-    if app_id == "xiaozhi" or app_id == "xiaozhi-service" or app_id == "xiaozhi_wake" then
+    if app_id == "xiaozhi" then
+      return suspend_audio_for_app(app_id)
+    end
+    if app_id == "xiaozhi-service" or app_id == "xiaozhi_wake" then
       return resume_audio_for_app(app_id)
     end
     if app_denies_service(app_id) then
@@ -1402,6 +1456,15 @@ function M.new(cfg, load_module)
     function bridge:on_app_change(app_id, source)
       return on_app_change(app_id, source or "bridge")
     end
+    function bridge:take_pending_wake()
+      local wake_word = self.runtime.pending_foreground_wake
+      local return_app_id = self.runtime.pending_foreground_return_app_id
+      clear_foreground_handoff()
+      return wake_word, return_app_id
+    end
+    function bridge:suspend(reason)
+      return suspend_audio_for_app("xiaozhi", reason or "foreground xiaozhi")
+    end
     function bridge:temporary_wake_backoff(duration_ms, source)
       return temporary_wake_backoff(duration_ms, source or "bridge")
     end
@@ -1549,6 +1612,9 @@ function M.new(cfg, load_module)
     if self.web then self.web:stop() end
     if rawget(_G, "XIAOZHI_SERVICE") == self.ipc then
       _G.XIAOZHI_SERVICE = nil
+    end
+    if rawget(_G, "XIAOZHI_SERVICE_APP") == self then
+      _G.XIAOZHI_SERVICE_APP = nil
     end
     if ipc and ipc.listen then pcall(function() ipc.listen("xiaozhi-service", nil) end) end
     if self.lifecycle_listening and ipc and ipc.listen then
@@ -1964,6 +2030,9 @@ function M.new(cfg, load_module)
     end
     if service_ui_mode ~= "app" and service_ui_mode ~= "floating" then
       return false, "后台 UI 模式仅支持 app 或 floating"
+    end
+    if service_ui_mode == "app" and not app_ui_installed then
+      return false, "未安装小智前台 App，不能选择打开 App"
     end
     if not service_ui_type then
       return false, "后台 UI 类型无效"
