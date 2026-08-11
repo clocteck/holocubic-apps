@@ -18,13 +18,17 @@ M.BOARD_NAME = "bread-compact-wifi-lcd"
 M.SERVICE_DIR = "/sd/apps/xiaozhi-service"
 M.UI_APP_DIR = "/sd/apps/xiaozhi"
 M.APP_DIR = M.SERVICE_DIR
-M.XZ_MODULE = M.SERVICE_DIR .. "/xiaozhi.so"
-M.WAKE_MODULE = M.SERVICE_DIR .. "/wake.so"
+-- The firmware ELF loader keys modules by filename only, not by full path.
+-- Keep service module basenames distinct from the foreground xiaozhi App so
+-- closing either runtime cannot dlclose code still used by the other one.
+M.XZ_MODULE = M.SERVICE_DIR .. "/xzvoice.so"
+M.WAKE_MODULE = M.SERVICE_DIR .. "/xzwk.so"
 M.CONFIG_PATH = M.SERVICE_DIR .. "/config.json"
 M.APP_UI_CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
 M.COMPAT_CONFIG_PATH = M.APP_UI_CONFIG_PATH
 M.MCP_DIR = M.SERVICE_DIR .. "/mcp"
--- wake.so is prebuilt with /sd/apps/xiaozhi/wake as its model base path.
+-- xzwk.so reuses the prebuilt wake implementation with a service-only module
+-- identity; its compiled model base remains /sd/apps/xiaozhi/wake.
 -- Keep the Lua preflight check aligned with that native path even when the
 -- foreground app is not installed; deployment creates the model-only path.
 M.WAKE_MODEL_DIR = M.UI_APP_DIR .. "/wake/wn9s_nihaoxiaozhi"

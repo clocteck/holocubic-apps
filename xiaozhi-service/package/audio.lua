@@ -392,7 +392,7 @@ function M.new(cfg)
   function self:load_modules()
     local ok, mod = pcall(require, cfg.XZ_MODULE)
     if not ok or type(mod) ~= "table" then
-      set_error("xiaozhi.so load failed")
+      set_error("xzvoice.so load failed")
       print("[xiaozhi] require failed", mod)
       return false
     end

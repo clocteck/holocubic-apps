@@ -1,8 +1,8 @@
 # XiaoZhi Service
 
-Wake-word capture runs in `wake.so`'s native capture task when available, so WakeNet inference does not block Lua timers or HTTP handlers. The foreground XiaoZhi App and this service keep separate runtime globals; launching either one no longer stops the other as a stale instance.
+Wake-word capture runs in `xzwk.so`'s native capture task when available, so WakeNet inference does not block Lua timers or HTTP handlers. The foreground XiaoZhi App and this service keep separate runtime globals and use distinct dynamic-module basenames; closing either runtime cannot unload native code still used by the other one.
 
-The checked-in `wake.so` is prebuilt with `/sd/apps/xiaozhi/wake` as its model base. During initialization the service checks the three WakeNet model files there and copies any missing files from its own package. This creates only the native model cache path; it does not load foreground-app Lua or configuration.
+The checked-in `xzwk.so` reuses the prebuilt wake implementation with a service-only module identity. Its compiled model base is `/sd/apps/xiaozhi/wake`. During initialization the service checks the three WakeNet model files there and copies any missing files from its own package. This creates only the native model cache path; it does not load foreground-app Lua or configuration.
 
 这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。`xiaozhi-service` 是可独立部署的
 后台服务包，自带唤醒、音频、激活、协议、MCP、native 模块、唤醒模型和悬浮 UI
@@ -93,10 +93,10 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 
 ## 回复流程
 
-1. `wake.so` 检测到 `你好小智`。
+1. `xzwk.so` 检测到 `你好小智`。
 2. Lua 进入 `connecting`，按官方 WebSocket 协议发送 hello。
 3. 服务端返回 `session_id` 后，Lua 发送 `listen.detect/start`。
-4. 麦克风 PCM 经 `xiaozhi.so` 编成 Opus，通过 WebSocket 发给服务端。
+4. 麦克风 PCM 经 `xzvoice.so` 编成 Opus，通过 WebSocket 发给服务端。
 5. 服务端返回 STT/LLM/TTS 文本事件和二进制 Opus。
 6. Lua 解码 Opus，写入独占 I2S 扬声器输出。
 
@@ -188,8 +188,8 @@ return {
 /sd/apps/xiaozhi-service/protocol.lua
 /sd/apps/xiaozhi-service/activation.lua
 /sd/apps/xiaozhi-service/mcp.lua
-/sd/apps/xiaozhi-service/xiaozhi.so
-/sd/apps/xiaozhi-service/wake.so
+/sd/apps/xiaozhi-service/xzwk.so
+/sd/apps/xiaozhi-service/xzvoice.so
 /sd/apps/xiaozhi-service/wake/wn9s_nihaoxiaozhi/*
 ```
 
