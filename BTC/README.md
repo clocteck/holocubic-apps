@@ -13,6 +13,11 @@ Ticker 是面向 HoloCubic 的多市场行情应用，支持自定义货币汇�
 
 所有在线请求均使用公开 HTTPS 原始域名，不依赖局域网代理地址。公开接口可能调整、限流或暂时不可用，行情仅用于展示，不构成投资建议。
 
+## 2.0.1 更新说明 / Release Notes
+
+- 中文：汇率的原货币和目标货币下拉框新增印尼盾（IDR），常用货币数量增加到 19 种。
+  English: Adds Indonesian Rupiah (IDR) to both FX dropdowns, increasing the common-currency list to 19 entries.
+
 ## 2.0.0 更新说明 / Release Notes
 
 - 中文：汇率控制区改为“原货币”和“目标货币”两个下拉框，内置 18 种常用货币，选择后立即刷新。

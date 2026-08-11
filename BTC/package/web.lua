@@ -528,6 +528,7 @@ const FX_CURRENCIES = [
   {code:"INR", zh:"印度卢比", en:"Indian Rupee", ja:"インドルピー", tw:"印度盧比"},
   {code:"AED", zh:"阿联酋迪拉姆", en:"UAE Dirham", ja:"UAEディルハム", tw:"阿聯酋迪拉姆"},
   {code:"MYR", zh:"马来西亚林吉特", en:"Malaysian Ringgit", ja:"マレーシアリンギット", tw:"馬來西亞令吉"},
+  {code:"IDR", zh:"印尼盾", en:"Indonesian Rupiah", ja:"インドネシアルピア", tw:"印尼盾"},
   {code:"PHP", zh:"菲律宾比索", en:"Philippine Peso", ja:"フィリピンペソ", tw:"菲律賓披索"}
 ];
 
