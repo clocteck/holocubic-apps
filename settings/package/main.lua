@@ -10,7 +10,7 @@ elseif prev and prev.shutdown then
 end
 
 SETTINGS_APP = {
-  VERSION = "2026-07-13-settings-hidpad-v3",
+  VERSION = "2026-08-12-settings-controller-v4",
   APP_DIR = "/sd/apps/settings",
   SCREEN_W = 320,
   SCREEN_H = 240,
@@ -441,6 +441,7 @@ local function toggle_state_text(item)
     return "不可用"
   end
   if item.id == "hidpad" then
+    if item.phase == "not_installed" then return "未安装" end
     if item.phase == "unsupported" then return "不支持" end
     if not item.available then return "不可用" end
     if not item.value or item.phase == "disabled" then return "已禁用" end
@@ -675,6 +676,8 @@ local function refresh_hidpad_item()
   item.hint = ""
 
   if not hidpad_installed(false) then
+    item.phase = "not_installed"
+    item.detail = "要连接手柄请先安装 HID Pad 服务"
     return
   end
 
@@ -1146,7 +1149,7 @@ local function build_settings_page()
     APP.ui.cards[i] = card
   end
 
-  APP.ui.footer = create_text(APP.ui.root, "上下选择  左右调整  Home 返回", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
+  APP.ui.footer = create_text(APP.ui.root, "上下选择  左右调整  A 确认", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
 end
 
 local function build_info_page()
@@ -1165,7 +1168,7 @@ local function build_info_page()
     APP.ui.info_rows[i] = row
   end
 
-  APP.ui.footer = create_text(APP.ui.root, "左右切换页面  Home 返回", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
+  APP.ui.footer = create_text(APP.ui.root, "B 返回设置  Select/Home 退出", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
 end
 
 function refresh_ui()
@@ -1224,8 +1227,15 @@ function refresh_ui()
           local value_text = item.id == "wifi" and text_or(item.value_label, "关闭") or toggle_state_text(item)
           local detail_text = item.id == "wifi" and text_or(APP.state.ip_text, "--") or text_or(item.detail, "--")
           lv_label_set_text(card.value, value_text)
-          lv_label_set_text(card.sub, clip_text(detail_text, 22))
-          lv_label_set_text(card.hint, item.hint)
+          if item.id == "hidpad" and item.phase == "not_installed" then
+            lv_label_set_text(card.sub, detail_text)
+            lv_obj_set_width(card.sub, 264)
+            lv_label_set_text(card.hint, "")
+          else
+            lv_label_set_text(card.sub, clip_text(detail_text, 22))
+            if item.id == "hidpad" then lv_obj_set_width(card.sub, 134) end
+            lv_label_set_text(card.hint, item.hint)
+          end
           lv_obj_set_style_text_color(card.value, item.available and (item.value and item.accent or C.text_dim) or C.text_dim, MAIN_STYLE)
           lv_obj_set_style_text_color(card.sub, item.available and C.text_dim or C.text_muted, MAIN_STYLE)
           lv_obj_set_style_text_color(card.hint, selected and C.text_dim or C.text_muted, MAIN_STYLE)
@@ -1441,19 +1451,65 @@ local function unbind_input()
 end
 
 local function start_polling()
-  local controller_buttons = 0
+  local controller_buttons = nil
+  local controller_zero_since = nil
+  local controller_ready = false
+  local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 1, 2, 4, 8
+  local PAD_A, PAD_B, PAD_SELECT, PAD_MENU, PAD_HOME = 16, 32, 4096, 8192, 32768
   add_timer(40, true, function()
     if not controller or not controller.state then return end
     local ok, pad = pcall(function() return controller.state("ble-main") end)
     local buttons = ok and type(pad) == "table" and (tonumber(pad.buttons) or 0) or 0
+    if controller_buttons == nil then
+      controller_buttons = buttons
+      return
+    end
+    local stamp = clock_ms()
+    if not controller_ready then
+      controller_buttons = buttons
+      if buttons == 0 then
+        controller_zero_since = controller_zero_since or stamp
+        if stamp - controller_zero_since >= 400 then controller_ready = true end
+      else
+        controller_zero_since = nil
+      end
+      return
+    end
     local pressed = buttons & (~controller_buttons)
     controller_buttons = buttons
-    if (pressed & (4096 | 32768)) ~= 0 then
+    if (pressed & (PAD_SELECT | PAD_HOME)) ~= 0 then
       request_exit("short")
-    elseif (pressed & 4) ~= 0 then
-      handle_key(APP.input.left_code, APP.input.start_type, clock_ms())
-    elseif (pressed & 8) ~= 0 then
-      handle_key(APP.input.right_code, APP.input.start_type, clock_ms())
+    elseif (pressed & PAD_UP) ~= 0 then
+      move_selection(-1)
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_DOWN) ~= 0 then
+      move_selection(1)
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_LEFT) ~= 0 then
+      apply_selected_value(-1)
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_RIGHT) ~= 0 then
+      apply_selected_value(1)
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_A) ~= 0 then
+      apply_selected_value(1)
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_MENU) ~= 0 then
+      APP.state.page = APP.state.page == 1 and 2 or 1
+      APP.selected_index = 4
+      set_message(APP.state.page == 1 and "设置" or "设备信息")
+      refresh_info_items()
+      refresh_ui()
+    elseif (pressed & PAD_B) ~= 0 and APP.state.page == 2 then
+      APP.state.page = 1
+      APP.selected_index = 1
+      set_message(item_summary(current_item()))
+      refresh_ui()
     end
   end)
   add_timer(1000, true, function()
