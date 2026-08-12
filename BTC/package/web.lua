@@ -196,6 +196,7 @@ canvas{display:block;width:100%;height:100%}
 .seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 #groupButtons{grid-template-columns:repeat(3,minmax(0,1fr))}
 .currency-seg{grid-template-columns:repeat(3,minmax(0,1fr))}
+#tiltButtons{grid-template-columns:repeat(2,minmax(0,1fr))}
 .seg button,.actions button{
   min-height:38px;
   border:1px solid var(--line);
@@ -351,6 +352,14 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
         </select>
       </div>
 
+      <div class="field">
+        <label data-i18n="tilt_switch">重力感应切换</label>
+        <div class="seg" id="tiltButtons">
+          <button data-tilt="true" data-i18n="on">开启</button>
+          <button data-tilt="false" data-i18n="disabled">关闭</button>
+        </div>
+      </div>
+
       <div class="actions">
         <button class="secondary" id="refreshNow" data-i18n="refresh">刷新</button>
       </div>
@@ -407,10 +416,10 @@ select:focus,input:focus,button:focus-visible{border-color:rgba(10,132,255,.5);b
 const API = "]=], api_prefix, [=[";
 const LANG = "]=], language, [=[";
 const MESSAGES = {
-  "zh-CN": {main:"主页",interval:"周期",high:"最高",low:"最低",updated:"更新",fx:"汇率",crypto:"币价",nasdaq:"纳斯达克",metal:"金银铜",ashare:"A股",taiwan:"台股",currency:"显示币种",usd:"美金",cny:"人民币",twd:"新台币",asset:"标的",trend_interval:"走势周期",chart:"图表",line:"折线",candle:"K线",ma:"均线",off:"不显示",refresh:"刷新",custom:"自定义",source:"来源",fx_source:"公开汇率",base_currency:"原货币",quote_currency:"目标货币",eastmoney:"Eastmoney公开",yahoo:"Yahoo Finance",twse:"台湾行情 (TWSE MIS)",market:"市场",shanghai:"沪市/指数",shenzhen:"深市",nasdaq_index:"纳斯达克指数",us_stock:"美股",metal_futures:"金银铜期货",symbol:"代码",name:"名称",add_view:"添加并查看",clear:"清空",loading:"加载中",ready:"就绪",cold:"启动中",error:"错误"},
-  en: {main:"Main",interval:"Interval",high:"High",low:"Low",updated:"Updated",fx:"FX",crypto:"Crypto",nasdaq:"Nasdaq",metal:"Metals",ashare:"A-shares",taiwan:"Taiwan",currency:"Display currency",usd:"USD",cny:"CNY",twd:"TWD",asset:"Asset",trend_interval:"Trend interval",chart:"Chart",line:"Line",candle:"Candles",ma:"Moving average",off:"Off",refresh:"Refresh",custom:"Custom",source:"Source",fx_source:"Public FX rates",base_currency:"Base currency",quote_currency:"Quote currency",eastmoney:"Eastmoney public",yahoo:"Yahoo Finance",twse:"Taiwan quotes (TWSE MIS)",market:"Market",shanghai:"Shanghai / Index",shenzhen:"Shenzhen",nasdaq_index:"Nasdaq index",us_stock:"US stocks",metal_futures:"Metal futures",symbol:"Symbol",name:"Name",add_view:"Add and view",clear:"Clear",loading:"Loading",ready:"Ready",cold:"Starting",error:"Error"},
-  ja: {main:"メイン",interval:"期間",high:"高値",low:"安値",updated:"更新",fx:"為替",crypto:"暗号資産",nasdaq:"ナスダック",metal:"金銀銅",ashare:"中国A株",taiwan:"台湾株",currency:"表示通貨",usd:"米ドル",cny:"人民元",twd:"台湾ドル",asset:"銘柄",trend_interval:"表示期間",chart:"チャート",line:"折線",candle:"ローソク",ma:"移動平均",off:"表示しない",refresh:"更新",custom:"カスタム",source:"データ元",fx_source:"公開為替レート",base_currency:"基準通貨",quote_currency:"換算先通貨",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"台湾相場 (TWSE MIS)",market:"市場",shanghai:"上海 / 指数",shenzhen:"深圳",nasdaq_index:"ナスダック指数",us_stock:"米国株",metal_futures:"金属先物",symbol:"コード",name:"名称",add_view:"追加して表示",clear:"クリア",loading:"読込中",ready:"準備完了",cold:"起動中",error:"エラー"},
-  "zh-TW": {main:"主頁",interval:"週期",high:"最高",low:"最低",updated:"更新",fx:"匯率",crypto:"幣價",nasdaq:"那斯達克",metal:"金銀銅",ashare:"A股",taiwan:"台股",currency:"顯示幣別",usd:"美元",cny:"人民幣",twd:"新台幣",asset:"標的",trend_interval:"走勢週期",chart:"圖表",line:"折線",candle:"K線",ma:"均線",off:"不顯示",refresh:"重新整理",custom:"自訂",source:"來源",fx_source:"公開匯率",base_currency:"來源貨幣",quote_currency:"目標貨幣",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"臺灣行情 (TWSE MIS)",market:"市場",shanghai:"滬市/指數",shenzhen:"深市",nasdaq_index:"那斯達克指數",us_stock:"美股",metal_futures:"金銀銅期貨",symbol:"代碼",name:"名稱",add_view:"新增並檢視",clear:"清除",loading:"載入中",ready:"就緒",cold:"啟動中",error:"錯誤"}
+  "zh-CN": {main:"主页",interval:"周期",high:"最高",low:"最低",updated:"更新",fx:"汇率",crypto:"币价",nasdaq:"纳斯达克",metal:"金银铜",ashare:"A股",taiwan:"台股",currency:"显示币种",usd:"美金",cny:"人民币",twd:"新台币",asset:"标的",trend_interval:"走势周期",chart:"图表",line:"折线",candle:"K线",ma:"均线",off:"不显示",on:"开启",disabled:"关闭",tilt_switch:"重力感应切换",refresh:"刷新",custom:"自定义",source:"来源",fx_source:"公开汇率",base_currency:"原货币",quote_currency:"目标货币",eastmoney:"Eastmoney公开",yahoo:"Yahoo Finance",twse:"台湾行情 (TWSE MIS)",market:"市场",shanghai:"沪市/指数",shenzhen:"深市",nasdaq_index:"纳斯达克指数",us_stock:"美股",metal_futures:"金银铜期货",symbol:"代码",name:"名称",add_view:"添加并查看",clear:"清空",loading:"加载中",ready:"就绪",cold:"启动中",error:"错误"},
+  en: {main:"Main",interval:"Interval",high:"High",low:"Low",updated:"Updated",fx:"FX",crypto:"Crypto",nasdaq:"Nasdaq",metal:"Metals",ashare:"A-shares",taiwan:"Taiwan",currency:"Display currency",usd:"USD",cny:"CNY",twd:"TWD",asset:"Asset",trend_interval:"Trend interval",chart:"Chart",line:"Line",candle:"Candles",ma:"Moving average",off:"Off",on:"On",disabled:"Off",tilt_switch:"Tilt switching",refresh:"Refresh",custom:"Custom",source:"Source",fx_source:"Public FX rates",base_currency:"Base currency",quote_currency:"Quote currency",eastmoney:"Eastmoney public",yahoo:"Yahoo Finance",twse:"Taiwan quotes (TWSE MIS)",market:"Market",shanghai:"Shanghai / Index",shenzhen:"Shenzhen",nasdaq_index:"Nasdaq index",us_stock:"US stocks",metal_futures:"Metal futures",symbol:"Symbol",name:"Name",add_view:"Add and view",clear:"Clear",loading:"Loading",ready:"Ready",cold:"Starting",error:"Error"},
+  ja: {main:"メイン",interval:"期間",high:"高値",low:"安値",updated:"更新",fx:"為替",crypto:"暗号資産",nasdaq:"ナスダック",metal:"金銀銅",ashare:"中国A株",taiwan:"台湾株",currency:"表示通貨",usd:"米ドル",cny:"人民元",twd:"台湾ドル",asset:"銘柄",trend_interval:"表示期間",chart:"チャート",line:"折線",candle:"ローソク",ma:"移動平均",off:"表示しない",on:"オン",disabled:"オフ",tilt_switch:"傾き切り替え",refresh:"更新",custom:"カスタム",source:"データ元",fx_source:"公開為替レート",base_currency:"基準通貨",quote_currency:"換算先通貨",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"台湾相場 (TWSE MIS)",market:"市場",shanghai:"上海 / 指数",shenzhen:"深圳",nasdaq_index:"ナスダック指数",us_stock:"米国株",metal_futures:"金属先物",symbol:"コード",name:"名称",add_view:"追加して表示",clear:"クリア",loading:"読込中",ready:"準備完了",cold:"起動中",error:"エラー"},
+  "zh-TW": {main:"主頁",interval:"週期",high:"最高",low:"最低",updated:"更新",fx:"匯率",crypto:"幣價",nasdaq:"那斯達克",metal:"金銀銅",ashare:"A股",taiwan:"台股",currency:"顯示幣別",usd:"美元",cny:"人民幣",twd:"新台幣",asset:"標的",trend_interval:"走勢週期",chart:"圖表",line:"折線",candle:"K線",ma:"均線",off:"不顯示",on:"開啟",disabled:"關閉",tilt_switch:"重力感應切換",refresh:"重新整理",custom:"自訂",source:"來源",fx_source:"公開匯率",base_currency:"來源貨幣",quote_currency:"目標貨幣",eastmoney:"Eastmoney公開",yahoo:"Yahoo Finance",twse:"臺灣行情 (TWSE MIS)",market:"市場",shanghai:"滬市/指數",shenzhen:"深市",nasdaq_index:"那斯達克指數",us_stock:"美股",metal_futures:"金銀銅期貨",symbol:"代碼",name:"名稱",add_view:"新增並檢視",clear:"清除",loading:"載入中",ready:"就緒",cold:"啟動中",error:"錯誤"}
 };
 const MSG = MESSAGES[LANG] || MESSAGES["zh-CN"];
 const tr = (key) => MSG[key] || MESSAGES["zh-CN"][key] || key;
@@ -457,6 +466,12 @@ const els = {
   quoteCurrencyInput: document.getElementById("quoteCurrencyInput"),
   hint: document.getElementById("hint")
 };
+
+function tiltButtons(enabled){
+  document.querySelectorAll("[data-tilt]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tilt === String(enabled !== false));
+  });
+}
 
 let current = null;
 let activeGroup = "crypto";
@@ -672,6 +687,7 @@ function renderOptions(state){
     els.currencySelect.appendChild(option);
   });
   currencyButtons();
+  tiltButtons(!state.settings || state.settings.tilt_enabled !== false);
 }
 
 function resizeCanvas(canvas){
@@ -1075,6 +1091,16 @@ document.querySelectorAll("[data-currency]").forEach((button) => {
     els.currencySelect.value = button.dataset.currency || "USD";
     currencyButtons();
     applySelectedAsset().catch((err) => setHint(errText.switch + err.message, true));
+  });
+});
+
+document.querySelectorAll("[data-tilt]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    try{
+      renderState(await getJson("/set?tilt_enabled=" + encodeURIComponent(button.dataset.tilt)));
+    }catch(err){
+      setHint(errText.switch + err.message, true);
+    }
   });
 });
 

@@ -28,6 +28,12 @@ local INTERVALS = {
   { label = "7day", api_binance = "1w", api_yahoo = "1wk", range_yahoo = "5y", klt_em = "102", em_span = "three_year", fx_days = 365, fx_label = "1Y" },
 }
 
+-- 设备端菜单与 Web 使用同一组常用汇率币种。
+local FX_CURRENCIES = {
+  "CNY", "USD", "EUR", "JPY", "GBP", "HKD", "TWD", "KRW", "AUD", "CAD",
+  "CHF", "SGD", "NZD", "THB", "INR", "AED", "MYR", "IDR", "PHP",
+}
+
 local PRESET_ASSETS = {
   { id = "fx:USDCNY", group = "fx", source = "fx", symbol = "USDCNY", base = "USD", quote = "CNY", text = "USD / CNY" },
   { id = "fx:EURCNY", group = "fx", source = "fx", symbol = "EURCNY", base = "EUR", quote = "CNY", text = "EUR / CNY" },
@@ -321,6 +327,15 @@ local function normalize_currency_code(value)
     return code
   end
   return nil
+end
+
+local function normalize_bool(value, fallback)
+  if type(value) == "boolean" then return value end
+  if type(value) == "number" then return value ~= 0 end
+  local text = trim(value):lower()
+  if text == "1" or text == "true" or text == "on" or text == "yes" then return true end
+  if text == "0" or text == "false" or text == "off" or text == "no" then return false end
+  return fallback and true or false
 end
 
 local function currency_text(value)
@@ -1201,6 +1216,7 @@ function Backend.new(opts)
       mode = "line",
       currency = "USD",
       ma_period = 0,
+      tilt_enabled = true,
     },
     custom_asset = nil,
     intraday = {},
@@ -1264,6 +1280,7 @@ function Backend.new(opts)
       mode = self.settings.mode,
       currency = self.settings.currency,
       ma_period = self.settings.ma_period,
+      tilt_enabled = self.settings.tilt_enabled,
       custom_asset = public_asset(self.custom_asset),
     }
   end
@@ -1318,6 +1335,9 @@ function Backend.new(opts)
     if ma_period ~= nil then
       self.settings.ma_period = ma_period
     end
+    if cfg.tilt_enabled ~= nil then
+      self.settings.tilt_enabled = normalize_bool(cfg.tilt_enabled, true)
+    end
 
     self.state.chart_dirty = true
     return true
@@ -1346,6 +1366,11 @@ function Backend.new(opts)
   -- 清空旧走势，切换资产或周期时调用。
   function self:clear_data(status)
     local s = self.state
+    -- 快速翻页时让旧请求回调失效，避免上一标的的数据覆盖当前页面。
+    s.http_req_id = (s.http_req_id or 0) + 1
+    s.http_busy = false
+    s.http_job = ""
+    s.http_started_ms = 0
     s.valid = false
     s.status = status or "loading"
     s.tone = "warn"
@@ -1922,6 +1947,30 @@ function Backend.new(opts)
     self:apply_settings({ asset = self.assets[idx].id }, true)
   end
 
+  -- 只在当前分类内切换标的，重力与手柄左右键共用。
+  function self:select_group_asset_delta(delta)
+    local active = self:current_asset()
+    local group = active.group
+    local choices = {}
+    for i = 1, #self.assets do
+      if self.assets[i].group == group then
+        choices[#choices + 1] = self.assets[i]
+      end
+    end
+    if self.custom_asset and self.custom_asset.group == group then
+      choices[#choices + 1] = self.custom_asset
+    end
+    if #choices == 0 then return end
+    local idx = 1
+    for i = 1, #choices do
+      if choices[i].id == active.id then idx = i break end
+    end
+    idx = idx + (tonumber(delta) or 1)
+    if idx < 1 then idx = #choices end
+    if idx > #choices then idx = 1 end
+    self:apply_settings({ asset = choices[idx].id }, true)
+  end
+
   -- 切换周期，delta 用于实体按键。
   function self:select_interval_delta(delta)
     local _, idx = find_interval(self.settings.interval)
@@ -2021,6 +2070,14 @@ function Backend.new(opts)
       if currency ~= self.settings.currency then
         self.settings.currency = currency
         chart_changed = true
+        settings_changed = true
+      end
+    end
+
+    if params.tilt_enabled ~= nil then
+      local enabled = normalize_bool(params.tilt_enabled, self.settings.tilt_enabled)
+      if enabled ~= self.settings.tilt_enabled then
+        self.settings.tilt_enabled = enabled
         settings_changed = true
       end
     end
@@ -2131,6 +2188,7 @@ function Backend.new(opts)
       assets = assets,
       intervals = intervals,
       currencies = public_currencies(),
+      fx_currencies = FX_CURRENCIES,
       active = public_asset(asset),
       settings = {
         asset = asset.id,
@@ -2140,6 +2198,7 @@ function Backend.new(opts)
         currency = target_currency,
         ma = self.settings.ma_period > 0 and tostring(self.settings.ma_period) or "off",
         ma_period = self.settings.ma_period,
+        tilt_enabled = self.settings.tilt_enabled,
       },
       mode_text = mode_text(self.settings.mode),
       valid = s.valid,

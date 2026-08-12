@@ -13,6 +13,24 @@ Ticker 是面向 HoloCubic 的多市场行情应用，支持自定义货币汇�
 
 所有在线请求均使用公开 HTTPS 原始域名，不依赖局域网代理地址。公开接口可能调整、限流或暂时不可用，行情仅用于展示，不构成投资建议。
 
+## 2.1.1 更新说明 / Release Notes
+
+- 中文：手柄 SELECT/View 或 HOME 键现在可随时退出 BTC 并返回 Launcher，行为与 Weather 应用一致。
+  English: SELECT/View or HOME now exits BTC and returns to Launcher from any screen, matching the Weather app.
+- 中文：确认行情刷新定时器只更新数据和 UI，不会自动切换当前分类或标的；页面仅由重力、手柄或 Web 操作切换。
+  English: Confirms that refresh timers only update data and UI; categories and symbols change only through tilt, controller, or Web input.
+- 中文：修复应用启动时菜单面板短暂闪现的问题，菜单遮罩在创建后立即隐藏。
+  English: Fixes the controller menu briefly flashing during startup by hiding its overlay immediately upon creation.
+
+## 2.1.0 更新说明 / Release Notes
+
+- 中文：重力切换改用与 Launcher 相同的阈值触发事件和长持重复节奏，到达倾斜阈值时立即在当前分类内翻页；Web 控制页可随时关闭并持久保存重力切换设置。
+  English: Tilt navigation now follows Launcher’s threshold-trigger and hold-repeat behavior, switching immediately within the current category; the Web console can disable it persistently.
+- 中文：新增 40 ms 上升沿轮询的蓝牙手柄控制。行情页左右切标的、上下切周期、A 键刷新，MENU 键打开设备端控制菜单。
+  English: Adds Bluetooth controller input with Launcher-style 40 ms rising-edge polling. Left/right switch symbols, up/down change intervals, A refreshes, and MENU opens the on-device control menu.
+- 中文：新增简洁的设备端菜单，可控制分类、标的、汇率原/目标货币、周期、图表、均线、显示币种、重力开关和立即刷新，无需保持 Web 页面连接。
+  English: Adds a compact on-device menu for category, symbol, FX base/quote, interval, chart, moving average, display currency, tilt, and refresh—without keeping the Web page open.
+
 ## 2.0.1 更新说明 / Release Notes
 
 - 中文：汇率的原货币和目标货币下拉框新增印尼盾（IDR），常用货币数量增加到 19 种。

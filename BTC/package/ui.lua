@@ -25,6 +25,7 @@ local C = {
   warn = 0xF59E0B,
   line = 0x38BDF8,
   wick = 0x8A9490,
+  menu_selected = 0x12384A,
 }
 
 local W = 320
@@ -63,6 +64,18 @@ end
 local function set_color(id, color)
   if id then
     pcall(function() lv_obj_set_style_text_color(id, color, MAIN_STYLE) end)
+  end
+end
+
+local function set_hidden(id, hidden)
+  if not id then return end
+  local flag = rawget(_G, "LV_OBJ_FLAG_HIDDEN")
+  if flag and lv_obj_add_flag and lv_obj_clear_flag then
+    pcall(function()
+      if hidden then lv_obj_add_flag(id, flag) else lv_obj_clear_flag(id, flag) end
+    end)
+  elseif lv_obj_set_hidden then
+    pcall(function() lv_obj_set_hidden(id, hidden) end)
   end
 end
 
@@ -435,6 +448,12 @@ function Ui.new(backend, i18n)
     ui_font = nil,
     ui_font_path = "",
     last_chart_key = "",
+    menu_overlay = nil,
+    menu_title = nil,
+    menu_page = nil,
+    menu_hint = nil,
+    menu_rows = {},
+    menu_visible = false,
   }
 
   -- 创建 LVGL 控件，一次性完成位置和文本宽度约束。
@@ -527,6 +546,88 @@ function Ui.new(backend, i18n)
     self.footer_right = lv_label_create(self.root)
     lv_obj_set_pos(self.footer_right, 170, 219)
     label_style(self.footer_right, FONT_10, C.dim, 138, ALIGN_RIGHT)
+
+    -- 手柄菜单使用独立遮罩层，只显示五行，保持 320x240 屏幕简洁清晰。
+    self.menu_overlay = lv_obj_create(self.root)
+    -- 必须在创建后的第一时间隐藏；否则 LVGL 可能在子控件构建期间刷新，造成启动闪现菜单。
+    set_hidden(self.menu_overlay, true)
+    lv_obj_set_pos(self.menu_overlay, 10, 10)
+    lv_obj_set_size(self.menu_overlay, 300, 220)
+    style_panel(self.menu_overlay)
+    pcall(function() lv_obj_set_style_bg_color(self.menu_overlay, 0x080B0D, MAIN_STYLE) end)
+    pcall(function() lv_obj_set_style_border_color(self.menu_overlay, C.line, MAIN_STYLE) end)
+
+    self.menu_title = lv_label_create(self.menu_overlay)
+    lv_obj_set_pos(self.menu_title, 12, 10)
+    label_style(self.menu_title, self.ui_font or FONT_16, C.text, 210)
+    set_text(self.menu_title, self.i18n and self.i18n:t("menu") or "Menu")
+
+    self.menu_page = lv_label_create(self.menu_overlay)
+    lv_obj_set_pos(self.menu_page, 225, 12)
+    label_style(self.menu_page, FONT_10, C.dim, 61, ALIGN_RIGHT)
+
+    for slot = 1, 5 do
+      local row = lv_obj_create(self.menu_overlay)
+      lv_obj_set_pos(row, 8, 38 + (slot - 1) * 30)
+      lv_obj_set_size(row, 284, 26)
+      style_panel(row)
+      pcall(function() lv_obj_set_style_radius(row, 4, MAIN_STYLE) end)
+
+      local marker = lv_label_create(row)
+      lv_obj_set_pos(marker, 7, 5)
+      label_style(marker, FONT_12, C.line, 12)
+
+      local label = lv_label_create(row)
+      lv_obj_set_pos(label, 22, 5)
+      label_style(label, self.ui_font or FONT_12, C.sub, 108)
+
+      local value = lv_label_create(row)
+      lv_obj_set_pos(value, 132, 5)
+      label_style(value, self.ui_font or FONT_12, C.text, 142, ALIGN_RIGHT)
+      self.menu_rows[slot] = { root = row, marker = marker, label = label, value = value }
+    end
+
+    self.menu_hint = lv_label_create(self.menu_overlay)
+    lv_obj_set_pos(self.menu_hint, 9, 196)
+    label_style(self.menu_hint, self.ui_font or FONT_10, C.dim, 282, ALIGN_CENTER)
+    set_text(self.menu_hint, self.i18n and self.i18n:t("controller_hint") or "UP/DOWN Select")
+  end
+
+  function self:show_menu(rows, selected)
+    rows = rows or {}
+    selected = math.max(1, math.min(#rows, tonumber(selected) or 1))
+    self.menu_visible = true
+    set_hidden(self.menu_overlay, false)
+    if lv_obj_move_foreground then pcall(function() lv_obj_move_foreground(self.menu_overlay) end) end
+    set_text(self.menu_title, self.i18n and self.i18n:t("menu") or "Menu")
+    set_text(self.menu_page, tostring(selected) .. "/" .. tostring(#rows))
+
+    local first = selected - 2
+    if first < 1 then first = 1 end
+    if first > math.max(1, #rows - 4) then first = math.max(1, #rows - 4) end
+    for slot = 1, 5 do
+      local view = self.menu_rows[slot]
+      local index = first + slot - 1
+      local item = rows[index]
+      if item then
+        set_hidden(view.root, false)
+        local active = index == selected
+        set_text(view.marker, active and ">" or "")
+        set_text(view.label, item.label or "")
+        set_text(view.value, item.value or "")
+        set_color(view.label, active and C.text or C.sub)
+        set_color(view.value, active and C.line or C.text)
+        pcall(function() lv_obj_set_style_bg_color(view.root, active and C.menu_selected or C.panel, MAIN_STYLE) end)
+        pcall(function() lv_obj_set_style_border_color(view.root, active and C.line or C.border, MAIN_STYLE) end)
+      else
+        set_hidden(view.root, true)
+      end
+    end
+  end
+
+  function self:hide_menu()
+    self.menu_visible = false
+    set_hidden(self.menu_overlay, true)
   end
 
   -- 绘制空状态和错误状态。
