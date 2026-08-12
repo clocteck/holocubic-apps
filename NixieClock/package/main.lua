@@ -4,7 +4,7 @@ if previous and previous.stop then
 end
 
 HOLO_TIME_APP = {
-  VERSION = "2026-08-04-holo-nixie-v16-release",
+  VERSION = "2026-08-12-holo-nixie-v17-fireworks-weather",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/NixieClock",
@@ -1410,7 +1410,12 @@ local function start_web()
         return web_response(encode_json({ ok = false, error = tr("设置保存失败", "Failed to save settings") }), "application/json; charset=utf-8", "500 Internal Server Error")
       end
     end
-    return web_response(encode_json({ ok = true, default_face = APP.state.default_face, auto_switch_ms = APP.state.auto_switch_ms, language = APP.state.language }), "application/json; charset=utf-8")
+    return web_response(encode_json({
+      ok = true,
+      default_face = APP.state.default_face,
+      auto_switch_ms = APP.state.auto_switch_ms,
+      language = APP.state.language,
+    }), "application/json; charset=utf-8")
   end
   local function imu_api()
     local state = APP.state

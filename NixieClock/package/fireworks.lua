@@ -11,7 +11,7 @@ if previous and previous.stop then
 end
 
 local APP = {
-  VERSION = "0.12.0",
+  VERSION = "0.13.0",
   APP_DIR = "/sd/apps/NixieClock",
   running = true,
   timers = {},
@@ -149,6 +149,7 @@ st.imu_calm_samples = 0
 st.imu_spike_count = 0
 st.imu_last_spike_ms = 0
 st.rect_mode = 0
+st.language = "zh-CN"
 
 -- ---------------------------------------------------------------- helpers
 local function warn(...)
@@ -189,8 +190,14 @@ local function queue_launch(delay_frames, ttl_frames, burst_kind, rapidfire_memb
 end
 
 -- ---------------------------------------------------------------- time
-local function load_timezone()
+local function load_preferences()
   local tz = "CST-8"
+  local language = "zh-CN"
+  local host = rawget(_G, "HOLO_TIME_APP")
+  if host and host.state then
+    tz = tostring(host.state.timezone or tz)
+    language = tostring(host.state.language or language)
+  end
   local codec = rawget(_G, "sjson") or rawget(_G, "json")
   local file_mod = rawget(_G, "file")
   if file_mod and file_mod.getcontents and codec then
@@ -200,9 +207,12 @@ local function load_timezone()
       if ok and type(cfg) == "table" and type(cfg.timezone) == "string" and #cfg.timezone > 0 then
         tz = cfg.timezone
       end
+      if ok and type(cfg) == "table" then
+        language = tostring(cfg.language or cfg.lang or language)
+      end
     end
   end
-  return tz
+  return tz, language
 end
 
 local function ensure_ntp()
@@ -246,7 +256,29 @@ local function local_time()
   return nil, false
 end
 
-local WEEKDAYS = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" }
+local WEEKDAYS = {
+  en = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
+  zh_cn = { "周日", "周一", "周二", "周三", "周四", "周五", "周六" },
+  zh_tw = { "週日", "週一", "週二", "週三", "週四", "週五", "週六" },
+  ja = { "日", "月", "火", "水", "木", "金", "土" },
+}
+
+local function current_language()
+  local host = rawget(_G, "HOLO_TIME_APP")
+  local value = host and host.state and host.state.language or st.language
+  value = tostring(value or "zh-CN"):lower():gsub("_", "-")
+  st.language = value
+  return value
+end
+
+local function weekday_label(index)
+  local language = current_language()
+  local labels = language:match("^en") and WEEKDAYS.en
+    or language:match("^ja") and WEEKDAYS.ja
+    or (language == "zh-tw" or language == "zh-hk" or language == "zh-mo") and WEEKDAYS.zh_tw
+    or WEEKDAYS.zh_cn
+  return labels[index] or ""
+end
 
 -- Zeller：wday 缺失时兜底
 local function weekday_of(y, m, d)
@@ -291,7 +323,7 @@ local function refresh_clock()
       wday = weekday_of(tonumber(t.year) or 2026, tonumber(t.mon) or 1, tonumber(t.day) or 1)
     end
     st.clock_date = string_format("%04d-%02d-%02d  %s",
-      tonumber(t.year) or 0, tonumber(t.mon) or 0, tonumber(t.day) or 0, WEEKDAYS[wday] or "")
+      tonumber(t.year) or 0, tonumber(t.mon) or 0, tonumber(t.day) or 0, weekday_label(wday))
     -- 整点齐射报时：按“日期+小时”去重；时间回拨只更新显示，不重复报时。
     local hour = tonumber(t.hour) or 0
     local hour_key = string_format("%04d-%02d-%02d-%02d",
@@ -1305,13 +1337,68 @@ local function draw_fireworks()
 end
 
 -- ---------------------------------------------------------------- clock draw
+local function weather_values()
+  local host = rawget(_G, "HOLO_TIME_APP")
+  local state = host and host.state
+  if not state then return "--", "--°", "103" end
+  local temp = tonumber(state.temp)
+  local temp_text = temp and string_format("%d°", math_floor(temp + 0.5)) or "--°"
+  return tostring(state.weather_text or "--"), temp_text, tostring(state.weather_code or "103")
+end
+
+local function draw_temperature_icon(x, y, color, opa)
+  -- Linear thermometer based on the reference set: 1 px outline, hollow tube,
+  -- round hollow bulb and a short centered mercury column.
+  draw_rect(x + 4, y, 5, 11, color, opa, 2)
+  draw_rect(x + 5, y + 1, 3, 9, C.bg, 255, 1)
+  draw_rect(x + 2, y + 8, 9, 8, color, opa, 4)
+  draw_rect(x + 3, y + 9, 7, 6, C.bg, 255, 3)
+  draw_rect(x + 6, y + 4, 1, 8, color, opa, 1)
+  draw_rect(x + 5, y + 11, 3, 3, color, opa, 1)
+end
+
+local function weather_kind(code, label)
+  label = tostring(label or "")
+  if code:match("^4") or label:find("雪") then return "snow" end
+  if code:match("^3") or label:find("雨") then return "rain" end
+  if code:match("^2") or label:find("雷") then return "storm" end
+  if code == "100" or code == "150" or label == "晴" then return "sun" end
+  return "cloud"
+end
+
+local function draw_weather_status_icon(x, y, code, label, color, opa)
+  local kind = weather_kind(code, label)
+  if kind == "sun" then
+    draw_rect(x + 3, y + 3, 7, 7, color, opa, 3)
+    if lv_canvas_line_fn then
+      lv_canvas_line_fn(APP.canvas, x + 6, y, x + 6, y + 2, color, opa, 1)
+      lv_canvas_line_fn(APP.canvas, x + 6, y + 11, x + 6, y + 13, color, opa, 1)
+      lv_canvas_line_fn(APP.canvas, x, y + 6, x + 2, y + 6, color, opa, 1)
+      lv_canvas_line_fn(APP.canvas, x + 11, y + 6, x + 13, y + 6, color, opa, 1)
+    end
+    return
+  end
+  draw_rect(x + 1, y + 5, 12, 6, color, opa, 3)
+  draw_rect(x + 4, y + 2, 6, 6, color, opa, 3)
+  if kind == "rain" or kind == "storm" then
+    if lv_canvas_line_fn then
+      lv_canvas_line_fn(APP.canvas, x + 4, y + 12, x + 3, y + 14, color, opa, 1)
+      lv_canvas_line_fn(APP.canvas, x + 9, y + 12, x + 8, y + 14, color, opa, 1)
+    end
+  elseif kind == "snow" then
+    draw_rect(x + 3, y + 13, 2, 2, color, opa, 1)
+    draw_rect(x + 9, y + 13, 2, 2, color, opa, 1)
+  end
+end
+
 local function draw_clock()
   -- 用细黑描边保护读数，同时保留烟花在数字间穿行的亮度。
-  draw_text(-2, 62, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
-  draw_text(2, 62, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
-  draw_text(0, 60, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
-  draw_text(0, 64, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
-  draw_text(0, 62, SCREEN_W, st.clock_hhmm, APP.font_time, C.clock, st.clock_valid and 255 or 140)
+  local clock_y = 62
+  draw_text(-2, clock_y, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
+  draw_text(2, clock_y, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
+  draw_text(0, clock_y - 2, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
+  draw_text(0, clock_y + 2, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
+  draw_text(0, clock_y, SCREEN_W, st.clock_hhmm, APP.font_time, C.clock, st.clock_valid and 255 or 140)
   -- 秒进度条
   local bar_x, bar_y, bar_w = 70, 154, 180
   draw_rect(bar_x, bar_y, bar_w, 3, C.bar_track, 255, 1)
@@ -1321,8 +1408,18 @@ local function draw_clock()
       draw_rect(bar_x, bar_y, w, 3, C.bar_fill, 220, 1)
     end
   end
-  draw_text(0, 169, SCREEN_W, st.clock_date, APP.font_date, C.bg, 255)
-  draw_text(0, 168, SCREEN_W, st.clock_date, APP.font_date, C.date, 220)
+  local date_font = current_language():match("^en") and APP.font_date_en or APP.font_date_cjk
+  draw_text(0, 169, SCREEN_W, st.clock_date, date_font, C.bg, 255)
+  draw_text(0, 168, SCREEN_W, st.clock_date, date_font, C.date, 220)
+  local weather_text, temp_text, weather_code = weather_values()
+  -- Two compact groups share the screen center; narrow text boxes keep each
+  -- glyph run visually attached to its icon instead of drifting inside a wide box.
+  draw_weather_status_icon(84, 194, weather_code, weather_text, C.date, 220)
+  draw_text(99, 196, 40, weather_text, date_font, C.bg, 255)
+  draw_text(99, 195, 40, weather_text, date_font, C.date, 220)
+  draw_temperature_icon(177, 195, C.date, 220)
+  draw_text(188, 196, 28, temp_text, date_font, C.bg, 255)
+  draw_text(188, 195, 28, temp_text, date_font, C.date, 220)
 end
 
 -- ---------------------------------------------------------------- render / tick
@@ -1452,7 +1549,9 @@ local function init_fonts()
   APP.font_time = host and host.font and host.font.n72
     or font_load(APP.APP_DIR .. "/font/time_num_72.bin",
       rawget(_G, "LV_FONT_MONTSERRAT_28") or 28)
-  APP.font_date = rawget(_G, "LV_FONT_MONTSERRAT_14") or rawget(_G, "LV_FONT_MONTSERRAT_12") or 14
+  APP.font_date_en = rawget(_G, "LV_FONT_MONTSERRAT_14") or rawget(_G, "LV_FONT_MONTSERRAT_12") or 14
+  APP.font_date_cjk = host and host.font and host.font.cn14 or APP.font_date_en
+  APP.font_date = APP.font_date_en
 end
 
 local function init_ui()
@@ -1562,7 +1661,7 @@ end
 local function start_app()
   local ok, err = pcall_fn(function()
     seed_random()
-    st.timezone = load_timezone()
+    st.timezone, st.language = load_preferences()
     init_time()
     init_fonts()
     if not init_ui() then error("ui-init-failed") end
