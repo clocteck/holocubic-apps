@@ -1,4 +1,4 @@
 name = photos
 entry = photos.lua
 description = play photos
-version = 0.0.1
+version = 0.0.2

@@ -136,8 +136,32 @@ local last_switch = millis() or 0
 local function create_canvas_slot(x)
   local id = lv_canvas_create(root, screen_w, screen_h, CANVAS_FMT_TRUE_COLOR)
   lv_obj_set_pos(id, x, 0)
+  if lv_obj_clear_flag then
+    local scrollable = rawget(_G, "LV_OBJ_FLAG_SCROLLABLE")
+    local overflow_visible = rawget(_G, "LV_OBJ_FLAG_OVERFLOW_VISIBLE")
+    if scrollable then
+      pcall(function() lv_obj_clear_flag(id, scrollable) end)
+    end
+    if overflow_visible then
+      pcall(function() lv_obj_clear_flag(id, overflow_visible) end)
+    end
+  end
+
+  local image = lv_img_create(id)
+  if lv_img_set_size_mode then
+    local real_size = rawget(_G, "LV_IMG_SIZE_MODE_REAL")
+    if real_size then
+      pcall(function() lv_img_set_size_mode(image, real_size) end)
+    end
+  end
+  local hidden = rawget(_G, "LV_OBJ_FLAG_HIDDEN")
+  if hidden and lv_obj_add_flag then
+    pcall(function() lv_obj_add_flag(image, hidden) end)
+  end
+
   return {
     id = id,
+    image = image,
     name = nil,
   }
 end
@@ -159,11 +183,15 @@ local function clear_slot(slot)
   local explicit_frame = canvas_frame_begin(slot.id)
   lv_canvas_fill_bg(slot.id, 0x000000, 255)
   canvas_frame_end(slot.id, explicit_frame)
+  local hidden = rawget(_G, "LV_OBJ_FLAG_HIDDEN")
+  if slot.image and hidden and lv_obj_add_flag then
+    pcall(function() lv_obj_add_flag(slot.image, hidden) end)
+  end
   slot.name = nil
 end
 
--- 这里假设 `/sd/images` 下主要是与屏幕尺寸匹配的静态图片；
--- canvas 当前只负责“整张图画进去再平移”，不做额外缩放排版。
+-- 图片作为 canvas 的子对象显示，尺寸不足 320x240 时默认在黑色画布中居中；
+-- 尺寸超过屏幕时也会从中心向四周裁切，不再固定贴在左上角。
 local function draw_image_to_slot(slot, name)
   if not slot or not slot.id then
     return
@@ -181,8 +209,18 @@ local function draw_image_to_slot(slot, name)
   local src = sd_to_lv(dir) .. "/" .. name
   local explicit_frame = canvas_frame_begin(slot.id)
   lv_canvas_fill_bg(slot.id, 0x000000, 255)
-  lv_canvas_draw_img(slot.id, 0, 0, src, { opa = 255 })
   canvas_frame_end(slot.id, explicit_frame)
+
+  lv_img_set_src(slot.image, src)
+  if lv_obj_center then
+    lv_obj_center(slot.image)
+  else
+    lv_obj_align(slot.image, LV_ALIGN_CENTER, 0, 0)
+  end
+  local hidden = rawget(_G, "LV_OBJ_FLAG_HIDDEN")
+  if hidden and lv_obj_clear_flag then
+    pcall(function() lv_obj_clear_flag(slot.image, hidden) end)
+  end
   slot.name = name
 end
 
