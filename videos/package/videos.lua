@@ -41,7 +41,7 @@ lv_obj_set_style_text_font(info, 14, MAIN_STYLE)
 lv_obj_set_align(info, LV_ALIGN_BOTTOM_MID, 0, -8)
 
 local dir = "/sd/gifs"
-local play_ms = 10000
+local play_ms = 0
 local last_switch = millis() or 0
 
 local function is_gif(name)
