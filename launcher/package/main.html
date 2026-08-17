@@ -1005,6 +1005,93 @@ button,input,select,textarea{font:inherit;color:inherit}
   z-index:20;
 }
 #toast.show{opacity:1;transform:translateY(0)}
+.gif-progress-modal{
+  position:fixed;
+  inset:0;
+  z-index:180;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.gif-progress-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(18,29,44,.46);
+  backdrop-filter:blur(12px) saturate(115%);
+}
+.gif-progress-dialog{
+  position:relative;
+  z-index:1;
+  width:min(460px,100%);
+  padding:24px;
+  border:1px solid rgba(255,255,255,.76);
+  border-radius:24px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 28px 80px rgba(18,36,62,.26);
+}
+.gif-progress-kicker{
+  display:block;
+  color:var(--blue-strong);
+  font-size:12px;
+  font-weight:750;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+.gif-progress-dialog h2{
+  margin:8px 0 0;
+  font-size:25px;
+  line-height:1.15;
+}
+.gif-progress-file{
+  margin:8px 0 0;
+  overflow:hidden;
+  color:var(--muted);
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.gif-progress-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:22px;
+  font-weight:700;
+}
+.gif-progress-percent{
+  color:var(--blue-strong);
+  font-size:22px;
+  font-variant-numeric:tabular-nums;
+}
+.gif-progress-track{
+  height:12px;
+  margin-top:10px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e5edf7;
+  box-shadow:inset 0 1px 2px rgba(31,61,100,.1);
+}
+.gif-progress-fill{
+  display:block;
+  width:0;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--blue),#78a9ee);
+  transition:width .14s ease;
+}
+.gif-progress-stats{
+  min-height:22px;
+  margin:12px 0 0;
+  color:var(--text);
+  font-size:14px;
+  font-variant-numeric:tabular-nums;
+}
+.gif-progress-note{
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+body.gif-processing{overflow:hidden}
 @media (max-width:960px){
   .topbar,.hero-card,.dashboard-grid,.wifi-stage,.media-hero,.media-page-grid{grid-template-columns:1fr}
   .topbar{
@@ -3005,7 +3092,7 @@ button,input,select,textarea{font:inherit;color:inherit}
         <section class="upload-card gif">
           <span class="section-kicker">GIF 动画</span>
           <h3>上传 GIF</h3>
-          <p>仅 GIF</p>
+          <p>GIF，超过 320×240 时等比例缩小；最大 50 MB</p>
           <button class="btn secondary" id="pickGifUploadBtn" type="button">选择 GIF</button>
           <input class="visually-hidden" id="gifUploadInput" type="file" accept=".gif,image/gif" multiple>
         </section>
@@ -3033,6 +3120,25 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 <div id="toast" aria-live="polite"></div>
 
+<div class="gif-progress-modal hidden" id="gifProgressModal" aria-hidden="true">
+  <div class="gif-progress-backdrop"></div>
+  <section class="gif-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="gifProgressTitle">
+    <span class="gif-progress-kicker">GIF Converter</span>
+    <h2 id="gifProgressTitle">GIF 转换中</h2>
+    <p class="gif-progress-file" id="gifProgressFile">-</p>
+    <div class="gif-progress-head">
+      <span id="gifProgressPhase">正在读取 GIF</span>
+      <strong class="gif-progress-percent" id="gifProgressPercent">0%</strong>
+    </div>
+    <div class="gif-progress-track" id="gifProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <span class="gif-progress-fill" id="gifProgressFill"></span>
+    </div>
+    <p class="gif-progress-stats" id="gifProgressStats">准备转换…</p>
+    <p class="gif-progress-note">转换期间请保持此页面打开。</p>
+  </section>
+</div>
+
+<script src="/api/system/fs/file?path=%2Fsd%2Fapps%2Flauncher%2Fvendor%2Fcubic-gif-tools.min.js"></script>
 <script>
 const qs = (sel) => document.querySelector(sel);
 const DEFAULT_MDNS = "-";
@@ -3065,6 +3171,7 @@ const SETTINGS_JSON_PATH = "/sd/apps/settings.json";
 const WIFI_SKIP_KEY = "cubic.skipWifiGate";
 const WIFI_SUCCESS_REDIRECT_DELAY_MS = 3000;
 const MAX_MEDIA_UPLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_GIF_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MEDIA_UPLOAD_MAX_WIDTH = 320;
 const MEDIA_UPLOAD_MAX_HEIGHT = 240;
 const STORAGE_KEYS = {
@@ -3222,8 +3329,12 @@ const I18N_ROWS = [
   ["PNG / JPG / WEBP / BMP / SVG，静态图会自动适配 320×240", "PNG / JPG / WEBP / BMP / SVG; images are fitted to 320×240", "PNG / JPG / WEBP / BMP / SVG。画像は 320×240 に自動調整されます", "PNG / JPG / WEBP / BMP / SVG；靜態圖片會自動調整為 320×240"],
   ["选择图片", "Choose images", "画像を選択", "選擇圖片"],
   ["上传 GIF", "Upload GIF", "GIF をアップロード", "上傳 GIF"],
-  ["仅 GIF", "GIF only", "GIF のみ", "僅限 GIF"],
+  ["GIF，超过 320×240 时等比例缩小；最大 50 MB", "GIFs larger than 320×240 are proportionally reduced; 50 MB maximum", "320×240 を超える GIF は縦横比を保って縮小します（最大 50 MB）", "GIF 超過 320×240 時會等比例縮小；最大 50 MB"],
   ["选择 GIF", "Choose GIF", "GIF を選択", "選擇 GIF"],
+  ["GIF 转换中", "Converting GIF", "GIF を変換中", "GIF 轉換中"],
+  ["正在读取 GIF", "Reading GIF", "GIF を読み込み中", "正在讀取 GIF"],
+  ["准备转换…", "Preparing…", "準備中…", "準備轉換…"],
+  ["转换期间请保持此页面打开。", "Keep this page open during conversion.", "変換中はこのページを開いたままにしてください。", "轉換期間請保持此頁面開啟。"],
   ["图片", "Images", "画像", "圖片"],
   ["资源类型", "Media type", "リソースの種類", "資源類型"],
   ["已保存到设备", "Saved to device", "デバイスに保存しました", "已儲存到裝置"],
@@ -3347,6 +3458,7 @@ const I18N_ROWS = [
   ["介绍页加载超时，请检查网络连接或介绍页地址是否可访问。", "The details page timed out. Check the network or page URL.", "詳細ページがタイムアウトしました。", "介紹頁載入逾時，請檢查網路或頁面位址。"],
   ["介绍页加载失败，请检查介绍页地址是否可访问。", "The details page failed to load. Check the page URL.", "詳細ページを読み込めません。", "介紹頁載入失敗，請檢查頁面位址。"],
   ["浏览器不支持图片缩放", "This browser cannot resize images", "このブラウザーは画像の調整に対応していません", "瀏覽器不支援圖片縮放"],
+  ["GIF 处理组件加载失败，请刷新页面后重试", "The GIF processor did not load. Refresh the page and try again.", "GIF 処理機能を読み込めません。ページを更新して再試行してください。", "GIF 處理元件載入失敗，請重新整理頁面後再試"],
   ["简体中文", "Simplified Chinese", "簡体字中国語", "簡體中文"],
   ["日本語", "Japanese", "日本語", "日文"],
   ["繁體中文", "Traditional Chinese", "繁体字中国語", "繁體中文"],
@@ -3413,6 +3525,9 @@ const I18N_PREFIX_ROWS = [
   ["已同步 ", "Synced ", "同期済み ", "已同步 "],
   ["已删除 ", "Deleted ", "削除済み ", "已刪除 "],
   ["正在适配 ", "Preparing ", "調整中 ", "正在調整 "],
+  ["正在检查 ", "Checking ", "確認中 ", "正在檢查 "],
+  ["正在处理 ", "Processing ", "処理中 ", "正在處理 "],
+  ["正在读取 ", "Reading ", "読み込み中 ", "正在讀取 "],
   ["正在下载 ", "Downloading ", "ダウンロード中 ", "正在下載 "],
   ["正在打开 ", "Opening ", "開いています ", "正在開啟 "],
   ["已安装 ", "Installed ", "インストール済み ", "已安裝 "],
@@ -4609,6 +4724,112 @@ async function prepareImageFileForUpload(file){
   };
 }
 
+let gifProgressStartedAt = 0;
+
+function gifProgressText(zh, en, ja, zhTw){
+  if(currentLanguage === "en") return en;
+  if(currentLanguage === "ja") return ja;
+  if(currentLanguage === "zh-TW") return zhTw;
+  return zh;
+}
+
+function openGifProgress(file){
+  gifProgressStartedAt = performance.now();
+  qs("#gifProgressTitle").textContent = gifProgressText("GIF 转换中", "Converting GIF", "GIF を変換中", "GIF 轉換中");
+  qs("#gifProgressFile").textContent = file && file.name ? file.name : "GIF";
+  qs("#gifProgressPhase").textContent = gifProgressText("正在读取 GIF", "Reading GIF", "GIF を読み込み中", "正在讀取 GIF");
+  qs("#gifProgressPercent").textContent = "0%";
+  qs("#gifProgressFill").style.width = "0%";
+  qs("#gifProgressStats").textContent = gifProgressText("准备转换…", "Preparing…", "準備中…", "準備轉換…");
+  qs("#gifProgressTrack").setAttribute("aria-valuenow", "0");
+  qs("#gifProgressModal").classList.remove("hidden");
+  qs("#gifProgressModal").setAttribute("aria-hidden", "false");
+  document.body.classList.add("gif-processing");
+}
+
+function updateGifProgress(progress){
+  const phase = progress && progress.phase || "decode";
+  const current = Math.max(0, Number(progress && progress.current) || 0);
+  const total = Math.max(0, Number(progress && progress.total) || 0);
+  const percent = phase === "done" ? 100 : (total > 0 ? Math.max(0, Math.min(100, Math.round(current * 100 / total))) : 0);
+  const elapsedSeconds = Math.max(0, (performance.now() - gifProgressStartedAt) / 1000);
+  const fps = current > 0 && elapsedSeconds > 0 ? current / elapsedSeconds : 0;
+  let phaseText = gifProgressText("正在读取并解析 GIF", "Reading and parsing GIF", "GIF を読み込んで解析中", "正在讀取並解析 GIF");
+  if(phase === "encode"){
+    phaseText = current > 0
+      ? gifProgressText("正在转换动画帧", "Converting frames", "フレームを変換中", "正在轉換動畫幀")
+      : gifProgressText("正在准备动画帧", "Preparing frames", "フレームを準備中", "正在準備動畫幀");
+  }else if(phase === "done"){
+    phaseText = gifProgressText("转换完成", "Conversion complete", "変換完了", "轉換完成");
+  }
+  let stats = gifProgressText("正在解析文件…", "Parsing file…", "ファイルを解析中…", "正在解析檔案…");
+  if(total > 0){
+    if(currentLanguage === "en"){
+      stats = current + " / " + total + " frames · " + elapsedSeconds.toFixed(1) + " s" + (fps ? " · " + fps.toFixed(1) + " fps" : "");
+    }else if(currentLanguage === "ja"){
+      stats = current + " / " + total + " フレーム · " + elapsedSeconds.toFixed(1) + " 秒" + (fps ? " · " + fps.toFixed(1) + " fps" : "");
+    }else if(currentLanguage === "zh-TW"){
+      stats = current + " / " + total + " 幀 · " + elapsedSeconds.toFixed(1) + " 秒" + (fps ? " · " + fps.toFixed(1) + " 幀/秒" : "");
+    }else{
+      stats = current + " / " + total + " 帧 · " + elapsedSeconds.toFixed(1) + " 秒" + (fps ? " · " + fps.toFixed(1) + " 帧/秒" : "");
+    }
+  }
+  qs("#gifProgressPhase").textContent = phaseText;
+  qs("#gifProgressPercent").textContent = percent + "%";
+  qs("#gifProgressFill").style.width = percent + "%";
+  qs("#gifProgressStats").textContent = stats;
+  qs("#gifProgressTrack").setAttribute("aria-valuenow", String(percent));
+}
+
+function closeGifProgress(){
+  qs("#gifProgressModal").classList.add("hidden");
+  qs("#gifProgressModal").setAttribute("aria-hidden", "true");
+  document.body.classList.remove("gif-processing");
+}
+
+function waitForGifProgressPaint(){
+  return new Promise((resolve) => {
+    if(typeof requestAnimationFrame !== "function"){
+      setTimeout(resolve, 0);
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+async function prepareGifFileForUpload(file){
+  const tools = window.CubicGifTools;
+  if(!tools || typeof tools.resizeGif !== "function"){
+    throw new Error(translateCore("GIF 处理组件加载失败，请刷新页面后重试"));
+  }
+  return tools.resizeGif(file, {
+    maxBytes: MAX_GIF_UPLOAD_BYTES,
+    maxWidth: MEDIA_UPLOAD_MAX_WIDTH,
+    maxHeight: MEDIA_UPLOAD_MAX_HEIGHT,
+    onProgress(progress){
+      updateGifProgress(progress);
+      const current = Math.max(0, Number(progress && progress.current) || 0);
+      const total = Math.max(0, Number(progress && progress.total) || 0);
+      if(progress && progress.phase === "done"){
+        setMediaStatus(gifProgressText("GIF 转换完成。", "GIF conversion complete.", "GIF の変換が完了しました。", "GIF 轉換完成。"), false);
+      }else if(progress && progress.phase === "encode"){
+        const frameProgress = current + "/" + total;
+        if(currentLanguage === "en"){
+          setMediaStatus("Processing " + file.name + ": " + frameProgress + " frames.", false);
+        }else if(currentLanguage === "ja"){
+          setMediaStatus(file.name + " を処理中：" + frameProgress + " フレーム。", false);
+        }else if(currentLanguage === "zh-TW"){
+          setMediaStatus("正在處理 " + file.name + "：" + frameProgress + " 幀。", false);
+        }else{
+          setMediaStatus("正在处理 " + file.name + "：" + frameProgress + " 帧。", false);
+        }
+      }else{
+        setMediaStatus(translateCore("正在读取 ") + file.name + "。", false);
+      }
+    }
+  });
+}
+
 function setMediaStatus(text, isError){
   const node = qs("#mediaLibraryStatus");
   node.textContent = languageSafeText(text, isError ? "Media operation failed" : "Ready");
@@ -4812,8 +5033,9 @@ function validateMediaFile(kind, file){
   if(!name){
     throw new Error("文件名无效");
   }
-  if(file.size > MAX_MEDIA_UPLOAD_BYTES){
-    throw new Error(name + " 超过 64 MB 上传限制");
+  const maxBytes = kind === "gif" ? MAX_GIF_UPLOAD_BYTES : MAX_MEDIA_UPLOAD_BYTES;
+  if(file.size > maxBytes){
+    throw new Error(name + (kind === "gif" ? " 超过 50 MB GIF 处理上限" : " 超过 64 MB 上传限制"));
   }
   if(kind === "gif"){
     if(!/\.gif$/i.test(lower)){
@@ -4843,7 +5065,18 @@ async function handleMediaUpload(kind, fileList){
         validateMediaFile(kind, file);
         let uploadFile = file;
         let prepared = { changed: false };
-        if(kind !== "gif"){
+        if(kind === "gif"){
+          setMediaStatus(translateCore("正在检查 ") + file.name + "。", false);
+          openGifProgress(file);
+          await waitForGifProgressPaint();
+          try{
+            prepared = await prepareGifFileForUpload(file);
+            uploadFile = prepared.file;
+            await new Promise((resolve) => setTimeout(resolve, 350));
+          }finally{
+            closeGifProgress();
+          }
+        }else{
           setMediaStatus("正在适配 " + file.name + "。", false);
           prepared = await prepareImageFileForUpload(file);
           uploadFile = prepared.file;
@@ -4851,7 +5084,10 @@ async function handleMediaUpload(kind, fileList){
         const sizeText = prepared.changed && prepared.width && prepared.height
           ? (" " + prepared.width + "×" + prepared.height)
           : "";
-        setMediaStatus("正在上传 " + uploadFile.name + sizeText + "。", false);
+        const frameText = prepared.frames
+          ? (" · " + prepared.frames + (currentLanguage === "en" ? " frames" : currentLanguage === "ja" ? " フレーム" : currentLanguage === "zh-TW" ? " 幀" : " 帧"))
+          : "";
+        setMediaStatus(translateCore("正在上传 ") + uploadFile.name + sizeText + frameText + "。", false);
         await uploadMediaFile(kind, uploadFile);
         success += 1;
       }catch(err){

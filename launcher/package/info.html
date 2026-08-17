@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-        <p class="summary zh">Launcher 1.12：修复手机浏览器中“上传图片”和“上传 GIF”入口被隐藏的问题，并优化移动端上传布局。</p><p class="summary en">Launcher 1.12 fixes the hidden media upload area in mobile browsers and improves the mobile image and GIF upload layout.</p>
+        <p class="summary zh">Launcher 1.14：GIF 转换增加逐帧进度、耗时和速度弹窗；暂不限制帧数、解码量和画布尺寸，文件上限 50 MB。</p><p class="summary en">Launcher 1.14 adds frame-by-frame GIF conversion progress, elapsed time, and speed. Frame, decode-work, and canvas limits are temporarily disabled; the file limit remains 50 MB.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -76,9 +76,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 230 KB</span><span class="value en">About 230 KB</span></div>
-          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.12</span></div>
+          <div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.14</span></div>
         </div>
-        <p class="note zh">1.12 更新内容：修复宽度不超过 700px 时通用 Hero 隐藏规则误伤图像资源上传区的问题；手机端继续显示“上传图片”和“上传 GIF”，并改为单列、全宽按钮布局。</p><p class="note en">Version 1.12 prevents the generic mobile Hero rule from hiding media uploads at widths up to 700px. Image and GIF upload controls now remain visible in a single-column layout with full-width buttons.</p>
+        <p class="note zh">1.14 更新内容：GIF 上传前仍会在浏览器中等比例缩小至不超过 320×240；转换时弹窗显示当前帧、总帧数、百分比、耗时和处理速度。为便于测试性能，暂时取消帧数、解码像素量和画布尺寸上限，只保留 50 MB 文件上限。</p><p class="note en">Version 1.14 keeps proportional GIF reduction to fit within 320×240 and adds a conversion dialog showing frame count, percentage, elapsed time, and processing speed. Frame, decoded-pixel, and canvas limits are temporarily removed for performance testing; only the 50 MB file limit remains.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
