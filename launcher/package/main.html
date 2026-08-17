@@ -1038,8 +1038,42 @@ button,input,select,textarea{font:inherit;color:inherit}
     font-size:26px;
     letter-spacing:-.03em;
   }
-  .hero-card{
+  .hero-card:not(.media-hero){
     display:none;
+  }
+  .hero-card.media-hero{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:14px;
+    padding:16px;
+    min-width:0;
+  }
+  .media-summary,
+  .media-upload-grid,
+  .upload-card{
+    min-width:0;
+  }
+  .media-hero .hero-copy{
+    display:block;
+  }
+  .media-hero .hero-copy h2{
+    margin:6px 0 0;
+  }
+  .upload-card .btn{
+    width:100%;
+  }
+  .upload-card p{
+    overflow-wrap:anywhere;
+  }
+  #imageManageView .topbar-actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    width:100%;
+  }
+  #imageManageView .topbar-actions .btn{
+    min-width:0;
+    width:100%;
+    padding-inline:10px;
   }
   .hero-copy{
     display:flex;
