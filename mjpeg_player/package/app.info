@@ -1,0 +1,12 @@
+name = MJPEG Player
+name_zh_cn = 视频播放器
+name_en = MJPEG Player
+name_ja = MJPEG プレーヤー
+name_zh_tw = 影片播放器
+version = 0.2.7
+kind = app
+entry = main.lua
+icon = main.png
+description = 支持 320×240 MJPEG-AVI 有声播放；异步解码任务可安全停止，使用 LVGL 显示避免退出黑屏
+description_zh = 支持 320×240 MJPEG-AVI 有声播放；异步解码任务可安全停止，使用 LVGL 显示避免退出黑屏
+description_en = Plays 320x240 MJPEG-AVI with audio; cooperative worker shutdown and LVGL presentation prevent exit black screens.

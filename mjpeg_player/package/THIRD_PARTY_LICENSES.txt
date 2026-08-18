@@ -1,0 +1,18 @@
+MJPEG Player third-party notices
+================================
+
+desktop-mirror native JPEG module
+---------------------------------
+Source: https://github.com/clocteck/desktop-mirror/tree/develop/native_module
+License: GNU General Public License v3.0
+
+HoloCubic MP3 Player native audio module
+----------------------------------------
+Source: https://github.com/clocteck/holocubic-apps/tree/main/mp3_player/package/modules
+Used for WAV decoding and I2S playback. Distributed with this GPL-3.0 application.
+
+TJpgDec / ESP32-S3 ROM JPEG decoder
+-----------------------------------
+TJpgDec copyright: ChaN, 2012
+Header source: Espressif ESP-IDF 5.3.2, components/esp_rom/include/esp32s3/rom/tjpgd.h
+The decoder implementation is supplied by the ESP32-S3 mask ROM and is not bundled in this package.

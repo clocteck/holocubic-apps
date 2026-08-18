@@ -266,7 +266,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   display:grid;
   gap:12px;
 }
-.resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.resource-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .resource-card .card-head{margin-bottom:12px}
 .resource-card .helper{max-width:28ch}
 .firmware-update-card .card-head{margin-bottom:12px}
@@ -350,6 +350,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .upload-card.gif{
   border-color:rgba(218,138,47,.18);
   background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,247,235,.94));
+}
+.upload-card.video{
+  border-color:rgba(117,91,214,.2);
+  background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(245,242,255,.95));
 }
 .upload-card h3{
   margin:0;
@@ -1090,6 +1094,36 @@ button,input,select,textarea{font:inherit;color:inherit}
   margin:8px 0 0;
   color:var(--muted);
   font-size:13px;
+}
+.gif-progress-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:18px;
+}
+.gif-progress-actions .btn{
+  min-width:108px;
+}
+.media-progress-stage + .media-progress-stage{
+  margin-top:18px;
+  padding-top:16px;
+  border-top:1px solid var(--line);
+}
+.media-progress-stage.pending{opacity:.5}
+.media-progress-stage.complete .gif-progress-fill{
+  background:linear-gradient(90deg,#36a675,#6dc99d);
+}
+.media-video-preview{
+  display:grid;
+  place-items:center;
+  width:100%;
+  height:100%;
+  color:var(--blue-strong);
+  font-size:15px;
+  font-weight:800;
+  line-height:1.35;
+  letter-spacing:.04em;
+  text-align:center;
+  white-space:pre-line;
 }
 body.gif-processing{overflow:hidden}
 @media (max-width:960px){
@@ -2895,7 +2929,7 @@ body.gif-processing{overflow:hidden}
           <div class="card-head">
             <div>
               <span class="section-kicker">资源</span>
-              <h2>图像资源</h2>
+              <h2>媒体资源</h2>
             </div>
             <button class="btn compact ghost" id="openImageManageBtn" type="button">进入管理</button>
           </div>
@@ -2907,6 +2941,10 @@ body.gif-processing{overflow:hidden}
             <div class="metric">
               <span>GIF 动画</span>
               <strong id="gifAssetCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>视频</span>
+              <strong id="videoAssetCount">0</strong>
             </div>
           </div>
         </section>
@@ -3063,7 +3101,7 @@ body.gif-processing{overflow:hidden}
     <header class="topbar">
       <div class="topbar-meta">
         <span class="eyebrow">资源管理</span>
-        <h1>图像管理</h1>
+        <h1>媒体管理</h1>
       </div>
       <div class="topbar-actions">
         <button class="btn ghost" id="backToStartBtn" type="button">返回控制面板</button>
@@ -3075,7 +3113,7 @@ body.gif-processing{overflow:hidden}
       <div class="media-summary">
         <div class="hero-copy">
           <span class="section-kicker">设备资源</span>
-          <h2>把常用图片和动画集中管理</h2>
+          <h2>集中管理图片、动画和视频</h2>
         </div>
         <span class="media-usage" id="mediaUsageSize">已占用 0 B</span>
         <div class="media-status" id="mediaLibraryStatus">正在同步资源。</div>
@@ -3096,6 +3134,13 @@ body.gif-processing{overflow:hidden}
           <button class="btn secondary" id="pickGifUploadBtn" type="button">选择 GIF</button>
           <input class="visually-hidden" id="gifUploadInput" type="file" accept=".gif,image/gif" multiple>
         </section>
+        <section class="upload-card video">
+          <span class="section-kicker">视频</span>
+          <h3>上传视频</h3>
+          <p>MP4 / MJPEG / AVI，自动转换为 320×240、20 FPS 有声 MJPEG AVI；最大 200 MB</p>
+          <button class="btn ghost" id="pickVideoUploadBtn" type="button">选择视频</button>
+          <input class="visually-hidden" id="videoUploadInput" type="file" accept=".mp4,.m4v,.mov,.avi,.mjpeg,.mjpg,video/mp4,video/quicktime,video/x-msvideo" multiple>
+        </section>
       </div>
     </section>
 
@@ -3109,10 +3154,12 @@ body.gif-processing{overflow:hidden}
           <div class="media-switch" role="tablist" aria-label="资源类型">
             <button class="media-switch-btn active" id="showImagesBtn" type="button" role="tab" aria-selected="true">图片</button>
             <button class="media-switch-btn" id="showGifsBtn" type="button" role="tab" aria-selected="false">GIF</button>
+            <button class="media-switch-btn" id="showVideosBtn" type="button" role="tab" aria-selected="false">视频</button>
           </div>
         </div>
         <div class="media-grid" id="mediaImageGrid"></div>
         <div class="media-grid hidden" id="mediaGifGrid"></div>
+        <div class="media-grid hidden" id="mediaVideoGrid"></div>
       </section>
     </main>
   </div>
@@ -3123,22 +3170,38 @@ body.gif-processing{overflow:hidden}
 <div class="gif-progress-modal hidden" id="gifProgressModal" aria-hidden="true">
   <div class="gif-progress-backdrop"></div>
   <section class="gif-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="gifProgressTitle">
-    <span class="gif-progress-kicker">GIF Converter</span>
-    <h2 id="gifProgressTitle">GIF 转换中</h2>
+    <span class="gif-progress-kicker" id="mediaProgressKicker">Media Converter</span>
+    <h2 id="gifProgressTitle">正在处理资源</h2>
     <p class="gif-progress-file" id="gifProgressFile">-</p>
-    <div class="gif-progress-head">
-      <span id="gifProgressPhase">正在读取 GIF</span>
-      <strong class="gif-progress-percent" id="gifProgressPercent">0%</strong>
+    <div class="media-progress-stage" id="mediaConvertStage">
+      <div class="gif-progress-head">
+        <span id="gifProgressPhase">正在准备转换</span>
+        <strong class="gif-progress-percent" id="gifProgressPercent">0%</strong>
+      </div>
+      <div class="gif-progress-track" id="gifProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="gif-progress-fill" id="gifProgressFill"></span>
+      </div>
+      <p class="gif-progress-stats" id="gifProgressStats">准备转换…</p>
     </div>
-    <div class="gif-progress-track" id="gifProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <span class="gif-progress-fill" id="gifProgressFill"></span>
+    <div class="media-progress-stage pending" id="mediaUploadStage">
+      <div class="gif-progress-head">
+        <span id="mediaUploadPhase">等待上传</span>
+        <strong class="gif-progress-percent" id="mediaUploadPercent">0%</strong>
+      </div>
+      <div class="gif-progress-track" id="mediaUploadTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="gif-progress-fill" id="mediaUploadFill"></span>
+      </div>
+      <p class="gif-progress-stats" id="mediaUploadStats">0 B / 0 B</p>
     </div>
-    <p class="gif-progress-stats" id="gifProgressStats">准备转换…</p>
-    <p class="gif-progress-note">转换期间请保持此页面打开。</p>
+    <p class="gif-progress-note">转换和上传期间请保持此页面打开。</p>
+    <div class="gif-progress-actions">
+      <button class="btn danger compact" id="cancelMediaOperationBtn" type="button">取消</button>
+    </div>
   </section>
 </div>
 
 <script src="/api/system/fs/file?path=%2Fsd%2Fapps%2Flauncher%2Fvendor%2Fcubic-gif-tools.min.js"></script>
+<script src="/api/system/fs/file?path=%2Fsd%2Fapps%2Flauncher%2Fvendor%2Fcubic-video-tools.js"></script>
 <script>
 const qs = (sel) => document.querySelector(sel);
 const DEFAULT_MDNS = "-";
@@ -3172,6 +3235,8 @@ const WIFI_SKIP_KEY = "cubic.skipWifiGate";
 const WIFI_SUCCESS_REDIRECT_DELAY_MS = 3000;
 const MAX_MEDIA_UPLOAD_BYTES = 64 * 1024 * 1024;
 const MAX_GIF_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
+const MAX_VIDEO_DURATION_SECONDS = 10 * 60;
 const MEDIA_UPLOAD_MAX_WIDTH = 320;
 const MEDIA_UPLOAD_MAX_HEIGHT = 240;
 const STORAGE_KEYS = {
@@ -3202,7 +3267,7 @@ let wifiScanRequested = false;
 let selectedWifiSsid = "";
 let currentView = "start";
 let activeMediaKind = "image";
-let mediaLibrary = { images: [], gifs: [] };
+let mediaLibrary = { images: [], gifs: [], videos: [] };
 let mediaRefreshToken = Date.now();
 const appBmpIconCache = new Map();
 let appCardsSignature = "";
@@ -3276,6 +3341,7 @@ const I18N_ROWS = [
   ["恢复中...", "Restoring...", "復元中...", "恢復中..."],
   ["资源", "Media", "リソース", "資源"],
   ["图像资源", "Image resources", "画像リソース", "圖像資源"],
+  ["媒体资源", "Media resources", "メディアリソース", "媒體資源"],
   ["进入管理", "Manage", "管理画面へ", "進入管理"],
   ["静态图片", "Images", "画像", "靜態圖片"],
   ["GIF 动画", "GIF animations", "GIF アニメーション", "GIF 動畫"],
@@ -3320,10 +3386,12 @@ const I18N_ROWS = [
   ["新窗口打开", "Open in new window", "新しいウィンドウで開く", "在新視窗開啟"],
   ["资源管理", "Media manager", "リソース管理", "資源管理"],
   ["图像管理", "Image manager", "画像管理", "圖像管理"],
+  ["媒体管理", "Media manager", "メディア管理", "媒體管理"],
   ["返回控制面板", "Back to dashboard", "管理画面へ戻る", "返回控制台"],
   ["刷新列表", "Refresh list", "一覧を更新", "重新整理清單"],
   ["设备资源", "Device media", "デバイスリソース", "裝置資源"],
   ["把常用图片和动画集中管理", "Manage images and animations in one place", "画像とアニメーションをまとめて管理します", "集中管理常用圖片與動畫"],
+  ["集中管理图片、动画和视频", "Manage images, animations, and videos in one place", "画像、アニメーション、動画をまとめて管理します", "集中管理圖片、動畫和影片"],
   ["正在同步资源。", "Syncing media.", "リソースを同期中です。", "正在同步資源。"],
   ["上传图片", "Upload images", "画像をアップロード", "上傳圖片"],
   ["PNG / JPG / WEBP / BMP / SVG，静态图会自动适配 320×240", "PNG / JPG / WEBP / BMP / SVG; images are fitted to 320×240", "PNG / JPG / WEBP / BMP / SVG。画像は 320×240 に自動調整されます", "PNG / JPG / WEBP / BMP / SVG；靜態圖片會自動調整為 320×240"],
@@ -3331,6 +3399,18 @@ const I18N_ROWS = [
   ["上传 GIF", "Upload GIF", "GIF をアップロード", "上傳 GIF"],
   ["GIF，超过 320×240 时等比例缩小；最大 50 MB", "GIFs larger than 320×240 are proportionally reduced; 50 MB maximum", "320×240 を超える GIF は縦横比を保って縮小します（最大 50 MB）", "GIF 超過 320×240 時會等比例縮小；最大 50 MB"],
   ["选择 GIF", "Choose GIF", "GIF を選択", "選擇 GIF"],
+  ["视频", "Videos", "動画", "影片"],
+  ["MJPEG 视频", "MJPEG videos", "MJPEG 動画", "MJPEG 影片"],
+  ["下载", "Download", "ダウンロード", "下載"],
+  ["还没有视频", "No videos yet", "動画はまだありません", "尚無影片"],
+  ["上传完成", "Upload complete", "アップロード完了", "上傳完成"],
+  ["上传视频", "Upload video", "動画をアップロード", "上傳影片"],
+  ["选择视频", "Choose videos", "動画を選択", "選擇影片"],
+  ["MP4 / MJPEG / AVI，自动转换为 320×240、20 FPS 有声 MJPEG AVI；最大 200 MB", "MP4 / MJPEG / AVI; automatically converted to 320×240, 20 FPS MJPEG AVI with audio; 200 MB maximum", "MP4 / MJPEG / AVI を音声付き 320×240、20 FPS MJPEG AVI に自動変換します（最大 200 MB）", "MP4 / MJPEG / AVI 會自動轉換為 320×240、20 FPS 有聲 MJPEG AVI；最大 200 MB"],
+  ["正在处理资源", "Processing media", "メディアを処理中", "正在處理媒體"],
+  ["正在准备转换", "Preparing conversion", "変換を準備中", "正在準備轉換"],
+  ["等待上传", "Waiting to upload", "アップロード待機中", "等待上傳"],
+  ["转换和上传期间请保持此页面打开。", "Keep this page open during conversion and upload.", "変換とアップロード中はこのページを開いたままにしてください。", "轉換和上傳期間請保持此頁面開啟。"],
   ["GIF 转换中", "Converting GIF", "GIF を変換中", "GIF 轉換中"],
   ["正在读取 GIF", "Reading GIF", "GIF を読み込み中", "正在讀取 GIF"],
   ["准备转换…", "Preparing…", "準備中…", "準備轉換…"],
@@ -3442,6 +3522,7 @@ const I18N_ROWS = [
   ["退出", "Exit", "終了", "退出"],
   ["退出中...", "Exiting...", "終了中...", "退出中..."],
   ["正在返回启动器", "Returning to Launcher", "ランチャーに戻っています", "正在返回啟動器"],
+  ["播放器安全退出失败，请按 HOME 键退出", "Safe player exit failed. Use the HOME key to exit.", "プレーヤーの安全終了に失敗しました。HOME キーで終了してください。", "播放器安全退出失敗，請按 HOME 鍵退出"],
   ["进入 app 页面", "Open app page", "アプリページを開く", "進入應用程式頁面"],
   ["进入服务页面", "Open service page", "サービスページを開く", "進入服務頁面"],
   ["固件已写入，设备正在重启。", "Firmware installed; the device is restarting.", "ファームウェアを適用し再起動しています。", "韌體已寫入，裝置正在重新啟動。"],
@@ -3840,26 +3921,59 @@ async function api(path, init){
   return data;
 }
 
-async function uploadMediaFile(kind, file){
-  const fsPath = (kind === "gif" ? "/sd/gifs/" : "/sd/images/") + (file.name || "");
-  const response = await fetch(
-    "/api/system/fs/upload?path=" + encodeURIComponent(fsPath),
-    {
-      method: "PUT",
-      cache: "no-store",
-      body: file
+function mediaCancelledError(){
+  const error = new Error(gifProgressText("操作已取消", "Operation cancelled", "操作をキャンセルしました", "操作已取消"));
+  error.name = "AbortError";
+  return error;
+}
+
+function uploadMediaFile(kind, file, onProgress, signal){
+  const directory = kind === "gif" ? "/sd/gifs/" : kind === "video" ? "/sd/videos/" : "/sd/images/";
+  const fsPath = directory + (file.name || "");
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    let settled = false;
+    const finish = (callback, value) => {
+      if(settled) return;
+      settled = true;
+      if(signal) signal.removeEventListener("abort", abortUpload);
+      callback(value);
+    };
+    const abortUpload = () => {
+      if(request.readyState !== XMLHttpRequest.DONE) request.abort();
+      finish(reject, mediaCancelledError());
+    };
+    if(signal && signal.aborted){
+      finish(reject, mediaCancelledError());
+      return;
     }
-  );
-  let data = null;
-  try{
-    data = await response.json();
-  }catch(err){
-    throw new Error("media api 返回了无效数据");
-  }
-  if(!response.ok || data.ok === false){
-    throw new Error(data && data.error ? data.error : ("HTTP " + response.status));
-  }
-  return data;
+    if(signal) signal.addEventListener("abort", abortUpload, { once: true });
+    request.open("PUT", "/api/system/fs/upload?path=" + encodeURIComponent(fsPath), true);
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+    request.timeout = 30 * 60 * 1000;
+    request.upload.onprogress = (event) => {
+      const total = event.lengthComputable && event.total > 0 ? event.total : Number(file.size || 0);
+      if(typeof onProgress === "function"){
+        onProgress({ loaded: Math.min(Number(event.loaded || 0), total || Number(event.loaded || 0)), total });
+      }
+    };
+    request.onerror = () => finish(reject, new Error("上传连接失败"));
+    request.ontimeout = () => finish(reject, new Error("上传超时"));
+    request.onabort = () => finish(reject, mediaCancelledError());
+    request.onload = () => {
+      let data = null;
+      try{ data = JSON.parse(request.responseText || "{}"); }
+      catch(err){ finish(reject, new Error("media api 返回了无效数据")); return; }
+      if(request.status < 200 || request.status >= 300 || data.ok === false){
+        finish(reject, new Error(data && data.error ? data.error : ("HTTP " + request.status)));
+        return;
+      }
+      if(typeof onProgress === "function") onProgress({ loaded: file.size, total: file.size, done: true });
+      finish(resolve, data);
+    };
+    if(typeof onProgress === "function") onProgress({ loaded: 0, total: file.size });
+    request.send(file);
+  });
 }
 
 async function readDevtoolsTextFile(path, maxBytes){
@@ -4543,7 +4657,7 @@ function formatBytes(size){
 }
 
 function mediaKindLabel(kind){
-  return kind === "gif" ? "GIF" : translateCore("图片");
+  return kind === "gif" ? "GIF" : kind === "video" ? translateCore("视频") : translateCore("图片");
 }
 
 function mediaTypeLabel(entry){
@@ -4561,17 +4675,17 @@ function mediaPreviewUrl(path){
 }
 
 function mediaEntriesForKind(kind){
-  return kind === "gif" ? mediaLibrary.gifs : mediaLibrary.images;
+  return kind === "gif" ? mediaLibrary.gifs : kind === "video" ? mediaLibrary.videos : mediaLibrary.images;
 }
 
 function mediaGridSelectorForKind(kind){
-  return kind === "gif" ? "#mediaGifGrid" : "#mediaImageGrid";
+  return kind === "gif" ? "#mediaGifGrid" : kind === "video" ? "#mediaVideoGrid" : "#mediaImageGrid";
 }
 
 function syncMediaGridVisibility(){
-  const showGif = activeMediaKind === "gif";
-  qs("#mediaImageGrid").classList.toggle("hidden", showGif);
-  qs("#mediaGifGrid").classList.toggle("hidden", !showGif);
+  qs("#mediaImageGrid").classList.toggle("hidden", activeMediaKind !== "image");
+  qs("#mediaGifGrid").classList.toggle("hidden", activeMediaKind !== "gif");
+  qs("#mediaVideoGrid").classList.toggle("hidden", activeMediaKind !== "video");
 }
 
 function mediaFileExtension(name){
@@ -4725,6 +4839,9 @@ async function prepareImageFileForUpload(file){
 }
 
 let gifProgressStartedAt = 0;
+let mediaProgressKind = "image";
+let mediaOperationController = null;
+let mediaOperationCancelled = false;
 
 function gifProgressText(zh, en, ja, zhTw){
   if(currentLanguage === "en") return en;
@@ -4733,19 +4850,43 @@ function gifProgressText(zh, en, ja, zhTw){
   return zh;
 }
 
-function openGifProgress(file){
+function openMediaProgress(file, kind){
   gifProgressStartedAt = performance.now();
-  qs("#gifProgressTitle").textContent = gifProgressText("GIF 转换中", "Converting GIF", "GIF を変換中", "GIF 轉換中");
-  qs("#gifProgressFile").textContent = file && file.name ? file.name : "GIF";
-  qs("#gifProgressPhase").textContent = gifProgressText("正在读取 GIF", "Reading GIF", "GIF を読み込み中", "正在讀取 GIF");
+  mediaProgressKind = kind || "image";
+  const isGif = mediaProgressKind === "gif";
+  const isVideo = mediaProgressKind === "video";
+  qs("#mediaProgressKicker").textContent = isVideo ? "Video Converter" : isGif ? "GIF Converter" : "Image Processor";
+  qs("#gifProgressTitle").textContent = isVideo
+    ? gifProgressText("视频转换中", "Converting video", "動画を変換中", "影片轉換中")
+    : isGif
+      ? gifProgressText("GIF 转换中", "Converting GIF", "GIF を変換中", "GIF 轉換中")
+      : gifProgressText("图片处理中", "Processing image", "画像を処理中", "圖片處理中");
+  qs("#gifProgressFile").textContent = file && file.name ? file.name : (isVideo ? "Video" : isGif ? "GIF" : "Image");
+  qs("#gifProgressPhase").textContent = isVideo
+    ? gifProgressText("正在读取视频", "Reading video", "動画を読み込み中", "正在讀取影片")
+    : isGif
+      ? gifProgressText("正在读取 GIF", "Reading GIF", "GIF を読み込み中", "正在讀取 GIF")
+      : gifProgressText("正在检查图片", "Checking image", "画像を確認中", "正在檢查圖片");
   qs("#gifProgressPercent").textContent = "0%";
   qs("#gifProgressFill").style.width = "0%";
   qs("#gifProgressStats").textContent = gifProgressText("准备转换…", "Preparing…", "準備中…", "準備轉換…");
   qs("#gifProgressTrack").setAttribute("aria-valuenow", "0");
+  qs("#mediaConvertStage").classList.remove("pending", "complete");
+  qs("#mediaUploadStage").classList.add("pending");
+  qs("#mediaUploadStage").classList.remove("complete");
+  qs("#mediaUploadPhase").textContent = gifProgressText("等待上传", "Waiting to upload", "アップロード待機中", "等待上傳");
+  qs("#mediaUploadPercent").textContent = "0%";
+  qs("#mediaUploadFill").style.width = "0%";
+  qs("#mediaUploadStats").textContent = "0 B / " + formatBytes(file && file.size || 0);
+  qs("#mediaUploadTrack").setAttribute("aria-valuenow", "0");
   qs("#gifProgressModal").classList.remove("hidden");
   qs("#gifProgressModal").setAttribute("aria-hidden", "false");
+  qs("#cancelMediaOperationBtn").disabled = false;
+  qs("#cancelMediaOperationBtn").textContent = gifProgressText("取消", "Cancel", "キャンセル", "取消");
   document.body.classList.add("gif-processing");
 }
+
+function openGifProgress(file){ openMediaProgress(file, "gif"); }
 
 function updateGifProgress(progress){
   const phase = progress && progress.phase || "decode";
@@ -4779,12 +4920,80 @@ function updateGifProgress(progress){
   qs("#gifProgressFill").style.width = percent + "%";
   qs("#gifProgressStats").textContent = stats;
   qs("#gifProgressTrack").setAttribute("aria-valuenow", String(percent));
+  qs("#mediaConvertStage").classList.toggle("complete", phase === "done");
+}
+
+function updateImageProgress(done, details){
+  const percent = done ? 100 : 20;
+  qs("#gifProgressPhase").textContent = done
+    ? gifProgressText("图片适配完成", "Image ready", "画像の準備完了", "圖片調整完成")
+    : gifProgressText("正在适配 320×240", "Fitting to 320×240", "320×240 に調整中", "正在調整為 320×240");
+  qs("#gifProgressPercent").textContent = percent + "%";
+  qs("#gifProgressFill").style.width = percent + "%";
+  qs("#gifProgressTrack").setAttribute("aria-valuenow", String(percent));
+  qs("#gifProgressStats").textContent = details || gifProgressText("正在处理图片…", "Processing image…", "画像を処理中…", "正在處理圖片…");
+  qs("#mediaConvertStage").classList.toggle("complete", !!done);
+}
+
+function updateVideoProgress(progress){
+  const phase = progress && progress.phase || "analyze";
+  const current = Math.max(0, Number(progress && progress.current) || 0);
+  const total = Math.max(0, Number(progress && progress.total) || 0);
+  const percent = phase === "done" ? 100 : total > 0 ? Math.max(0, Math.min(100, Math.round(current * 100 / total))) : 0;
+  const elapsed = Math.max(0, (performance.now() - gifProgressStartedAt) / 1000);
+  let phaseText = gifProgressText("正在分析视频", "Analyzing video", "動画を解析中", "正在分析影片");
+  if(phase === "convert") phaseText = gifProgressText("正在转换视频帧", "Converting video frames", "動画フレームを変換中", "正在轉換影片幀");
+  if(phase === "mux") phaseText = gifProgressText("正在封装 MJPEG AVI", "Building MJPEG AVI", "MJPEG AVI を作成中", "正在封裝 MJPEG AVI");
+  if(phase === "audio-decode") phaseText = gifProgressText("正在提取声音", "Extracting audio", "音声を抽出中", "正在擷取聲音");
+  if(phase === "audio") phaseText = gifProgressText("正在转换声音", "Converting audio", "音声を変換中", "正在轉換聲音");
+  if(phase === "done") phaseText = gifProgressText("视频转换完成", "Video conversion complete", "動画変換完了", "影片轉換完成");
+  let stats = gifProgressText("正在读取文件…", "Reading file…", "ファイルを読み込み中…", "正在讀取檔案…");
+  if(total > 0 && phase === "audio"){
+    stats = (current / 16000).toFixed(1) + " / " + (total / 16000).toFixed(1) + " s · 16 kHz mono";
+  }else if(total > 0){
+    const speed = current > 0 && elapsed > 0 ? current / elapsed : 0;
+    stats = current + " / " + total + " " + gifProgressText("帧", "frames", "フレーム", "幀") +
+      " · " + elapsed.toFixed(1) + " s" + (speed ? " · " + speed.toFixed(1) + " fps" : "");
+  }
+  if(phase === "done" && progress.outputBytes) stats += " · " + formatBytes(progress.outputBytes);
+  qs("#gifProgressPhase").textContent = phaseText;
+  qs("#gifProgressPercent").textContent = percent + "%";
+  qs("#gifProgressFill").style.width = percent + "%";
+  qs("#gifProgressStats").textContent = stats;
+  qs("#gifProgressTrack").setAttribute("aria-valuenow", String(percent));
+  qs("#mediaConvertStage").classList.toggle("complete", phase === "done");
+}
+
+function updateMediaUploadProgress(progress){
+  const loaded = Math.max(0, Number(progress && progress.loaded) || 0);
+  const total = Math.max(0, Number(progress && progress.total) || 0);
+  const done = !!(progress && progress.done) || (total > 0 && loaded >= total);
+  const percent = done ? 100 : total > 0 ? Math.max(0, Math.min(100, Math.round(loaded * 100 / total))) : 0;
+  qs("#mediaUploadStage").classList.remove("pending");
+  qs("#mediaUploadStage").classList.toggle("complete", done);
+  qs("#mediaUploadPhase").textContent = done
+    ? gifProgressText("上传完成", "Upload complete", "アップロード完了", "上傳完成")
+    : gifProgressText("正在上传到设备", "Uploading to device", "デバイスへアップロード中", "正在上傳到裝置");
+  qs("#mediaUploadPercent").textContent = percent + "%";
+  qs("#mediaUploadFill").style.width = percent + "%";
+  qs("#mediaUploadStats").textContent = formatBytes(loaded) + " / " + formatBytes(total);
+  qs("#mediaUploadTrack").setAttribute("aria-valuenow", String(percent));
 }
 
 function closeGifProgress(){
   qs("#gifProgressModal").classList.add("hidden");
   qs("#gifProgressModal").setAttribute("aria-hidden", "true");
   document.body.classList.remove("gif-processing");
+}
+
+function cancelMediaOperation(){
+  if(!mediaOperationController || mediaOperationController.signal.aborted) return;
+  mediaOperationCancelled = true;
+  const button = qs("#cancelMediaOperationBtn");
+  button.disabled = true;
+  button.textContent = gifProgressText("正在取消…", "Cancelling…", "キャンセル中…", "正在取消…");
+  qs("#gifProgressTitle").textContent = gifProgressText("正在取消", "Cancelling", "キャンセル中", "正在取消");
+  mediaOperationController.abort();
 }
 
 function waitForGifProgressPaint(){
@@ -4797,7 +5006,7 @@ function waitForGifProgressPaint(){
   });
 }
 
-async function prepareGifFileForUpload(file){
+async function prepareGifFileForUpload(file, signal){
   const tools = window.CubicGifTools;
   if(!tools || typeof tools.resizeGif !== "function"){
     throw new Error(translateCore("GIF 处理组件加载失败，请刷新页面后重试"));
@@ -4807,6 +5016,7 @@ async function prepareGifFileForUpload(file){
     maxWidth: MEDIA_UPLOAD_MAX_WIDTH,
     maxHeight: MEDIA_UPLOAD_MAX_HEIGHT,
     onProgress(progress){
+      if(signal && signal.aborted) throw mediaCancelledError();
       updateGifProgress(progress);
       const current = Math.max(0, Number(progress && progress.current) || 0);
       const total = Math.max(0, Number(progress && progress.total) || 0);
@@ -4840,34 +5050,42 @@ function setMediaToolbarBusy(isBusy){
   qs("#refreshMediaBtn").disabled = isBusy;
   qs("#pickImageUploadBtn").disabled = isBusy;
   qs("#pickGifUploadBtn").disabled = isBusy;
+  qs("#pickVideoUploadBtn").disabled = isBusy;
 }
 
 function updateMediaCounters(){
   const images = Array.isArray(mediaLibrary.images) ? mediaLibrary.images.length : 0;
   const gifs = Array.isArray(mediaLibrary.gifs) ? mediaLibrary.gifs.length : 0;
-  const totalBytes = mediaLibrary.images.concat(mediaLibrary.gifs).reduce((sum, entry) => {
+  const videos = Array.isArray(mediaLibrary.videos) ? mediaLibrary.videos.length : 0;
+  const totalBytes = mediaLibrary.images.concat(mediaLibrary.gifs, mediaLibrary.videos).reduce((sum, entry) => {
     const size = Number(entry && entry.size);
     return sum + (Number.isFinite(size) && size > 0 ? size : 0);
   }, 0);
   qs("#imageAssetCount").textContent = String(images);
   qs("#gifAssetCount").textContent = String(gifs);
+  qs("#videoAssetCount").textContent = String(videos);
   qs("#mediaUsageSize").textContent = translateCore("已占用 ") + formatBytes(totalBytes);
 }
 
 function updateMediaLibrarySwitch(){
-  const imageActive = activeMediaKind !== "gif";
+  const imageActive = activeMediaKind === "image";
+  const gifActive = activeMediaKind === "gif";
+  const videoActive = activeMediaKind === "video";
   const imageBtn = qs("#showImagesBtn");
   const gifBtn = qs("#showGifsBtn");
+  const videoBtn = qs("#showVideosBtn");
   imageBtn.classList.toggle("active", imageActive);
-  gifBtn.classList.toggle("active", !imageActive);
+  gifBtn.classList.toggle("active", gifActive);
+  videoBtn.classList.toggle("active", videoActive);
   imageBtn.setAttribute("aria-selected", imageActive ? "true" : "false");
-  gifBtn.setAttribute("aria-selected", imageActive ? "false" : "true");
-  qs("#mediaLibraryKicker").textContent = translateCore(imageActive ? "图片" : "动画");
-  qs("#mediaLibraryTitle").textContent = translateCore(imageActive ? "静态图片" : "GIF 动画");
+  gifBtn.setAttribute("aria-selected", gifActive ? "true" : "false");
+  videoBtn.setAttribute("aria-selected", videoActive ? "true" : "false");
+  qs("#mediaLibraryKicker").textContent = translateCore(videoActive ? "视频" : imageActive ? "图片" : "动画");
+  qs("#mediaLibraryTitle").textContent = translateCore(videoActive ? "MJPEG 视频" : imageActive ? "静态图片" : "GIF 动画");
 }
 
 function setActiveMediaKind(kind){
-  activeMediaKind = kind === "gif" ? "gif" : "image";
+  activeMediaKind = kind === "gif" || kind === "video" ? kind : "image";
   updateMediaLibrarySwitch();
   syncMediaGridVisibility();
 }
@@ -4891,17 +5109,24 @@ function buildMediaCard(entry){
 
   const preview = document.createElement("div");
   preview.className = "media-preview";
-  const image = document.createElement("img");
-  image.loading = "lazy";
-  image.alt = entry && entry.name ? entry.name : mediaKindLabel(entry && entry.kind);
-  image.src = mediaPreviewUrl(entry && entry.path);
-  image.addEventListener("error", () => {
-    preview.innerHTML = "";
-    const fallback = document.createElement("span");
-    fallback.textContent = translateCore("当前无法预览");
-    preview.appendChild(fallback);
-  });
-  preview.appendChild(image);
+  if(entry && entry.kind === "video"){
+    const videoMark = document.createElement("div");
+    videoMark.className = "media-video-preview";
+    videoMark.textContent = "MJPEG\nAVI";
+    preview.appendChild(videoMark);
+  }else{
+    const image = document.createElement("img");
+    image.loading = "lazy";
+    image.alt = entry && entry.name ? entry.name : mediaKindLabel(entry && entry.kind);
+    image.src = mediaPreviewUrl(entry && entry.path);
+    image.addEventListener("error", () => {
+      preview.innerHTML = "";
+      const fallback = document.createElement("span");
+      fallback.textContent = translateCore("当前无法预览");
+      preview.appendChild(fallback);
+    });
+    preview.appendChild(image);
+  }
 
   const copy = document.createElement("div");
   copy.className = "media-copy";
@@ -4936,7 +5161,8 @@ function buildMediaCard(entry){
   openBtn.href = mediaPreviewUrl(entry && entry.path);
   openBtn.target = "_blank";
   openBtn.rel = "noreferrer";
-  openBtn.textContent = translateCore("查看");
+  if(entry && entry.kind === "video") openBtn.download = entry.name || "video.avi";
+  openBtn.textContent = translateCore(entry && entry.kind === "video" ? "下载" : "查看");
 
   const removeBtn = document.createElement("button");
   removeBtn.className = "btn danger";
@@ -4967,11 +5193,11 @@ function renderMediaGrid(selector, entries, emptyTitle, emptyNote){
 }
 
 function renderActiveMediaLibrary(){
-  ["image", "gif"].forEach((kind) => {
+  ["image", "gif", "video"].forEach((kind) => {
     renderMediaGrid(
       mediaGridSelectorForKind(kind),
       mediaEntriesForKind(kind),
-      kind === "gif" ? "还没有 GIF" : "还没有图片",
+      kind === "gif" ? "还没有 GIF" : kind === "video" ? "还没有视频" : "还没有图片",
       ""
     );
   });
@@ -4992,11 +5218,12 @@ async function loadMediaLibrary(options){
     const data = await loadMediaLibraryFromFs();
     mediaLibrary = {
       images: sortMediaEntries(data && data.images),
-      gifs: sortMediaEntries(data && data.gifs)
+      gifs: sortMediaEntries(data && data.gifs),
+      videos: sortMediaEntries(data && data.videos)
     };
     mediaRefreshToken = Date.now();
     renderMediaLibrary();
-    const total = mediaLibrary.images.length + mediaLibrary.gifs.length;
+    const total = mediaLibrary.images.length + mediaLibrary.gifs.length + mediaLibrary.videos.length;
     setMediaStatus(total ? ("已同步 " + total + " 项。") : "暂无资源。", false);
     return data;
   }catch(err){
@@ -5013,14 +5240,17 @@ async function loadMediaLibrary(options){
 async function listFsMediaDir(path, kind){
   const data = await api("/api/system/fs/list?path=" + encodeURIComponent(path));
   return (Array.isArray(data && data.entries) ? data.entries : [])
-    .filter((entry) => entry && !entry.is_dir)
+    .filter((entry) => entry && !entry.is_dir && (kind !== "video" || /\.avi$/i.test(String(entry.name || ""))))
     .map((entry) => Object.assign({}, entry, { kind }));
 }
 
 async function loadMediaLibraryFromFs(){
-  const images = await listFsMediaDir("/sd/images", "image");
-  const gifs = await listFsMediaDir("/sd/gifs", "gif");
-  return { ok: true, images, gifs };
+  const [images, gifs, videos] = await Promise.all([
+    listFsMediaDir("/sd/images", "image").catch(() => []),
+    listFsMediaDir("/sd/gifs", "gif").catch(() => []),
+    listFsMediaDir("/sd/videos", "video").catch(() => [])
+  ]);
+  return { ok: true, images, gifs, videos };
 }
 
 async function removeFsMediaFile(path){
@@ -5033,13 +5263,19 @@ function validateMediaFile(kind, file){
   if(!name){
     throw new Error("文件名无效");
   }
-  const maxBytes = kind === "gif" ? MAX_GIF_UPLOAD_BYTES : MAX_MEDIA_UPLOAD_BYTES;
+  const maxBytes = kind === "gif" ? MAX_GIF_UPLOAD_BYTES : kind === "video" ? MAX_VIDEO_UPLOAD_BYTES : MAX_MEDIA_UPLOAD_BYTES;
   if(file.size > maxBytes){
-    throw new Error(name + (kind === "gif" ? " 超过 50 MB GIF 处理上限" : " 超过 64 MB 上传限制"));
+    throw new Error(name + (kind === "gif" ? " 超过 50 MB GIF 处理上限" : kind === "video" ? " 超过 200 MB 视频处理上限" : " 超过 64 MB 上传限制"));
   }
   if(kind === "gif"){
     if(!/\.gif$/i.test(lower)){
       throw new Error(name + " 不是 GIF 文件");
+    }
+    return;
+  }
+  if(kind === "video"){
+    if(!/\.(mp4|m4v|mov|avi|mjpeg|mjpg)$/i.test(lower)){
+      throw new Error(name + " 不是支持的 MP4 或 MJPEG 视频");
     }
     return;
   }
@@ -5051,65 +5287,139 @@ function validateMediaFile(kind, file){
   }
 }
 
+async function prepareVideoFileForUpload(file, signal){
+  const tools = window.CubicVideoTools;
+  if(!tools || typeof tools.convertVideo !== "function"){
+    throw new Error(translateCore("视频处理组件加载失败，请刷新页面后重试"));
+  }
+  return tools.convertVideo(file, {
+    width: 320,
+    height: 240,
+    fps: 20,
+    jpegQuality: 0.72,
+    audioSampleRate: 16000,
+    maxDurationSeconds: MAX_VIDEO_DURATION_SECONDS,
+    signal,
+    onProgress: updateVideoProgress
+  });
+}
+
 async function handleMediaUpload(kind, fileList){
   const files = Array.from(fileList || []);
   if(!files.length){
     return;
   }
   setMediaToolbarBusy(true);
+  mediaOperationController = new AbortController();
+  mediaOperationCancelled = false;
+  const signal = mediaOperationController.signal;
   let success = 0;
   let lastError = "";
   try{
     for(const file of files){
+      if(signal.aborted) break;
+      let progressOpen = false;
+      const uploadPaths = [];
       try{
         validateMediaFile(kind, file);
+        openMediaProgress(file, kind);
+        progressOpen = true;
+        await waitForGifProgressPaint();
         let uploadFile = file;
         let prepared = { changed: false };
         if(kind === "gif"){
           setMediaStatus(translateCore("正在检查 ") + file.name + "。", false);
-          openGifProgress(file);
-          await waitForGifProgressPaint();
-          try{
-            prepared = await prepareGifFileForUpload(file);
-            uploadFile = prepared.file;
-            await new Promise((resolve) => setTimeout(resolve, 350));
-          }finally{
-            closeGifProgress();
-          }
-        }else{
-          setMediaStatus("正在适配 " + file.name + "。", false);
-          prepared = await prepareImageFileForUpload(file);
+          prepared = await prepareGifFileForUpload(file, signal);
           uploadFile = prepared.file;
+        }else if(kind === "video"){
+          setMediaStatus(gifProgressText("正在转换 ", "Converting ", "変換中：", "正在轉換 ") + file.name + "。", false);
+          prepared = await prepareVideoFileForUpload(file, signal);
+          uploadFile = prepared.file;
+        }else{
+          if(signal.aborted) throw mediaCancelledError();
+          setMediaStatus("正在适配 " + file.name + "。", false);
+          updateImageProgress(false);
+          prepared = await prepareImageFileForUpload(file);
+          if(signal.aborted) throw mediaCancelledError();
+          uploadFile = prepared.file;
+          const imageSize = prepared.width && prepared.height ? prepared.width + "×" + prepared.height : "320×240";
+          updateImageProgress(true, imageSize + " · " + formatBytes(uploadFile.size));
         }
         const sizeText = prepared.changed && prepared.width && prepared.height
           ? (" " + prepared.width + "×" + prepared.height)
+          : kind === "video" && prepared.width && prepared.height
+            ? (" " + prepared.width + "×" + prepared.height + " @ " + prepared.fps + " FPS")
           : "";
         const frameText = prepared.frames
           ? (" · " + prepared.frames + (currentLanguage === "en" ? " frames" : currentLanguage === "ja" ? " フレーム" : currentLanguage === "zh-TW" ? " 幀" : " 帧"))
           : "";
+        const uploadFiles = kind === "video" && Array.isArray(prepared.files) && prepared.files.length
+          ? prepared.files
+          : [uploadFile];
+        const totalUploadBytes = uploadFiles.reduce((sum, item) => sum + Number(item && item.size || 0), 0);
+        let completedUploadBytes = 0;
         setMediaStatus(translateCore("正在上传 ") + uploadFile.name + sizeText + frameText + "。", false);
-        await uploadMediaFile(kind, uploadFile);
+        updateMediaUploadProgress({ loaded: 0, total: totalUploadBytes });
+        for(const item of uploadFiles){
+          if(signal.aborted) throw mediaCancelledError();
+          const directory = kind === "gif" ? "/sd/gifs/" : kind === "video" ? "/sd/videos/" : "/sd/images/";
+          uploadPaths.push(directory + item.name);
+          await uploadMediaFile(kind, item, (progress) => {
+            updateMediaUploadProgress({
+              loaded: completedUploadBytes + Number(progress && progress.loaded || 0),
+              total: totalUploadBytes,
+              done: completedUploadBytes + Number(progress && progress.loaded || 0) >= totalUploadBytes
+            });
+          }, signal);
+          completedUploadBytes += Number(item.size || 0);
+        }
+        updateMediaUploadProgress({ loaded: totalUploadBytes, total: totalUploadBytes, done: true });
+        await new Promise((resolve) => setTimeout(resolve, 450));
         success += 1;
       }catch(err){
         lastError = err.message || String(err);
-        setMediaStatus(lastError, true);
+        const cancelled = signal.aborted || (err && err.name === "AbortError");
+        if(uploadPaths.length){
+          await Promise.all(uploadPaths.map((path) => removeFsMediaFile(path).catch(() => null)));
+        }
+        setMediaStatus(lastError, !cancelled);
+        if(progressOpen){
+          qs("#gifProgressTitle").textContent = cancelled
+            ? gifProgressText("已取消", "Cancelled", "キャンセルしました", "已取消")
+            : gifProgressText("处理失败", "Processing failed", "処理失敗", "處理失敗");
+          qs("#gifProgressStats").textContent = lastError;
+          await new Promise((resolve) => setTimeout(resolve, cancelled ? 350 : 1200));
+        }
+        if(cancelled) break;
+      }finally{
+        if(progressOpen) closeGifProgress();
       }
     }
     await loadMediaLibrary({ silent: true });
     if(success){
-      showToast("已上传 " + success + " 个文件", false);
+      showToast(gifProgressText(
+        "已上传 " + success + " 个文件",
+        "Uploaded " + success + (success === 1 ? " file" : " files"),
+        success + " 件をアップロードしました",
+        "已上傳 " + success + " 個檔案"
+      ), false);
     }
-    if(success && lastError){
+    if(mediaOperationCancelled){
+      setMediaStatus(gifProgressText("操作已取消。", "Operation cancelled.", "操作をキャンセルしました。", "操作已取消。"), false);
+      showToast(gifProgressText("已取消", "Cancelled", "キャンセルしました", "已取消"), false);
+    }else if(success && lastError){
       setMediaStatus("部分上传成功：" + lastError, true);
       showToast(lastError, true);
     }
-    if(!success && lastError){
+    if(!mediaOperationCancelled && !success && lastError){
+      setMediaStatus(lastError, true);
       showToast(lastError, true);
     }
-    if(success && !lastError){
+    if(!mediaOperationCancelled && success && !lastError){
       setMediaStatus("上传完成。", false);
     }
   }finally{
+    mediaOperationController = null;
     setMediaToolbarBusy(false);
   }
 }
@@ -5127,6 +5437,9 @@ async function handleRemoveMedia(entry, button){
   try{
     setMediaStatus("正在删除。", false);
     await removeFsMediaFile(entry.path);
+    if(entry.kind === "video" && /\.avi$/i.test(String(entry.path))){
+      await removeFsMediaFile(String(entry.path).replace(/\.avi$/i, ".wav")).catch(() => null);
+    }
     await loadMediaLibrary({ silent: true });
     showToast("已删除 " + (entry.name || "资源"), false);
     setMediaStatus("已删除。", false);
@@ -6636,6 +6949,15 @@ async function exitCurrentApp(button, busyText){
   button.disabled = true;
   button.textContent = translateCore(busyText || "退出中...");
   try{
+    const runningId = currentAppId(latestSystemState);
+    if(runningId === "mjpeg_player"){
+      try{
+        await api("/api/mjpeg-player/prepare-exit", { method: "POST" });
+      }catch(prepareErr){
+        throw new Error(translateCore("播放器安全退出失败，请按 HOME 键退出"));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
     await api("/api/system/exit", { method: "POST" });
     showToast("正在返回启动器", false);
     setTimeout(() => loadState(true), 350);
@@ -8031,10 +8353,14 @@ qs("#backToStartBtn").addEventListener("click", returnToStartView);
 qs("#refreshMediaBtn").addEventListener("click", () => loadMediaLibrary({ silent: false }));
 qs("#showImagesBtn").addEventListener("click", () => setActiveMediaKind("image"));
 qs("#showGifsBtn").addEventListener("click", () => setActiveMediaKind("gif"));
+qs("#showVideosBtn").addEventListener("click", () => setActiveMediaKind("video"));
 qs("#pickImageUploadBtn").addEventListener("click", () => qs("#imageUploadInput").click());
 qs("#pickGifUploadBtn").addEventListener("click", () => qs("#gifUploadInput").click());
+qs("#pickVideoUploadBtn").addEventListener("click", () => qs("#videoUploadInput").click());
 qs("#imageUploadInput").addEventListener("change", (ev) => handleMediaInputChange("image", ev));
 qs("#gifUploadInput").addEventListener("change", (ev) => handleMediaInputChange("gif", ev));
+qs("#videoUploadInput").addEventListener("change", (ev) => handleMediaInputChange("video", ev));
+qs("#cancelMediaOperationBtn").addEventListener("click", cancelMediaOperation);
 qs("#openWifiSetupBtn").addEventListener("click", handleOpenWifiSetup);
 qs("#skipWifiBtn").addEventListener("click", handleWifiSkip);
 qs("#wifiScanBtn").addEventListener("click", handleWifiScanClick);
