@@ -1,0 +1,23 @@
+Default background music
+========================
+
+Title: Home in the Wilderness
+Author: Herowl
+Source project: VoxeLibre
+Source file:
+https://github.com/VoxeLibre/VoxeLibre/blob/master/mods/PLAYER/mcl_music/sounds/Herowl-Home_in_the_Wilderness.ogg
+
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Modifications for this package:
+- Downmixed from stereo to mono
+- Resampled from 44100 Hz OGG to 11025 Hz PCM WAV
+- Converted to signed 16-bit little-endian samples
+- Added short fade-in/fade-out for click-free looping
+- Peak level limited to -4 dBFS
+
+The ClassiCube port and the BGM are separate works in a collection. This
+converted BGM remains available under CC BY-SA 4.0. Official Minecraft/C418
+music is not bundled. Users may replace bgm.wav with music they are authorised
+to use, encoded as mono 16-bit PCM WAV at 11025 or 22050 Hz.

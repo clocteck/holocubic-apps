@@ -1,0 +1,6 @@
+name = Minecraft
+version = 1.0.0
+entry = main.lua
+icon = main.png
+allow_webui = true
+description = 离线随机海岛方块沙盒，支持手柄探索与自由建造
