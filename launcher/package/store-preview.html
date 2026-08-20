@@ -1,0 +1,1716 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Cubic Store</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --ink:#11161f;
+      --muted:#6b7280;
+      --soft:#9299a6;
+      --line:#e4e7ec;
+      --line-strong:#d3d8e0;
+      --canvas:#f4f6f8;
+      --surface:#ffffff;
+      --official:#315efb;
+      --official-deep:#173bb8;
+      --official-soft:#e9efff;
+      --community:#f06434;
+      --community-deep:#b73d18;
+      --community-soft:#fff0e9;
+      --success:#16865f;
+      --success-soft:#e6f6ef;
+      --danger:#c13c4d;
+      --shadow:0 18px 55px rgba(20,29,45,.09);
+      --shadow-soft:0 8px 26px rgba(20,29,45,.07);
+    }
+
+    *{box-sizing:border-box}
+
+    html{background:var(--canvas)}
+
+    body{
+      margin:0;
+      min-width:320px;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at 13% -8%,rgba(49,94,251,.12),transparent 27rem),
+        radial-gradient(circle at 92% 4%,rgba(240,100,52,.1),transparent 25rem),
+        var(--canvas);
+      font-family:Inter,"SF Pro Display","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    button,input,select{font:inherit}
+
+    button{color:inherit}
+
+    .market-app{
+      min-height:100vh;
+      padding-bottom:56px;
+    }
+
+    .market-topbar{
+      position:sticky;
+      top:0;
+      z-index:30;
+      border-bottom:1px solid rgba(211,216,224,.86);
+      background:rgba(248,249,251,.88);
+      backdrop-filter:blur(18px) saturate(145%);
+    }
+
+    .market-topbar-inner{
+      width:min(1180px,calc(100% - 40px));
+      min-height:70px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns:auto minmax(260px,520px) auto;
+      align-items:center;
+      gap:24px;
+    }
+
+    .market-brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:max-content;
+    }
+
+    .market-logo{
+      width:38px;
+      height:38px;
+      display:grid;
+      place-items:center;
+      border-radius:12px;
+      color:#fff;
+      background:#11161f;
+      box-shadow:0 8px 18px rgba(17,22,31,.18);
+    }
+
+    .market-logo svg{width:22px;height:22px}
+
+    .market-brand-copy strong,
+    .market-brand-copy span{display:block}
+
+    .market-brand-copy strong{
+      font-size:15px;
+      letter-spacing:-.01em;
+    }
+
+    .market-brand-copy span{
+      margin-top:2px;
+      color:var(--muted);
+      font-size:11px;
+      letter-spacing:.1em;
+      text-transform:uppercase;
+    }
+
+    .market-search{
+      position:relative;
+      display:flex;
+      align-items:center;
+    }
+
+    .market-search svg{
+      position:absolute;
+      left:15px;
+      width:18px;
+      height:18px;
+      color:var(--muted);
+      pointer-events:none;
+    }
+
+    .market-search input{
+      width:100%;
+      height:42px;
+      padding:0 16px 0 43px;
+      border:1px solid var(--line);
+      border-radius:13px;
+      outline:none;
+      color:var(--ink);
+      background:rgba(255,255,255,.88);
+      transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+    }
+
+    .market-search input:focus{
+      border-color:var(--official);
+      background:#fff;
+      box-shadow:0 0 0 4px rgba(49,94,251,.1);
+    }
+
+    .market-top-actions{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:9px;
+    }
+
+    .preview-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      min-height:34px;
+      padding:0 11px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      color:var(--muted);
+      background:rgba(255,255,255,.82);
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    .preview-chip::before{
+      content:"";
+      width:7px;
+      height:7px;
+      border-radius:50%;
+      background:#21a777;
+      box-shadow:0 0 0 4px rgba(33,167,119,.11);
+    }
+
+    .preview-chip.is-loading::before{
+      background:#e4a11b;
+      box-shadow:0 0 0 4px rgba(228,161,27,.12);
+    }
+
+    .preview-chip.is-error::before{
+      background:var(--danger);
+      box-shadow:0 0 0 4px rgba(193,60,77,.12);
+    }
+
+    .icon-button{
+      width:38px;
+      height:38px;
+      display:grid;
+      place-items:center;
+      border:1px solid var(--line);
+      border-radius:11px;
+      cursor:pointer;
+      background:rgba(255,255,255,.82);
+      transition:transform .18s ease,border-color .18s ease,background .18s ease;
+    }
+
+    .icon-button:hover{transform:translateY(-1px);border-color:var(--line-strong);background:#fff}
+    .icon-button svg{width:18px;height:18px}
+
+    .market-main{
+      width:min(1180px,calc(100% - 40px));
+      margin:0 auto;
+      padding-top:28px;
+    }
+
+    .scope-switch{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-bottom:18px;
+      padding:6px;
+      border:1px solid var(--line);
+      border-radius:18px;
+      background:rgba(255,255,255,.72);
+      box-shadow:var(--shadow-soft);
+    }
+
+    .scope-option{
+      min-width:0;
+      display:grid;
+      grid-template-columns:44px minmax(0,1fr) auto;
+      align-items:center;
+      gap:13px;
+      padding:13px 15px;
+      border:1px solid transparent;
+      border-radius:13px;
+      cursor:pointer;
+      text-align:left;
+      background:transparent;
+      transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+    }
+
+    .scope-option:hover{transform:translateY(-1px);background:rgba(255,255,255,.8)}
+
+    .scope-option[aria-selected="true"]{
+      border-color:rgba(49,94,251,.18);
+      background:var(--surface);
+      box-shadow:0 9px 24px rgba(22,39,84,.08);
+    }
+
+    .scope-option[data-scope="community"][aria-selected="true"]{
+      border-color:rgba(240,100,52,.2);
+    }
+
+    .scope-icon{
+      width:44px;
+      height:44px;
+      display:grid;
+      place-items:center;
+      border-radius:13px;
+      color:var(--official);
+      background:var(--official-soft);
+    }
+
+    .scope-option[data-scope="community"] .scope-icon{
+      color:var(--community);
+      background:var(--community-soft);
+    }
+
+    .scope-icon svg{width:22px;height:22px}
+
+    .scope-copy{min-width:0}
+
+    .scope-copy strong,
+    .scope-copy span{display:block}
+
+    .scope-copy strong{font-size:15px}
+
+    .scope-copy span{
+      margin-top:4px;
+      overflow:hidden;
+      color:var(--muted);
+      font-size:12px;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .scope-count{
+      min-width:34px;
+      padding:5px 8px;
+      border-radius:9px;
+      color:var(--official-deep);
+      background:var(--official-soft);
+      font-size:12px;
+      font-weight:700;
+      text-align:center;
+    }
+
+    .scope-option[data-scope="community"] .scope-count{
+      color:var(--community-deep);
+      background:var(--community-soft);
+    }
+
+    .market-hero{
+      position:relative;
+      overflow:hidden;
+      min-height:262px;
+      display:grid;
+      grid-template-columns:minmax(0,1.1fr) minmax(310px,.9fr);
+      border-radius:24px;
+      color:#fff;
+      background:
+        linear-gradient(122deg,rgba(255,255,255,.08),transparent 38%),
+        linear-gradient(135deg,#101932 0%,#173b9f 52%,#315efb 100%);
+      box-shadow:0 25px 70px rgba(31,62,151,.23);
+    }
+
+    .market-app[data-scope="community"] .market-hero{
+      background:
+        linear-gradient(122deg,rgba(255,255,255,.1),transparent 38%),
+        linear-gradient(135deg,#251711 0%,#8d351c 52%,#f06434 100%);
+      box-shadow:0 25px 70px rgba(128,53,28,.22);
+    }
+
+    .hero-content{
+      position:relative;
+      z-index:2;
+      align-self:center;
+      padding:36px 40px;
+    }
+
+    .hero-kicker{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-height:30px;
+      padding:0 10px;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:9px;
+      background:rgba(255,255,255,.1);
+      font-size:11px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .hero-kicker::before{
+      content:"";
+      width:6px;
+      height:6px;
+      border-radius:50%;
+      background:#78ffca;
+    }
+
+    .market-app[data-scope="community"] .hero-kicker::before{background:#ffd49f}
+
+    .hero-content h1{
+      max-width:660px;
+      margin:18px 0 12px;
+      font-size:clamp(32px,5vw,52px);
+      line-height:1.03;
+      letter-spacing:-.045em;
+    }
+
+    .hero-content p{
+      max-width:590px;
+      margin:0;
+      color:rgba(255,255,255,.74);
+      font-size:15px;
+      line-height:1.7;
+    }
+
+    .hero-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:24px;
+    }
+
+    .hero-button{
+      min-height:41px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:0 15px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:11px;
+      cursor:pointer;
+      color:#fff;
+      background:rgba(255,255,255,.1);
+      transition:transform .18s ease,background .18s ease;
+    }
+
+    .hero-button.primary{
+      border-color:#fff;
+      color:#16245b;
+      background:#fff;
+    }
+
+    .creator-guide-button{display:none}
+    .market-app[data-scope="community"] .creator-guide-button{display:inline-flex}
+
+    .market-app[data-scope="community"] .hero-button.primary{color:#72280f}
+    .hero-button:hover{transform:translateY(-1px);background:rgba(255,255,255,.17)}
+    .hero-button.primary:hover{background:#f7f9ff}
+    .hero-button svg{width:17px;height:17px}
+
+    .hero-art{
+      position:relative;
+      min-height:262px;
+    }
+
+    .hero-orbit{
+      position:absolute;
+      width:270px;
+      height:270px;
+      right:28px;
+      top:-8px;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:50%;
+    }
+
+    .hero-orbit::before,
+    .hero-orbit::after{
+      content:"";
+      position:absolute;
+      border:1px solid rgba(255,255,255,.13);
+      border-radius:50%;
+    }
+
+    .hero-orbit::before{inset:38px}
+    .hero-orbit::after{inset:76px}
+
+    .hero-cube{
+      position:absolute;
+      right:86px;
+      top:49px;
+      width:138px;
+      height:138px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(255,255,255,.28);
+      border-radius:38px;
+      background:linear-gradient(145deg,rgba(255,255,255,.32),rgba(255,255,255,.08));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 25px 45px rgba(4,12,45,.28);
+      transform:rotate(-8deg);
+      backdrop-filter:blur(16px);
+    }
+
+    .hero-cube svg{width:76px;height:76px;filter:drop-shadow(0 12px 14px rgba(2,11,43,.22))}
+
+    .hero-mini-card{
+      position:absolute;
+      right:23px;
+      bottom:26px;
+      min-width:174px;
+      padding:12px 14px;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:14px;
+      background:rgba(10,20,56,.46);
+      box-shadow:0 18px 32px rgba(4,12,40,.18);
+      backdrop-filter:blur(16px);
+    }
+
+    .market-app[data-scope="community"] .hero-mini-card{background:rgba(56,20,10,.42)}
+
+    .hero-mini-card span,
+    .hero-mini-card strong{display:block}
+
+    .hero-mini-card span{color:rgba(255,255,255,.66);font-size:11px}
+    .hero-mini-card strong{margin-top:5px;font-size:14px}
+
+    .community-note{
+      display:none;
+      align-items:flex-start;
+      gap:12px;
+      margin-top:18px;
+      padding:14px 16px;
+      border:1px solid #f4d7ca;
+      border-radius:14px;
+      color:#714231;
+      background:#fff8f4;
+      font-size:13px;
+      line-height:1.55;
+    }
+
+    .market-app[data-scope="community"] .community-note{display:flex}
+    .community-note svg{width:19px;height:19px;flex:0 0 auto;margin-top:1px;color:var(--community)}
+
+    .catalog-toolbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      margin:30px 0 18px;
+    }
+
+    .catalog-heading span,
+    .catalog-heading h2{display:block}
+
+    .catalog-heading span{
+      color:var(--muted);
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .catalog-heading h2{
+      margin:5px 0 0;
+      font-size:25px;
+      letter-spacing:-.025em;
+    }
+
+    .catalog-filters{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+    }
+
+    .filter-button{
+      min-height:36px;
+      padding:0 12px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      cursor:pointer;
+      color:var(--muted);
+      background:rgba(255,255,255,.76);
+      transition:border-color .18s ease,color .18s ease,background .18s ease;
+    }
+
+    .filter-button:hover{border-color:var(--line-strong);color:var(--ink);background:#fff}
+
+    .filter-button[aria-pressed="true"]{
+      border-color:rgba(49,94,251,.22);
+      color:var(--official-deep);
+      background:var(--official-soft);
+    }
+
+    .market-app[data-scope="community"] .filter-button[aria-pressed="true"]{
+      border-color:rgba(240,100,52,.24);
+      color:var(--community-deep);
+      background:var(--community-soft);
+    }
+
+    .catalog-count{
+      min-height:36px;
+      display:inline-flex;
+      align-items:center;
+      padding:0 11px;
+      border-left:1px solid var(--line);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    .app-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:16px;
+    }
+
+    .app-card{
+      min-width:0;
+      min-height:270px;
+      display:flex;
+      flex-direction:column;
+      padding:18px;
+      border:1px solid var(--line);
+      border-radius:18px;
+      background:rgba(255,255,255,.92);
+      box-shadow:0 1px 0 rgba(255,255,255,.8),var(--shadow-soft);
+      transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;
+    }
+
+    .app-card:hover{
+      transform:translateY(-3px);
+      border-color:#ccd3dd;
+      box-shadow:0 18px 42px rgba(20,29,45,.11);
+    }
+
+    .app-card-top{
+      display:grid;
+      grid-template-columns:58px minmax(0,1fr) auto;
+      align-items:start;
+      gap:13px;
+    }
+
+    .app-icon{
+      width:58px;
+      height:58px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(17,22,31,.06);
+      border-radius:16px;
+      color:var(--icon-ink,#fff);
+      background:var(--icon-bg,#315efb);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 8px 18px rgba(20,29,45,.1);
+      font-size:25px;
+      font-weight:750;
+      letter-spacing:-.04em;
+    }
+
+    .app-icon.has-image{
+      border-color:transparent;
+      background:transparent;
+      box-shadow:none;
+    }
+
+    .app-icon img{
+      grid-area:1/1;
+      width:100%;
+      height:100%;
+      display:block;
+      border-radius:inherit;
+      object-fit:cover;
+    }
+
+    .app-icon-fallback{
+      grid-area:1/1;
+      display:grid;
+      place-items:center;
+    }
+
+    .app-card-title{min-width:0;padding-top:2px}
+
+    .app-card-title h3{
+      overflow:hidden;
+      margin:0;
+      font-size:17px;
+      letter-spacing:-.02em;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .publisher{
+      display:flex;
+      align-items:center;
+      gap:5px;
+      min-width:0;
+      margin-top:6px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .publisher span{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .publisher svg{width:14px;height:14px;flex:0 0 auto;color:var(--official)}
+    .market-app[data-scope="community"] .publisher svg{color:var(--community)}
+
+    .scope-badge{
+      min-height:25px;
+      display:inline-flex;
+      align-items:center;
+      gap:5px;
+      padding:0 8px;
+      border-radius:8px;
+      color:var(--official-deep);
+      background:var(--official-soft);
+      font-size:10px;
+      font-weight:700;
+      white-space:nowrap;
+    }
+
+    .scope-badge.community{
+      color:var(--community-deep);
+      background:var(--community-soft);
+    }
+
+    .scope-badge svg{width:12px;height:12px}
+
+    .app-description{
+      display:-webkit-box;
+      min-height:63px;
+      margin:16px 0 14px;
+      overflow:hidden;
+      color:#5e6674;
+      font-size:13px;
+      line-height:1.62;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:3;
+    }
+
+    .app-tags{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-bottom:17px;
+    }
+
+    .app-tag{
+      padding:5px 8px;
+      border:1px solid #e7eaf0;
+      border-radius:8px;
+      color:#737b88;
+      background:#f8f9fb;
+      font-size:10px;
+    }
+
+    .app-card-footer{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-top:auto;
+      padding-top:14px;
+      border-top:1px solid #eceef2;
+    }
+
+    .app-meta{
+      min-width:0;
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.55;
+    }
+
+    .app-meta strong{
+      display:block;
+      overflow:hidden;
+      color:#424a57;
+      font-size:12px;
+      font-weight:650;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .app-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px;flex:0 0 auto}
+
+    .card-button{
+      min-height:35px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 11px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      cursor:pointer;
+      background:#fff;
+      font-size:12px;
+      transition:transform .18s ease,border-color .18s ease,background .18s ease;
+    }
+
+    .card-button:hover{transform:translateY(-1px);border-color:var(--line-strong);background:#f9fafb}
+
+    .card-button.primary{
+      border-color:var(--official);
+      color:#fff;
+      background:var(--official);
+      box-shadow:0 8px 16px rgba(49,94,251,.2);
+    }
+
+    .market-app[data-scope="community"] .card-button.primary{
+      border-color:var(--community);
+      background:var(--community);
+      box-shadow:0 8px 16px rgba(240,100,52,.18);
+    }
+
+    .card-button.primary:hover{background:var(--official-deep)}
+    .market-app[data-scope="community"] .card-button.primary:hover{background:var(--community-deep)}
+
+    .card-button.installed{
+      border-color:#cceadc;
+      color:var(--success);
+      background:var(--success-soft);
+      cursor:default;
+    }
+
+    .card-button.danger{
+      border-color:#f0cbd1;
+      color:var(--danger);
+      background:#fff5f6;
+    }
+
+    .card-button.danger:hover{
+      border-color:#e7aeb7;
+      background:#ffedef;
+    }
+
+    .card-button:disabled{
+      cursor:default;
+      transform:none;
+    }
+
+    .empty-state{
+      display:none;
+      padding:64px 20px;
+      border:1px dashed var(--line-strong);
+      border-radius:18px;
+      color:var(--muted);
+      text-align:center;
+      background:rgba(255,255,255,.6);
+    }
+
+    .empty-state strong,
+    .empty-state span{display:block}
+
+    .empty-state strong{color:var(--ink);font-size:16px}
+    .empty-state span{margin-top:6px;font-size:13px}
+
+    .store-modal{
+      position:fixed;
+      inset:0;
+      z-index:80;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(9,14,23,.45);
+      backdrop-filter:blur(9px);
+    }
+
+    .store-modal.open{display:flex}
+
+    .store-dialog{
+      width:min(520px,100%);
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.6);
+      border-radius:22px;
+      background:#fff;
+      box-shadow:0 28px 90px rgba(8,15,30,.26);
+    }
+
+    .dialog-visual{
+      min-height:155px;
+      display:flex;
+      align-items:flex-end;
+      padding:24px;
+      color:#fff;
+      background:linear-gradient(135deg,#172148,#315efb);
+    }
+
+    .market-app[data-scope="community"] .dialog-visual{background:linear-gradient(135deg,#4b2215,#f06434)}
+
+    .dialog-app{
+      display:flex;
+      align-items:center;
+      gap:14px;
+    }
+
+    .dialog-app .app-icon{width:66px;height:66px;border-color:rgba(255,255,255,.2)}
+    .dialog-app h3{margin:0;font-size:24px;letter-spacing:-.03em}
+    .dialog-app p{margin:5px 0 0;color:rgba(255,255,255,.72);font-size:12px}
+
+    .dialog-body{padding:23px 24px 24px}
+
+    .dialog-description{
+      margin:0;
+      color:#5e6674;
+      font-size:14px;
+      line-height:1.7;
+    }
+
+    .dialog-facts{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+      margin:20px 0;
+    }
+
+    .dialog-fact{
+      padding:12px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#f8f9fb;
+    }
+
+    .dialog-fact span,
+    .dialog-fact strong{display:block}
+
+    .dialog-fact span{color:var(--muted);font-size:10px}
+    .dialog-fact strong{margin-top:5px;font-size:13px}
+
+    .dialog-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:9px;
+    }
+
+    .cloud-detail-dialog{
+      width:min(920px,100%);
+      height:min(760px,calc(100dvh - 48px));
+      min-height:520px;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .cloud-detail-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      padding:17px 18px 17px 22px;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+
+    .cloud-detail-copy{min-width:0}
+    .cloud-detail-copy span{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+    .cloud-detail-copy h3{overflow:hidden;margin:4px 0 0;font-size:20px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
+    .cloud-detail-copy p{overflow:hidden;margin:4px 0 0;color:var(--muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+    .cloud-detail-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+    .cloud-detail-close{width:38px;min-width:38px;padding:0;font-size:22px;line-height:1}
+
+    .cloud-detail-body{
+      position:relative;
+      flex:1 1 auto;
+      min-height:0;
+      background:#f7f8fa;
+    }
+
+    .cloud-detail-frame{width:100%;height:100%;display:block;border:0;background:#fff}
+    .cloud-detail-state{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding:24px;
+      background:rgba(247,248,250,.94);
+      text-align:center;
+    }
+    .cloud-detail-state[hidden]{display:none}
+    .cloud-detail-state-card{width:min(400px,100%);padding:24px;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:var(--shadow-soft)}
+    .cloud-detail-state-card strong{display:block;font-size:17px}
+    .cloud-detail-state-card p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
+    .cloud-detail-spinner{width:28px;height:28px;margin:0 auto 14px;border:3px solid rgba(49,94,251,.15);border-top-color:var(--official);border-radius:50%;animation:detail-spin .8s linear infinite}
+    @keyframes detail-spin{to{transform:rotate(360deg)}}
+
+    .toast{
+      position:fixed;
+      right:22px;
+      bottom:22px;
+      z-index:100;
+      max-width:min(360px,calc(100% - 44px));
+      padding:12px 15px;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:12px;
+      color:#fff;
+      background:#151b25;
+      box-shadow:0 18px 45px rgba(10,16,27,.22);
+      font-size:13px;
+      opacity:0;
+      transform:translateY(10px);
+      pointer-events:none;
+      transition:opacity .2s ease,transform .2s ease;
+    }
+
+    .toast.show{opacity:1;transform:translateY(0)}
+
+    @media (max-width:980px){
+      .market-topbar-inner{grid-template-columns:auto 1fr auto}
+      .preview-chip{display:none}
+      .market-hero{grid-template-columns:minmax(0,1fr) 290px}
+      .hero-content{padding:32px}
+      .hero-orbit{right:-20px}
+      .hero-cube{right:36px}
+      .hero-mini-card{right:14px}
+      .app-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+
+    @media (max-width:720px){
+      .market-topbar-inner{
+        width:min(100% - 28px,1180px);
+        grid-template-columns:1fr auto;
+        gap:12px;
+        padding:12px 0;
+      }
+      .market-search{grid-column:1/-1;grid-row:2}
+      .market-brand-copy span{display:none}
+      .market-main{width:min(100% - 28px,1180px);padding-top:18px}
+      .scope-switch{grid-template-columns:1fr}
+      .market-hero{grid-template-columns:1fr;min-height:unset}
+      .hero-content{padding:30px 25px 27px}
+      .hero-content h1{font-size:36px}
+      .hero-art{display:none}
+      .catalog-toolbar{align-items:flex-start;flex-direction:column;margin-top:24px}
+      .catalog-filters{justify-content:flex-start}
+      .catalog-count{border-left:0;padding-left:2px}
+      .store-modal{padding:10px}
+      .cloud-detail-dialog{height:calc(100dvh - 20px);min-height:460px;border-radius:18px}
+      .cloud-detail-head{align-items:flex-start;padding:14px}
+      .cloud-detail-actions .cloud-detail-open{display:none}
+    }
+
+    @media (max-width:520px){
+      .market-app{padding-bottom:34px}
+      .market-top-actions .icon-button:first-of-type{display:none}
+      .scope-option{grid-template-columns:40px minmax(0,1fr) auto;padding:11px}
+      .scope-icon{width:40px;height:40px}
+      .scope-copy span{max-width:190px}
+      .hero-content h1{font-size:31px}
+      .hero-content p{font-size:14px}
+      .app-grid{grid-template-columns:1fr}
+      .app-card{min-height:250px}
+      .catalog-filters{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+      .filter-button{padding:0 8px}
+      .catalog-count{grid-column:1/-1}
+      .dialog-facts{grid-template-columns:1fr}
+      .store-modal{padding:12px}
+      .dialog-visual{min-height:130px}
+      .dialog-body{padding:19px}
+    }
+
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{scroll-behavior:auto!important;transition:none!important}
+    }
+  </style>
+</head>
+<body>
+  <div class="market-app" id="marketApp" data-scope="official">
+    <header class="market-topbar">
+      <div class="market-topbar-inner">
+        <div class="market-brand" aria-label="Cubic Store">
+          <div class="market-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m12 2 8 4.6v9.2L12 20.5 4 15.8V6.6L12 2Z" stroke="currentColor" stroke-width="1.8"/><path d="m4.4 6.8 7.6 4.4 7.6-4.4M12 11.2v8.7" stroke="currentColor" stroke-width="1.8"/></svg>
+          </div>
+          <div class="market-brand-copy">
+            <strong>Cubic Store</strong>
+            <span>Device apps</span>
+          </div>
+        </div>
+
+        <label class="market-search" for="storeSearchInput">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="storeSearchInput" type="search" autocomplete="off" placeholder="搜索应用、作者或分类">
+        </label>
+
+        <div class="market-top-actions">
+          <span class="preview-chip is-loading" id="storeConnectionChip">正在连接设备目录</span>
+          <button class="icon-button" id="refreshPreviewBtn" type="button" aria-label="刷新目录">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.1 8.2A7 7 0 0 1 18.8 7M17.9 15.8A7 7 0 0 1 5.2 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-button" id="previewSettingsBtn" type="button" aria-label="商店设置">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19 13.5v-3l-2-.6a7 7 0 0 0-.7-1.7l1-1.9-2.1-2.1-1.9 1a7 7 0 0 0-1.7-.7l-.6-2H8l-.6 2a7 7 0 0 0-1.7.7l-1.9-1-2.1 2.1 1 1.9A7 7 0 0 0 2 9.9l-2 .6v3l2 .6a7 7 0 0 0 .7 1.7l-1 1.9 2.1 2.1 1.9-1a7 7 0 0 0 1.7.7l.6 2h3l.6-2a7 7 0 0 0 1.7-.7l1.9 1 2.1-2.1-1-1.9a7 7 0 0 0 .7-1.7l2-.6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="icon-button" id="backToLauncherBtn" type="button" aria-label="返回设备主页">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m10 6-6 6 6 6M4 12h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="market-main">
+      <div class="scope-switch" role="tablist" aria-label="商店来源">
+        <button class="scope-option" type="button" role="tab" aria-selected="true" data-scope="official">
+          <span class="scope-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 20 6v5.8c0 4.7-3.2 8-8 9.4-4.8-1.4-8-4.7-8-9.4V6l8-3.2Z" stroke="currentColor" stroke-width="1.7"/><path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="scope-copy"><strong>官方商店</strong><span>系统团队维护与签名验证</span></span>
+          <span class="scope-count" id="officialCount">6</span>
+        </button>
+        <button class="scope-option" type="button" role="tab" aria-selected="false" data-scope="community">
+          <span class="scope-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="9" r="3" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="8" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M2.8 19c.4-3.5 2.1-5.3 5.2-5.3s4.8 1.8 5.2 5.3M14 13.1c.8-.6 1.8-.9 3-.9 2.5 0 3.9 1.5 4.2 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <span class="scope-copy"><strong>社区应用</strong><span>来自创作者的玩法与扩展</span></span>
+          <span class="scope-count" id="communityCount">6</span>
+        </button>
+      </div>
+
+      <section class="market-hero" aria-labelledby="heroTitle">
+        <div class="hero-content">
+          <span class="hero-kicker" id="heroKicker">Cubic verified</span>
+          <h1 id="heroTitle">为你的 Cubic，装上更多可能。</h1>
+          <p id="heroDescription">官方应用经过兼容性与稳定性验证，与你的固件、屏幕和设备服务协同工作。</p>
+          <div class="hero-actions">
+            <button class="hero-button primary" id="heroExploreBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M14 7l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="heroPrimaryText">浏览官方精选</span>
+            </button>
+            <button class="hero-button creator-guide-button" id="creatorGuideBtn" type="button">创作应用</button>
+            <button class="hero-button" id="showInstalledBtn" type="button">查看已安装</button>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="hero-orbit"></div>
+          <div class="hero-cube">
+            <svg viewBox="0 0 120 120" fill="none"><path d="m60 10 42 24v50L60 109 18 84V34L60 10Z" fill="rgba(255,255,255,.18)" stroke="white" stroke-width="3"/><path d="m20 35 40 23 40-23M60 58v49" stroke="white" stroke-width="3"/><path d="m38 45 22-13 22 13-22 13-22-13Z" fill="rgba(255,255,255,.26)"/></svg>
+          </div>
+          <div class="hero-mini-card"><span id="heroCardLabel">官方应用</span><strong id="heroCardValue">安全、稳定、持续更新</strong></div>
+        </div>
+      </section>
+
+      <div class="community-note">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 9v4.5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div><strong>安装前请查看应用说明。</strong> 社区应用由独立创作者维护，请留意应用的权限、兼容性与更新说明。</div>
+      </div>
+
+      <section aria-labelledby="catalogTitle">
+        <div class="catalog-toolbar">
+          <div class="catalog-heading">
+            <span id="catalogEyebrow">Official collection</span>
+            <h2 id="catalogTitle">官方精选</h2>
+          </div>
+          <div class="catalog-filters" role="group" aria-label="应用筛选">
+            <button class="filter-button" type="button" data-filter="all" aria-pressed="true">全部</button>
+            <button class="filter-button" type="button" data-filter="game" aria-pressed="false">游戏</button>
+            <button class="filter-button" type="button" data-filter="weather" aria-pressed="false">天气</button>
+            <button class="filter-button" type="button" data-filter="clock" aria-pressed="false">时间与时钟</button>
+            <button class="filter-button" type="button" data-filter="media" aria-pressed="false">音乐与媒体</button>
+            <button class="filter-button" type="button" data-filter="tool" aria-pressed="false">工具</button>
+            <span class="catalog-count" id="catalogCount">0 个项目</span>
+          </div>
+        </div>
+
+        <div class="app-grid" id="appGrid"></div>
+        <div class="empty-state" id="emptyState">
+          <strong>应用加载中</strong>
+          <span>正在读取设备安装状态和云端目录。</span>
+        </div>
+      </section>
+    </main>
+
+    <div class="store-modal" id="storeModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dialogTitle">
+      <div class="store-dialog cloud-detail-dialog">
+        <header class="cloud-detail-head">
+          <div class="cloud-detail-copy">
+            <span>云端应用介绍</span>
+            <h3 id="dialogTitle">应用详情</h3>
+            <p id="dialogPublisher">正在打开 info.html</p>
+          </div>
+          <div class="cloud-detail-actions">
+            <a class="card-button cloud-detail-open" id="dialogOpenLink" href="#" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+            <button class="card-button cloud-detail-close" id="dialogCloseBtn" type="button" aria-label="关闭详情">×</button>
+          </div>
+        </header>
+        <div class="cloud-detail-body">
+          <iframe class="cloud-detail-frame" id="dialogInfoFrame" title="应用云端介绍" loading="eager" referrerpolicy="no-referrer"></iframe>
+          <div class="cloud-detail-state" id="dialogDetailLoading">
+            <div class="cloud-detail-state-card"><div class="cloud-detail-spinner" aria-hidden="true"></div><strong>详情页加载中</strong><p>正在获取云端 info.html 应用介绍。</p></div>
+          </div>
+          <div class="cloud-detail-state" id="dialogDetailError" hidden>
+            <div class="cloud-detail-state-card"><strong>无法加载应用介绍</strong><p id="dialogDetailErrorText">请检查网络后重试，或在新窗口打开。</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="previewToast" role="status" aria-live="polite"></div>
+  </div>
+
+  <script>
+    const DEFAULT_STORE_SERVER = "https://cubic.clocteck.com";
+    const STORE_SERVER_KEY = "cubic.mainpage.appStoreUrl";
+    const STORE_LANGUAGE_KEY = "cubic.mainpage.language";
+    const ACTIVE_PHASES = new Set(["queued","manifest","download","verify","extract","install","commit"]);
+    const TERMINAL_PHASES = new Set(["done","error","failed","cancelled"]);
+    const STORE_I18N = {
+      "zh-CN":{
+        search:"搜索应用、作者或分类",officialStore:"官方商店",officialSubtitle:"官方维护与验证",communityStore:"社区应用",communitySubtitle:"来自创作者的玩法与扩展",createApp:"创作应用",showInstalled:"查看已安装",showAll:"显示全部",all:"全部",detail:"详情",install:"安装",update:"更新",installed:"已安装",uninstall:"卸载",uninstalling:"卸载中",unavailable:"不可安装",preparing:"准备中",items:"个项目",loadingTitle:"应用加载中",loadingNote:"正在读取设备和云端目录。",emptyTitle:"没有匹配的应用",emptyNote:"试试其他关键词或筛选条件。",loadFailed:"无法读取应用目录",connected:"已连接",connecting:"正在连接设备目录",connectionFailed:"目录连接失败",officialPublisher:"Cubic 官方",communityPublisher:"社区开发者",officialBadge:"官方",communityBadge:"社区",cloudInfo:"云端应用介绍",openNew:"新窗口打开",warningStrong:"安装前请查看说明。",warningText:"社区应用由创作者维护，请留意权限与兼容性。",
+        categories:{game:"游戏",weather:"天气",clock:"时间与时钟",media:"音乐与媒体",tool:"工具"},kinds:{app:"设备应用",service:"后台服务",launcher:"启动器"},
+        scopes:{official:{kicker:"Cubic verified",title:"为 Cubic，装上更多可能。",description:"官方维护，兼容稳定。",primary:"浏览官方应用",cardLabel:"官方应用",cardValue:"稳定、兼容、持续更新",eyebrow:"Official collection",catalog:"官方应用"},community:{kicker:"Made by creators",title:"探索社区新作。",description:"发现更多游戏与设备扩展。",primary:"浏览社区应用",cardLabel:"社区创作",cardValue:"更多玩法，持续生长",eyebrow:"Community picks",catalog:"社区应用"}}
+      },
+      en:{search:"Search apps, creators, or categories",officialStore:"Official Store",officialSubtitle:"Maintained and verified",communityStore:"Community Apps",communitySubtitle:"Apps and extensions from creators",createApp:"Create an app",showInstalled:"Installed",showAll:"Show all",all:"All",detail:"Details",install:"Install",update:"Update",installed:"Installed",uninstall:"Uninstall",uninstalling:"Uninstalling",unavailable:"Unavailable",preparing:"Preparing",items:"items",loadingTitle:"Loading apps",loadingNote:"Reading device state and the cloud catalog.",emptyTitle:"No matching apps",emptyNote:"Try another search or category.",loadFailed:"Unable to load the catalog",connected:"Connected",connecting:"Connecting to the catalog",connectionFailed:"Catalog connection failed",officialPublisher:"Cubic Official",communityPublisher:"Community developer",officialBadge:"Official",communityBadge:"Community",cloudInfo:"Cloud app information",openNew:"Open in new window",warningStrong:"Read the app notes before installing.",warningText:"Community apps are creator-maintained; review permissions and compatibility.",categories:{game:"Games",weather:"Weather",clock:"Time & Clock",media:"Music & Media",tool:"Tools"},kinds:{app:"Device app",service:"Background service",launcher:"Launcher"},scopes:{official:{kicker:"Cubic verified",title:"More for your Cubic.",description:"Official, stable, compatible.",primary:"Browse official apps",cardLabel:"Official apps",cardValue:"Stable, compatible, updated",eyebrow:"Official collection",catalog:"Official apps"},community:{kicker:"Made by creators",title:"Explore community apps.",description:"Games and device extensions from creators.",primary:"Browse community apps",cardLabel:"Community apps",cardValue:"More ideas, more possibilities",eyebrow:"Community picks",catalog:"Community apps"}}},
+      ja:{search:"アプリ、作者、カテゴリを検索",officialStore:"公式ストア",officialSubtitle:"公式に保守・検証",communityStore:"コミュニティ",communitySubtitle:"クリエイターのアプリと拡張",createApp:"アプリを作る",showInstalled:"インストール済み",showAll:"すべて表示",all:"すべて",detail:"詳細",install:"インストール",update:"更新",installed:"インストール済み",uninstall:"削除",uninstalling:"削除中",unavailable:"利用不可",preparing:"準備中",items:"件",loadingTitle:"アプリを読み込み中",loadingNote:"デバイスとクラウドのカタログを取得中。",emptyTitle:"該当するアプリはありません",emptyNote:"別の検索条件をお試しください。",loadFailed:"カタログを読み込めません",connected:"接続済み",connecting:"カタログに接続中",connectionFailed:"接続失敗",officialPublisher:"Cubic 公式",communityPublisher:"コミュニティ開発者",officialBadge:"公式",communityBadge:"コミュニティ",cloudInfo:"クラウドアプリ情報",openNew:"新しいウィンドウで開く",warningStrong:"インストール前に説明を確認してください。",warningText:"コミュニティアプリは作者が保守します。",categories:{game:"ゲーム",weather:"天気",clock:"時計",media:"音楽・メディア",tool:"ツール"},kinds:{app:"デバイスアプリ",service:"バックグラウンドサービス",launcher:"ランチャー"},scopes:{official:{kicker:"Cubic verified",title:"Cubic をもっと便利に。",description:"公式・安定・互換。",primary:"公式アプリ",cardLabel:"公式アプリ",cardValue:"安定した継続更新",eyebrow:"Official collection",catalog:"公式アプリ"},community:{kicker:"Made by creators",title:"コミュニティアプリを探す。",description:"ゲームと拡張を発見。",primary:"コミュニティアプリ",cardLabel:"コミュニティ",cardValue:"より多くの可能性",eyebrow:"Community picks",catalog:"コミュニティ"}}},
+      "zh-TW":{search:"搜尋應用、作者或分類",officialStore:"官方商店",officialSubtitle:"官方維護與驗證",communityStore:"社群應用",communitySubtitle:"來自創作者的玩法與擴充",createApp:"創作應用",showInstalled:"查看已安裝",showAll:"顯示全部",all:"全部",detail:"詳情",install:"安裝",update:"更新",installed:"已安裝",uninstall:"卸載",uninstalling:"卸載中",unavailable:"不可安裝",preparing:"準備中",items:"個項目",loadingTitle:"應用載入中",loadingNote:"正在讀取裝置與雲端目錄。",emptyTitle:"沒有符合的應用",emptyNote:"請嘗試其他搜尋或分類。",loadFailed:"無法讀取應用目錄",connected:"已連線",connecting:"正在連線目錄",connectionFailed:"目錄連線失敗",officialPublisher:"Cubic 官方",communityPublisher:"社群開發者",officialBadge:"官方",communityBadge:"社群",cloudInfo:"雲端應用介紹",openNew:"新視窗開啟",warningStrong:"安裝前請查看說明。",warningText:"社群應用由創作者維護，請留意權限與相容性。",categories:{game:"遊戲",weather:"天氣",clock:"時間與時鐘",media:"音樂與媒體",tool:"工具"},kinds:{app:"裝置應用",service:"後台服務",launcher:"啟動器"},scopes:{official:{kicker:"Cubic verified",title:"為 Cubic，裝上更多可能。",description:"官方維護，相容穩定。",primary:"瀏覽官方應用",cardLabel:"官方應用",cardValue:"穩定、相容、持續更新",eyebrow:"Official collection",catalog:"官方應用"},community:{kicker:"Made by creators",title:"探索社群新作。",description:"發現更多遊戲與裝置擴充。",primary:"瀏覽社群應用",cardLabel:"社群創作",cardValue:"更多玩法，持續生長",eyebrow:"Community picks",catalog:"社群應用"}}}
+    };
+    const categoryLabels = {game:true,weather:true,clock:true,media:true,tool:true};
+    const kindLabels = {app:true,service:true,launcher:true};
+    const iconPalettes = [
+      "linear-gradient(145deg,#315efb,#1536a9)",
+      "linear-gradient(145deg,#6e55f7,#3f2bbd)",
+      "linear-gradient(145deg,#4aa6ff,#2461c9)",
+      "linear-gradient(145deg,#f55883,#b82c5f)",
+      "linear-gradient(145deg,#17a68a,#08705e)",
+      "linear-gradient(145deg,#f18d39,#a84317)",
+      "linear-gradient(145deg,#536273,#263442)"
+    ];
+
+    const params = new URLSearchParams(window.location.search);
+    const initialScope = params.get("scope") === "community" ? "community" : "official";
+    const initialCategory = Object.prototype.hasOwnProperty.call(categoryLabels,params.get("category")) ? params.get("category") : "all";
+    const initialKind = ["app","service","launcher"].includes(params.get("kind")) ? params.get("kind") : "";
+    const requestedLanguage = params.get("lang") || params.get("language") || "";
+    const storedLanguage = String(requestedLanguage || localStorage.getItem(STORE_LANGUAGE_KEY) || "zh-CN").replace(/_/g,"-");
+    if(requestedLanguage){
+      try{localStorage.setItem(STORE_LANGUAGE_KEY,storedLanguage);}catch(err){}
+    }
+    const currentLanguage = /^en/i.test(storedLanguage) ? "en" : (/^ja/i.test(storedLanguage) ? "ja" : (/^zh-(tw|hant)/i.test(storedLanguage) ? "zh-TW" : "zh-CN"));
+    function storeLocale(){return STORE_I18N[currentLanguage] || STORE_I18N.en;}
+    function storeText(key){return storeLocale()[key] || STORE_I18N.en[key] || key;}
+    function categoryLabel(value){return (storeLocale().categories && storeLocale().categories[value]) || STORE_I18N.en.categories[value] || value;}
+    function kindLabel(value){return (storeLocale().kinds && storeLocale().kinds[value]) || STORE_I18N.en.kinds[value] || value;}
+    function scopeCopyFor(value){return (storeLocale().scopes && storeLocale().scopes[value]) || STORE_I18N.en.scopes[value];}
+    function applyStoreLanguage(){
+      document.documentElement.lang = currentLanguage;
+      document.getElementById("storeSearchInput").placeholder = storeText("search");
+      const official = document.querySelector('.scope-option[data-scope="official"] .scope-copy');
+      official.querySelector("strong").textContent = storeText("officialStore");
+      official.querySelector("span").textContent = storeText("officialSubtitle");
+      const community = document.querySelector('.scope-option[data-scope="community"] .scope-copy');
+      community.querySelector("strong").textContent = storeText("communityStore");
+      community.querySelector("span").textContent = storeText("communitySubtitle");
+      document.getElementById("creatorGuideBtn").textContent = storeText("createApp");
+      const filterLabels = {all:storeText("all"),game:categoryLabel("game"),weather:categoryLabel("weather"),clock:categoryLabel("clock"),media:categoryLabel("media"),tool:categoryLabel("tool")};
+      document.querySelectorAll(".filter-button").forEach((button)=>{button.textContent = filterLabels[button.dataset.filter] || button.textContent;});
+      const warning = document.querySelector(".community-note div");
+      warning.innerHTML = "<strong>" + escapeHtml(storeText("warningStrong")) + "</strong> " + escapeHtml(storeText("warningText"));
+      document.querySelector(".cloud-detail-copy span").textContent = storeText("cloudInfo");
+      document.getElementById("dialogOpenLink").textContent = storeText("openNew");
+    }
+    const state = {
+      apps:[], rawItems:[], system:null, scope:initialScope, filter:initialCategory,
+      kindOnly:initialKind, installedOnly:false, query:"", selected:null,
+      jobsById:new Map(), pending:new Map(), handledJobs:new Set(), pollTimer:0,
+      uninstalling:new Set(), loading:false, loadedOnce:false, loadError:""
+    };
+    const appRoot = document.getElementById("marketApp");
+    const grid = document.getElementById("appGrid");
+    const emptyState = document.getElementById("emptyState");
+    const modal = document.getElementById("storeModal");
+    const toast = document.getElementById("previewToast");
+    const connectionChip = document.getElementById("storeConnectionChip");
+    const refreshButton = document.getElementById("refreshPreviewBtn");
+    const detailFrame = document.getElementById("dialogInfoFrame");
+    const detailLoading = document.getElementById("dialogDetailLoading");
+    const detailError = document.getElementById("dialogDetailError");
+    const detailOpenLink = document.getElementById("dialogOpenLink");
+    let toastTimer = 0;
+    let detailLoadTimer = 0;
+
+    function escapeHtml(value){
+      return String(value == null ? "" : value).replace(/[&<>\"]/g,(ch)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+    }
+
+    function normalizeServer(value){
+      const text = String(value || "").trim().replace(/\/+$/,"");
+      if(!text){return DEFAULT_STORE_SERVER;}
+      return /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : ("https://" + text);
+    }
+
+    function currentServer(){
+      return normalizeServer(localStorage.getItem(STORE_SERVER_KEY) || DEFAULT_STORE_SERVER);
+    }
+
+    async function api(path,init){
+      const response = await fetch(path,Object.assign({cache:"no-store"},init || {}));
+      const text = await response.text();
+      let data = null;
+      try{data = text ? JSON.parse(text) : null;}catch(err){}
+      if(!response.ok){
+        throw new Error((data && (data.error || data.message)) || ("HTTP " + response.status));
+      }
+      return data;
+    }
+
+    function localizedValue(raw,prefix){
+      if(currentLanguage === "en"){
+        return String(raw[prefix + "_en"] || raw[prefix] || "").trim();
+      }
+      if(currentLanguage === "ja"){
+        return String(raw[prefix + "_ja"] || raw[prefix + "_en"] || raw[prefix] || "").trim();
+      }
+      if(currentLanguage === "zh-TW"){
+        return String(raw[prefix + "_zh_tw"] || raw[prefix + "_zh_hant"] || raw[prefix + "_en"] || raw[prefix] || "").trim();
+      }
+      return String(raw[prefix + "_zh_cn"] || raw[prefix + "_zh"] || raw[prefix + "_en"] || raw[prefix] || "").trim();
+    }
+
+    function initials(value){
+      const parts = String(value || "AP").trim().split(/[\s_-]+/).filter(Boolean);
+      return (parts.length > 1 ? (parts[0][0] + parts[1][0]) : parts[0].slice(0,2)).toUpperCase();
+    }
+
+    function iconBackground(id){
+      let hash = 0;
+      String(id || "").split("").forEach((char)=>{hash = (hash * 33 + char.charCodeAt(0)) >>> 0;});
+      return iconPalettes[hash % iconPalettes.length];
+    }
+
+    function formatBytes(value){
+      const bytes = Number(value || 0);
+      if(!Number.isFinite(bytes) || bytes <= 0){return "--";}
+      if(bytes >= 1024 * 1024){return (bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 1 : 2) + " MB";}
+      if(bytes >= 1024){return Math.round(bytes / 1024) + " KB";}
+      return bytes + " B";
+    }
+
+    function compareVersions(left,right){
+      const a = String(left || "").match(/\d+/g) || [];
+      const b = String(right || "").match(/\d+/g) || [];
+      const length = Math.max(a.length,b.length);
+      for(let i=0;i<length;i+=1){
+        const av = Number(a[i] || 0);
+        const bv = Number(b[i] || 0);
+        if(av !== bv){return av > bv ? 1 : -1;}
+      }
+      return 0;
+    }
+
+    function systemInstallJobs(system){
+      const install = system && system.app_install;
+      if(!install){return [];}
+      if(Array.isArray(install.jobs)){return install.jobs.filter(Boolean);}
+      return Number(install.seq || 0) > 0 ? [install] : [];
+    }
+
+    function installedMap(system){
+      const map = new Map();
+      const installed = system && Array.isArray(system.installed_apps) ? system.installed_apps : [];
+      installed.forEach((item)=>{
+        const id = String(item && item.id || "").trim();
+        if(id){map.set(id,item);}
+      });
+      const launcherJobs = systemInstallJobs(system)
+        .filter((job)=>String(job && job.app_id || "") === "launcher" && String(job && job.phase || "") === "done")
+        .sort((a,b)=>Number(b.seq || 0) - Number(a.seq || 0));
+      if(!map.has("launcher")){
+        map.set("launcher",{id:"launcher",name:"Launcher",kind:"launcher",source:"sd",version:String(launcherJobs[0] && launcherJobs[0].version || "")});
+      }
+      return map;
+    }
+
+    function normalizeItem(raw,installed){
+      const id = String(raw && (raw.app_id || raw.id) || "").trim();
+      const scope = String(raw && raw.catalog_scope || "community").toLowerCase() === "official" ? "official" : "community";
+      const kind = ["app","service","launcher"].includes(String(raw && raw.kind || "").toLowerCase()) ? String(raw.kind).toLowerCase() : "app";
+      const category = Object.prototype.hasOwnProperty.call(categoryLabels,String(raw && raw.category || "").toLowerCase()) ? String(raw.category).toLowerCase() : "tool";
+      const installedInfo = installed.get(id) || null;
+      const name = localizedValue(raw,"name") || String(raw && raw.name || id || "App");
+      const description = localizedValue(raw,"description") || (currentLanguage === "zh-CN" ? "暂无应用介绍。" : "No description available.");
+      const remoteVersion = String(raw && raw.version || "");
+      const installedVersion = String(installedInfo && (installedInfo.version || installedInfo.app_version) || "");
+      return {
+        id,name,description,scope,kind,category,
+        publisher:scope === "official" ? storeText("officialPublisher") : storeText("communityPublisher"),
+        verified:scope === "official",
+        version:remoteVersion || "--",
+        size:formatBytes(raw && raw.package_size),
+        icon:initials(name),
+        iconUrl:String(raw && raw.icon_url || ""),
+        iconBg:iconBackground(id),
+        manifestUrl:String(raw && raw.manifest_url || ""),
+        descriptionPageUrl:String(raw && raw.description_page_url || ""),
+        installed:!!installedInfo,
+        installedInfo,
+        update:!!installedInfo && !!remoteVersion && !!installedVersion && compareVersions(remoteVersion,installedVersion) > 0,
+        tags:[categoryLabel(category),kindLabel(kind)],
+        raw
+      };
+    }
+
+    function updateNormalizedApps(){
+      const installed = installedMap(state.system);
+      state.apps = state.rawItems.map((item)=>normalizeItem(item,installed)).filter((item)=>item.id);
+      state.apps.sort((a,b)=>{
+        if(a.installed !== b.installed){return a.installed ? -1 : 1;}
+        return a.name.localeCompare(b.name,currentLanguage,{numeric:true,sensitivity:"base"});
+      });
+    }
+
+    function setConnection(text,mode){
+      connectionChip.textContent = text;
+      connectionChip.classList.toggle("is-loading",mode === "loading");
+      connectionChip.classList.toggle("is-error",mode === "error");
+    }
+
+    function iconInnerMarkup(app){
+      const fallback = '<span class="app-icon-fallback">' + escapeHtml(app.icon) + '</span>';
+      if(!app.iconUrl){return fallback;}
+      return fallback + '<img src="' + escapeHtml(app.iconUrl) + '" alt="" loading="lazy" onload="this.previousElementSibling.style.display=\'none\'" onerror="this.remove()">';
+    }
+
+    function iconMarkup(app,className){
+      const imageClass = app.iconUrl ? " has-image" : "";
+      return '<div class="app-icon' + imageClass + (className ? " " + className : "") + '" style="--icon-bg:' + escapeHtml(app.iconBg) + '">' + iconInnerMarkup(app) + '</div>';
+    }
+
+    function publisherIcon(verified){
+      if(!verified){return "";}
+      return '<svg viewBox="0 0 24 24" fill="none" aria-label="已验证"><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".14"/><path d="m8 12.2 2.5 2.5 5.7-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    function scopeBadge(app){
+      const community = app.scope === "community";
+      const icon = community
+        ? '<svg viewBox="0 0 24 24" fill="none"><path d="M7 17c.6-2.3 2.2-3.5 5-3.5s4.4 1.2 5 3.5M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none"><path d="m7 12 3.2 3.2L17 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      return '<span class="scope-badge' + (community ? " community" : "") + '">' + icon + (community ? storeText("communityBadge") : storeText("officialBadge")) + '</span>';
+    }
+
+    function actionState(app){
+      const job = state.jobsById.get(app.id);
+      if(job && ACTIVE_PHASES.has(String(job.phase || ""))){
+        return {label:Math.max(0,Math.min(100,Math.round(Number(job.percent || 0)))) + "%",className:"card-button primary",disabled:true};
+      }
+      if(state.pending.has(app.id)){
+        return {label:storeText("preparing"),className:"card-button primary",disabled:true};
+      }
+      if(app.update){return {label:storeText("update"),className:"card-button primary",disabled:false};}
+      if(app.installed){return {label:storeText("installed"),className:"card-button installed",disabled:true};}
+      if(!app.manifestUrl){return {label:storeText("unavailable"),className:"card-button installed",disabled:true};}
+      return {label:storeText("install"),className:"card-button primary",disabled:false};
+    }
+
+    function cardMarkup(app){
+      const action = actionState(app);
+      const removable = !!(app.installedInfo && app.installedInfo.source === "sd" && app.id !== "launcher");
+      const uninstalling = state.uninstalling.has(app.id);
+      const uninstallButton = removable
+        ? '<button class="card-button danger" type="button" data-action="uninstall" data-app-id="' + escapeHtml(app.id) + '"' + (uninstalling ? " disabled" : "") + '>' + (uninstalling ? storeText("uninstalling") : storeText("uninstall")) + '</button>'
+        : "";
+      return '<article class="app-card" data-app-id="' + escapeHtml(app.id) + '">' +
+        '<div class="app-card-top">' + iconMarkup(app,"") +
+        '<div class="app-card-title"><h3>' + escapeHtml(app.name) + '</h3><div class="publisher">' + publisherIcon(app.verified) + '<span>' + escapeHtml(app.publisher) + '</span></div></div>' +
+        scopeBadge(app) + '</div>' +
+        '<p class="app-description">' + escapeHtml(app.description) + '</p>' +
+        '<div class="app-tags">' + app.tags.map((tag)=>'<span class="app-tag">' + escapeHtml(tag) + '</span>').join("") + '</div>' +
+        '<div class="app-card-footer"><div class="app-meta"><strong>v' + escapeHtml(app.version) + '</strong><span>' + escapeHtml(app.size) + ' · ' + escapeHtml(kindLabel(app.kind)) + '</span></div>' +
+        '<div class="app-actions"><button class="card-button" type="button" data-action="detail" data-app-id="' + escapeHtml(app.id) + '">' + escapeHtml(storeText("detail")) + '</button>' +
+        uninstallButton + '<button class="' + action.className + '" type="button" data-action="install" data-app-id="' + escapeHtml(app.id) + '"' + (action.disabled ? " disabled" : "") + '>' + escapeHtml(action.label) + '</button></div></div></article>';
+    }
+
+    function visibleApps(){
+      const query = state.query.trim().toLowerCase();
+      return state.apps.filter((app)=>{
+        if(app.scope !== state.scope){return false;}
+        if(state.filter !== "all" && app.category !== state.filter){return false;}
+        if(state.kindOnly && app.kind !== state.kindOnly){return false;}
+        if(state.installedOnly && !app.installed){return false;}
+        if(query){
+          const text = [app.id,app.name,app.publisher,app.description,app.category,app.kind].concat(app.tags).join(" ").toLowerCase();
+          if(!text.includes(query)){return false;}
+        }
+        return true;
+      });
+    }
+
+    function render(){
+      const apps = visibleApps();
+      grid.innerHTML = apps.map(cardMarkup).join("");
+      grid.style.display = apps.length ? "grid" : "none";
+      emptyState.style.display = apps.length ? "none" : "block";
+      if(!apps.length){
+        const title = emptyState.querySelector("strong");
+        const note = emptyState.querySelector("span");
+        if(state.loading || !state.loadedOnce){
+          title.textContent = storeText("loadingTitle");
+          note.textContent = storeText("loadingNote");
+        }else if(state.loadError){
+          title.textContent = storeText("loadFailed");
+          note.textContent = state.loadError;
+        }else{
+          title.textContent = storeText("emptyTitle");
+          note.textContent = storeText("emptyNote");
+        }
+      }
+      document.getElementById("catalogCount").textContent = apps.length + " " + storeText("items");
+      document.getElementById("officialCount").textContent = state.apps.filter((app)=>app.scope === "official").length;
+      document.getElementById("communityCount").textContent = state.apps.filter((app)=>app.scope === "community").length;
+      const installedButton = document.getElementById("showInstalledBtn");
+      installedButton.textContent = state.installedOnly ? storeText("showAll") : storeText("showInstalled");
+      installedButton.setAttribute("aria-pressed",state.installedOnly ? "true" : "false");
+    }
+
+    function updateScope(scope){
+      state.scope = scope === "community" ? "community" : "official";
+      appRoot.dataset.scope = state.scope;
+      document.querySelectorAll(".scope-option").forEach((button)=>button.setAttribute("aria-selected",button.dataset.scope === state.scope ? "true" : "false"));
+      const copy = scopeCopyFor(state.scope);
+      document.getElementById("heroKicker").textContent = copy.kicker;
+      document.getElementById("heroTitle").textContent = copy.title;
+      document.getElementById("heroDescription").textContent = copy.description;
+      document.getElementById("heroPrimaryText").textContent = copy.primary;
+      document.getElementById("heroCardLabel").textContent = copy.cardLabel;
+      document.getElementById("heroCardValue").textContent = copy.cardValue;
+      document.getElementById("catalogEyebrow").textContent = copy.eyebrow;
+      document.getElementById("catalogTitle").textContent = copy.catalog;
+      render();
+    }
+
+    function showToast(message){
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add("show");
+      toastTimer = window.setTimeout(()=>toast.classList.remove("show"),2800);
+    }
+
+    function syncJobs(system,announce){
+      state.jobsById.clear();
+      systemInstallJobs(system).forEach((job)=>{
+        const id = String(job && job.app_id || "").trim();
+        const phase = String(job && job.phase || "").toLowerCase();
+        const seq = Number(job && job.seq || 0);
+        if(id){state.jobsById.set(id,job);}
+        if(id && (ACTIVE_PHASES.has(phase) || TERMINAL_PHASES.has(phase))){state.pending.delete(id);}
+        if(!announce || seq <= 0 || state.handledJobs.has(seq) || !TERMINAL_PHASES.has(phase)){return;}
+        state.handledJobs.add(seq);
+        const app = state.apps.find((item)=>item.id === id);
+        const name = app ? app.name : id;
+        if(phase === "done"){showToast("已完成安装或更新：" + name);}
+        else{showToast((job.error || "安装失败") + (name ? (" · " + name) : ""));}
+      });
+      if(!announce){
+        systemInstallJobs(system).forEach((job)=>{const seq=Number(job && job.seq || 0);if(seq>0&&TERMINAL_PHASES.has(String(job.phase||"").toLowerCase())){state.handledJobs.add(seq);}});
+      }
+    }
+
+    function hasActiveInstall(){
+      return Array.from(state.jobsById.values()).some((job)=>ACTIVE_PHASES.has(String(job && job.phase || "").toLowerCase()));
+    }
+
+    function schedulePoll(){
+      window.clearTimeout(state.pollTimer);
+      const now = Date.now();
+      state.pending.forEach((value,id)=>{
+        if(now - value.startedAt > 30000){state.pending.delete(id);showToast("未收到安装任务状态：" + id);}
+      });
+      if(hasActiveInstall() || state.pending.size){
+        state.pollTimer = window.setTimeout(refreshSystemState,700);
+      }
+    }
+
+    async function refreshSystemState(){
+      try{
+        state.system = await api("/api/system/state");
+        updateNormalizedApps();
+        syncJobs(state.system,true);
+        if(state.selected){state.selected = state.apps.find((item)=>item.id === state.selected.id) || null;}
+        render();
+      }catch(err){
+        showToast("读取安装进度失败：" + err.message);
+      }finally{
+        schedulePoll();
+      }
+    }
+
+    async function loadCatalog(silent){
+      if(state.loading){return;}
+      state.loading = true;
+      state.loadError = "";
+      refreshButton.disabled = true;
+      setConnection(storeText("connecting"),"loading");
+      render();
+      try{
+        const server = currentServer();
+        const [system,catalog] = await Promise.all([
+          api("/api/system/state"),
+          api("/api/system/apps/catalog?server=" + encodeURIComponent(server) + "&channel=stable")
+        ]);
+        state.system = system;
+        state.rawItems = Array.isArray(catalog && catalog.items) ? catalog.items : [];
+        updateNormalizedApps();
+        syncJobs(system,false);
+        state.loadedOnce = true;
+        setConnection(storeText("connected") + " · " + state.apps.length,"");
+        render();
+        if(!silent){showToast("应用目录已刷新");}
+        schedulePoll();
+      }catch(err){
+        state.rawItems = [];
+        state.apps = [];
+        state.loadedOnce = true;
+        state.loadError = err.message || "请检查设备网络和商店地址。";
+        setConnection(storeText("connectionFailed"),"error");
+        render();
+        if(!silent){showToast("刷新失败：" + (err.message || err));}
+      }finally{
+        state.loading = false;
+        refreshButton.disabled = false;
+        render();
+      }
+    }
+
+    function detailUrlWithLanguage(value){
+      const source = String(value || "").trim();
+      if(!source){return "";}
+      try{
+        const url = new URL(source,window.location.href);
+        url.searchParams.set("lang",currentLanguage);
+        url.searchParams.set("language",currentLanguage);
+        return url.href;
+      }catch(err){return source;}
+    }
+
+    function setDetailLoading(loading){
+      detailLoading.hidden = !loading;
+      if(loading){detailError.hidden = true;}
+    }
+
+    function showDetailError(message){
+      window.clearTimeout(detailLoadTimer);
+      detailLoadTimer = 0;
+      document.getElementById("dialogDetailErrorText").textContent = message || "请检查网络后重试，或在新窗口打开。";
+      detailLoading.hidden = true;
+      detailError.hidden = false;
+    }
+
+    function openDetail(app){
+      state.selected = app;
+      const url = detailUrlWithLanguage(app.descriptionPageUrl);
+      document.getElementById("dialogTitle").textContent = app.name;
+      document.getElementById("dialogPublisher").textContent = (app.scope === "official" ? storeText("officialStore") : storeText("communityStore")) + " · v" + app.version;
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden","false");
+      window.clearTimeout(detailLoadTimer);
+      detailError.hidden = true;
+      if(url){
+        detailOpenLink.href = url;
+        detailOpenLink.hidden = false;
+        detailFrame.removeAttribute("srcdoc");
+        setDetailLoading(true);
+        detailFrame.src = url;
+        detailLoadTimer = window.setTimeout(()=>{
+          if(modal.classList.contains("open")){showDetailError("云端介绍页加载超时，可尝试在新窗口打开。");}
+        },12000);
+      }else{
+        detailOpenLink.hidden = true;
+        detailOpenLink.removeAttribute("href");
+        detailFrame.removeAttribute("src");
+        detailFrame.srcdoc = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:28px;font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17201b;background:#fff}h1{margin:0 0 14px;font-size:28px}p{color:#5e6674}</style></head><body><h1>' + escapeHtml(app.name) + '</h1><p>' + escapeHtml(app.description) + '</p></body></html>';
+        setDetailLoading(false);
+      }
+    }
+
+    function closeDetail(){
+      window.clearTimeout(detailLoadTimer);
+      detailLoadTimer = 0;
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden","true");
+      detailLoading.hidden = true;
+      detailError.hidden = true;
+      detailFrame.removeAttribute("srcdoc");
+      detailFrame.src = "about:blank";
+      state.selected = null;
+    }
+
+    async function installApp(app){
+      if(!app || !app.manifestUrl || actionState(app).disabled){return;}
+      const action = app.update ? storeText("update") : storeText("install");
+      state.pending.set(app.id,{startedAt:Date.now(),action});
+      closeDetail();
+      render();
+      try{
+        await api("/api/system/apps",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({manifest_url:app.manifestUrl,app_id:app.id,name:app.raw && app.raw.name || app.name})
+        });
+        showToast((currentLanguage === "zh-CN" ? "已开始" : "Started ") + action + "：" + app.name);
+      }catch(err){
+        state.pending.delete(app.id);
+        render();
+        showToast(action + "失败：" + (err.message || err));
+      }
+      schedulePoll();
+    }
+
+    async function uninstallApp(app){
+      if(!app || !app.installedInfo || app.installedInfo.source !== "sd" || app.id === "launcher" || state.uninstalling.has(app.id)){return;}
+      if(!window.confirm((currentLanguage === "zh-CN" ? "确定卸载「" : "Uninstall ") + app.name + (currentLanguage === "zh-CN" ? "」吗？" : "?"))){return;}
+      state.uninstalling.add(app.id);
+      render();
+      try{
+        await api("/api/system/apps?id=" + encodeURIComponent(app.id),{method:"DELETE"});
+        state.system = await api("/api/system/state");
+        updateNormalizedApps();
+        syncJobs(state.system,false);
+        showToast((currentLanguage === "zh-CN" ? "已卸载：" : "Uninstalled: ") + app.name);
+      }catch(err){
+        showToast("卸载失败：" + (err.message || err));
+      }finally{
+        state.uninstalling.delete(app.id);
+        render();
+      }
+    }
+
+    document.querySelectorAll(".scope-option").forEach((button)=>button.addEventListener("click",()=>updateScope(button.dataset.scope)));
+    document.querySelectorAll(".filter-button").forEach((button)=>button.addEventListener("click",()=>{
+      state.filter = button.dataset.filter;
+      document.querySelectorAll(".filter-button").forEach((item)=>item.setAttribute("aria-pressed",item === button ? "true" : "false"));
+      render();
+    }));
+    document.getElementById("storeSearchInput").addEventListener("input",(event)=>{state.query=event.target.value;render();});
+    document.getElementById("heroExploreBtn").addEventListener("click",()=>document.getElementById("catalogTitle").scrollIntoView({behavior:"smooth",block:"start"}));
+    document.getElementById("showInstalledBtn").addEventListener("click",()=>{
+      state.installedOnly = !state.installedOnly;
+      if(state.installedOnly){
+        state.filter = "all";
+        state.kindOnly = "";
+        document.querySelectorAll(".filter-button").forEach((item)=>item.setAttribute("aria-pressed",item.dataset.filter === "all" ? "true" : "false"));
+      }
+      render();
+      document.getElementById("catalogTitle").scrollIntoView({behavior:"smooth",block:"start"});
+    });
+    document.getElementById("creatorGuideBtn").addEventListener("click",()=>{window.location.href="/apps/launcher/creator-guide.html?lang="+encodeURIComponent(currentLanguage);});
+    refreshButton.addEventListener("click",()=>loadCatalog(false));
+    document.getElementById("previewSettingsBtn").addEventListener("click",()=>{
+      const next = window.prompt("应用目录服务器地址",currentServer());
+      if(next == null){return;}
+      const normalized = normalizeServer(next);
+      if(normalized === DEFAULT_STORE_SERVER){localStorage.removeItem(STORE_SERVER_KEY);}else{localStorage.setItem(STORE_SERVER_KEY,normalized);}
+      loadCatalog(false);
+    });
+    document.getElementById("backToLauncherBtn").addEventListener("click",()=>{window.location.href="/main";});
+    grid.addEventListener("click",(event)=>{
+      const button = event.target.closest("button[data-app-id]");
+      if(!button){return;}
+      const app = state.apps.find((item)=>item.id === button.dataset.appId);
+      if(!app){return;}
+      if(button.dataset.action === "detail"){openDetail(app);}
+      else if(button.dataset.action === "uninstall"){uninstallApp(app);}
+      else{installApp(app);}
+    });
+    document.getElementById("dialogCloseBtn").addEventListener("click",closeDetail);
+    detailFrame.addEventListener("load",()=>{
+      if(!modal.classList.contains("open")){return;}
+      window.clearTimeout(detailLoadTimer);
+      detailLoadTimer = 0;
+      setDetailLoading(false);
+    });
+    detailFrame.addEventListener("error",()=>{
+      if(modal.classList.contains("open")){showDetailError("云端介绍页加载失败，可尝试在新窗口打开。");}
+    });
+    modal.addEventListener("click",(event)=>{if(event.target===modal){closeDetail();}});
+    window.addEventListener("keydown",(event)=>{if(event.key==="Escape"&&modal.classList.contains("open")){closeDetail();}});
+
+    appRoot.dataset.scope = state.scope;
+    document.querySelectorAll(".filter-button").forEach((button)=>button.setAttribute("aria-pressed",button.dataset.filter===state.filter?"true":"false"));
+    applyStoreLanguage();
+    updateScope(state.scope);
+    loadCatalog(true);
+  </script>
+</body>
+</html>

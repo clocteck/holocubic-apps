@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Cubic 应用创作指南</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --ink:#171712;
+      --muted:#6e6c65;
+      --line:#e4e1d9;
+      --canvas:#f5f3ee;
+      --surface:#fff;
+      --accent:#e65f32;
+      --accent-deep:#ad3517;
+      --accent-soft:#fff0e9;
+      --blue:#315efb;
+      --shadow:0 18px 55px rgba(37,29,20,.08);
+    }
+    *{box-sizing:border-box}
+    html{background:var(--canvas);scroll-behavior:smooth}
+    body{
+      margin:0;
+      min-width:320px;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at 8% -10%,rgba(230,95,50,.12),transparent 28rem),
+        radial-gradient(circle at 94% 2%,rgba(49,94,251,.08),transparent 25rem),
+        var(--canvas);
+      font-family:Inter,"SF Pro Display","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    body.i18n-pending .topbar,body.i18n-pending main{visibility:hidden}
+    a{color:inherit}
+    button{font:inherit}
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:20;
+      border-bottom:1px solid rgba(216,211,201,.82);
+      background:rgba(249,248,244,.9);
+      backdrop-filter:blur(18px) saturate(145%);
+    }
+    .topbar-inner{
+      width:min(1080px,calc(100% - 40px));
+      min-height:68px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:20px;
+      margin:0 auto;
+    }
+    .brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+    .brand-mark{
+      width:38px;
+      height:38px;
+      display:grid;
+      place-items:center;
+      border-radius:12px;
+      color:#fff;
+      background:#171712;
+      box-shadow:0 8px 18px rgba(23,23,18,.17);
+    }
+    .brand-mark svg{width:22px;height:22px}
+    .brand-copy strong,.brand-copy span{display:block}
+    .brand-copy strong{font-size:15px}
+    .brand-copy span{margin-top:2px;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+    .back-link{
+      min-height:38px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:0 13px;
+      border:1px solid var(--line);
+      border-radius:11px;
+      background:rgba(255,255,255,.84);
+      text-decoration:none;
+      font-size:13px;
+    }
+    .back-link svg{width:17px;height:17px}
+    main{width:min(1080px,calc(100% - 40px));margin:0 auto;padding:30px 0 60px}
+    .hero{
+      position:relative;
+      overflow:hidden;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 290px;
+      min-height:360px;
+      border-radius:28px;
+      color:#fff;
+      background:linear-gradient(125deg,#3b2118 0%,#963616 54%,#ef6837 100%);
+      box-shadow:0 26px 64px rgba(113,43,19,.2);
+    }
+    .hero-copy{position:relative;z-index:2;padding:48px 48px 44px}
+    .kicker{
+      min-height:30px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:0 12px;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:10px;
+      background:rgba(255,255,255,.1);
+      color:rgba(255,255,255,.86);
+      font-size:11px;
+      letter-spacing:.1em;
+      text-transform:uppercase;
+    }
+    .kicker::before{content:"";width:7px;height:7px;border-radius:50%;background:#ffd59e}
+    h1{max-width:680px;margin:20px 0 0;font-size:clamp(38px,5vw,64px);line-height:1.02;letter-spacing:-.055em}
+    .hero-copy p{max-width:680px;margin:18px 0 0;color:rgba(255,255,255,.78);font-size:16px;line-height:1.75}
+    .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+    .button{
+      min-height:44px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:0 17px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:12px;
+      color:#fff;
+      background:rgba(255,255,255,.08);
+      text-decoration:none;
+      font-weight:650;
+      font-size:14px;
+    }
+    .button.primary{border-color:#fff;color:#8c2c11;background:#fff}
+    .button svg{width:18px;height:18px}
+    .hero-art{position:relative;min-height:300px}
+    .orbit{position:absolute;width:320px;height:320px;right:-34px;top:20px;border:1px solid rgba(255,255,255,.18);border-radius:50%}
+    .orbit::before,.orbit::after{content:"";position:absolute;border:1px solid rgba(255,255,255,.16);border-radius:50%}
+    .orbit::before{inset:42px}.orbit::after{inset:88px}
+    .cube{
+      position:absolute;
+      top:88px;
+      right:64px;
+      width:142px;
+      height:142px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(255,255,255,.25);
+      border-radius:38px;
+      background:rgba(255,255,255,.16);
+      box-shadow:0 24px 50px rgba(61,19,7,.25),inset 0 1px 0 rgba(255,255,255,.32);
+      transform:rotate(-8deg);
+      backdrop-filter:blur(14px);
+    }
+    .cube svg{width:72px;height:72px;transform:rotate(8deg)}
+    .section{margin-top:28px}
+    .section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:16px}
+    .eyebrow{display:block;color:var(--accent);font-size:11px;font-weight:750;letter-spacing:.11em;text-transform:uppercase}
+    h2{margin:6px 0 0;font-size:30px;line-height:1.1;letter-spacing:-.035em}
+    .lead{max-width:690px;margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
+    .steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .step,.panel{
+      border:1px solid var(--line);
+      border-radius:20px;
+      background:rgba(255,255,255,.88);
+      box-shadow:0 10px 28px rgba(37,29,20,.05);
+    }
+    .step{padding:20px}
+    .step-number{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;color:var(--accent-deep);background:var(--accent-soft);font-size:13px;font-weight:800}
+    .step strong{display:block;margin-top:16px;font-size:16px}
+    .step p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.65}
+    .two-column{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:16px}
+    .panel{padding:24px}
+    .panel h3{margin:0;font-size:20px;letter-spacing:-.025em}
+    .panel p{margin:9px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
+    .repo-link{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-top:18px;
+      padding:14px 16px;
+      border:1px solid #dfe5ff;
+      border-radius:14px;
+      color:#234ac7;
+      background:#f3f6ff;
+      text-decoration:none;
+      word-break:break-all;
+    }
+    .repo-link svg{width:20px;height:20px;flex:0 0 auto}
+    pre{
+      overflow:auto;
+      margin:16px 0 0;
+      padding:18px;
+      border:1px solid #292d34;
+      border-radius:15px;
+      color:#edf3ef;
+      background:#171a1f;
+      font:12.5px/1.7 "SFMono-Regular",Consolas,"Liberation Mono",monospace;
+      tab-size:2;
+      white-space:pre;
+    }
+    .field-list{display:grid;gap:9px;margin-top:17px}
+    .field-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;padding-top:9px;border-top:1px solid #eeebe4}
+    .field-row code{color:#a33a1e;font:12px/1.5 "SFMono-Regular",Consolas,monospace}
+    .field-row span{color:var(--muted);font-size:13px;line-height:1.6}
+    .submit-card{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:center;
+      gap:28px;
+      padding:30px;
+      border:1px solid #f0d1c3;
+      border-radius:24px;
+      background:linear-gradient(135deg,#fff 0%,#fff7f2 100%);
+      box-shadow:var(--shadow);
+    }
+    .submit-card h2{font-size:28px}
+    .submit-card p{max-width:700px;margin:10px 0 0;color:var(--muted);font-size:14px;line-height:1.75}
+    .submit-actions{display:flex;flex-direction:column;gap:9px;min-width:210px}
+    .submit-actions .button{border-color:var(--accent);color:#fff;background:var(--accent)}
+    .submit-actions .button.secondary{border-color:var(--line);color:var(--ink);background:#fff}
+    .checklist{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+    .checklist li{position:relative;padding-left:24px;color:var(--muted);font-size:13px;line-height:1.6}
+    .checklist li::before{content:"✓";position:absolute;left:0;top:0;color:#16865f;font-weight:800}
+    .footnote{margin:20px 0 0;color:#8b877f;font-size:12px;text-align:center}
+    @media(max-width:860px){
+      .hero{grid-template-columns:1fr}.hero-art{display:none}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.two-column{grid-template-columns:1fr}.submit-card{grid-template-columns:1fr}.submit-actions{flex-direction:row;min-width:0}
+    }
+    @media(max-width:560px){
+      .topbar-inner,main{width:min(100% - 28px,1080px)}
+      .brand-copy span{display:none}
+      main{padding-top:18px}
+      .hero{border-radius:22px}.hero-copy{padding:30px 24px}.hero-copy p{font-size:14px}h1{font-size:38px}
+      .steps{grid-template-columns:1fr}.panel{padding:19px}.field-row{grid-template-columns:1fr;gap:3px}.submit-card{padding:22px}.submit-actions{flex-direction:column}
+    }
+  </style>
+</head>
+<body class="i18n-pending">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" id="storeBrandLink" href="/apps/launcher/store-preview.html?scope=community" aria-label="Cubic Store">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 2 8 4.6v9.2L12 20.5 4 15.8V6.6L12 2Z" stroke="currentColor" stroke-width="1.8"/><path d="m4.4 6.8 7.6 4.4 7.6-4.4M12 11.2v8.7" stroke="currentColor" stroke-width="1.8"/></svg></span>
+        <span class="brand-copy"><strong>Cubic Creator</strong><span data-i18n="brandGuide">App guide</span></span>
+      </a>
+      <a class="back-link" id="storeBackLink" href="/apps/launcher/store-preview.html?scope=community"><svg viewBox="0 0 24 24" fill="none"><path d="m10 6-6 6 6 6M4 12h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="backCommunity">返回社区应用</span></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="kicker" data-i18n="heroKicker">Made for Cubic</span>
+        <h1 data-i18n="heroTitle">让你的创意，出现在 Cubic 上。</h1>
+        <p data-i18n="heroText">用 Lua 创作适合 320×240 屏幕的应用或服务。完成后将 GitHub 仓库发给 clocteck，通过审核即可上架到社区应用。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/clocteck/holocubic-apps/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18c-4 .8-4-2-5-2.5M14 21v-3.1c0-.9.1-1.4-.4-2 3.3-.4 6.8-1.6 6.8-7.4A5.8 5.8 0 0 0 18.9 4.5 5.4 5.4 0 0 0 18.7.6S17.5.2 14 2.1a13.4 13.4 0 0 0-6 0C4.5.2 3.3.6 3.3.6A5.4 5.4 0 0 0 3.1 4.5a5.8 5.8 0 0 0-1.5 4.1c0 5.8 3.5 7 6.8 7.4-.4.4-.8 1.2-.8 2V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="viewRepo">查看 GitHub 仓库</span></a>
+          <a class="button" href="#app-info" data-i18n="viewAppInfo">查看 app.info 写法</a>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true"><div class="orbit"></div><div class="cube"><svg viewBox="0 0 100 100" fill="none"><path d="m50 8 36 20v42L50 91 14 70V28L50 8Z" stroke="white" stroke-width="3"/><path d="m15 29 35 20 35-20M50 49v40" stroke="white" stroke-width="3"/></svg></div></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><span class="eyebrow" data-i18n="workflowKicker">Workflow</span><h2 data-i18n="workflowTitle">从想法到社区上架</h2><p class="lead" data-i18n="workflowLead">保持依赖简单、资源占用可控，并在真实 Cubic 设备上验证启动、交互和退出。</p></div></div>
+      <div class="steps">
+        <article class="step"><span class="step-number">01</span><strong data-i18n="step1Title">创建仓库</strong><p data-i18n="step1Text">新建公开 GitHub 仓库，或参考 clocteck 应用库中的现有项目。</p></article>
+        <article class="step"><span class="step-number">02</span><strong data-i18n="step2Title">编写应用</strong><p data-i18n-html="step2Text">以 <code>main.lua</code> 作为入口，准备图标、多语言名称和应用介绍。</p></article>
+        <article class="step"><span class="step-number">03</span><strong data-i18n="step3Title">设备测试</strong><p data-i18n="step3Text">在 320×240 屏幕和实际手柄上测试，确保能正常退出并释放资源。</p></article>
+        <article class="step"><span class="step-number">04</span><strong data-i18n="step4Title">邮件提交</strong><p data-i18n-html="step4Text">把应用 GitHub 地址发到 <code>sales@clocteck.com</code>，等待兼容性与安全审核。</p></article>
+      </div>
+    </section>
+
+    <section class="section two-column">
+      <article class="panel">
+        <h3 data-i18n="structureTitle">最小应用结构</h3>
+        <p data-i18n-html="structureText">一个基础应用只需要元数据、Lua 入口和 PNG 图标。如果需要 Web 管理页，可增加 <code>main.html</code>。</p>
+        <pre data-i18n="structureTree">my-cubic-app/
+├── app.info       # 应用元数据
+├── main.lua       # Lua 入口
+├── main.png       # 应用图标
+├── info.html      # 详情介绍（可选）
+└── main.html      # WebUI（可选）</pre>
+        <a class="repo-link" href="https://github.com/clocteck/holocubic-apps/" target="_blank" rel="noopener noreferrer"><span>github.com/clocteck/holocubic-apps</span><svg viewBox="0 0 24 24" fill="none"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </article>
+
+      <article class="panel" id="app-info">
+        <h3 data-i18n-html="appInfoTitle"><code>app.info</code> 基础写法</h3>
+        <p data-i18n-html="appInfoText">字段使用 <code>key = value</code> 格式。社区应用必须标注运行类型、内容分类和社区归属。</p>
+        <pre>name = My Cubic App
+name_zh_cn = 我的 Cubic 应用
+name_zh_tw = 我的 Cubic 應用
+name_en = My Cubic App
+name_ja = My Cubic App
+
+icon = main.png
+version = 0.1.0
+kind = app
+category = tool
+catalog_scope = community
+entry = main.lua
+
+description = A concise Cubic app
+description_zh_cn = 一个简洁的 Cubic 应用
+description_zh_tw = 一個簡潔的 Cubic 應用
+description_en = A concise Cubic app
+description_ja = Cubic 向けのシンプルなアプリ</pre>
+        <div class="field-list">
+          <div class="field-row"><code>kind</code><span data-i18n-html="kindText"><code>app</code> 表示前台应用，<code>service</code> 表示后台服务。社区项目不应使用 <code>launcher</code>。</span></div>
+          <div class="field-row"><code>category</code><span data-i18n-html="categoryText">可选 <code>game</code>、<code>weather</code>、<code>clock</code>、<code>media</code>、<code>tool</code>。</span></div>
+          <div class="field-row"><code>catalog_scope</code><span data-i18n-html="scopeText">社区提交填写 <code>community</code>；<code>official</code> 由 clocteck 官方维护。</span></div>
+          <div class="field-row"><code>entry / icon</code><span data-i18n="entryText">指向仓库内实际存在的 Lua 入口和 PNG 图标。</span></div>
+          <div class="field-row"><code>allow_webui</code><span data-i18n-html="webuiText">只有需要设备 Web 管理页时才设为 <code>true</code>。</span></div>
+          <div class="field-row"><code>name_* / description_*</code><span data-i18n="localeText">建议至少提供简体中文、繁体中文、英文和日文。</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="section submit-card">
+      <div>
+        <span class="eyebrow" data-i18n="submitKicker">Submit for review</span>
+        <h2 data-i18n="submitTitle">准备好后，把 GitHub 地址发给我们</h2>
+        <p data-i18n-html="submitText">请发邮件到 <strong>sales@clocteck.com</strong>，标题建议使用“Cubic 社区应用提交 - 应用名称”。clocteck 团队会检查元数据、可安装性、基础安全性和设备兼容性；通过后将上架到社区应用。</p>
+        <ul class="checklist">
+          <li data-i18n="check1">邮件中附上公开可访问的 GitHub 仓库地址</li>
+          <li data-i18n="check2">说明应用用途、支持的交互方式和已测试的固件版本</li>
+          <li data-i18n="check3">不要在仓库中提交密码、Token、私钥或其他敏感信息</li>
+        </ul>
+      </div>
+      <div class="submit-actions">
+        <a class="button" id="submitMailLink" href="mailto:sales@clocteck.com?subject=Cubic%20%E7%A4%BE%E5%8C%BA%E5%BA%94%E7%94%A8%E6%8F%90%E4%BA%A4"><svg viewBox="0 0 24 24" fill="none"><path d="M3 5h18v14H3V5Zm1 1 8 7 8-7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span data-i18n="sendMail">发送提交邮件</span></a>
+        <a class="button secondary" href="https://github.com/clocteck/holocubic-apps/" target="_blank" rel="noopener noreferrer" data-i18n="openReference">打开 GitHub 参考库</a>
+      </div>
+    </section>
+    <p class="footnote">Cubic Community Apps · clocteck</p>
+  </main>
+  <script>
+    (function(){
+      "use strict";
+      const LANGUAGE_KEY="cubic.mainpage.language";
+      const TEXT={
+        "zh-CN":{
+          title:"Cubic 应用创作指南",brandGuide:"应用指南",backCommunity:"返回社区应用",heroKicker:"为 Cubic 创作",heroTitle:"让你的创意，出现在 Cubic 上。",heroText:"用 Lua 创作适合 320×240 屏幕的应用或服务。完成后将 GitHub 仓库发给 clocteck，通过审核即可上架到社区应用。",viewRepo:"查看 GitHub 仓库",viewAppInfo:"查看 app.info 写法",workflowKicker:"创作流程",workflowTitle:"从想法到社区上架",workflowLead:"保持依赖简单、资源占用可控，并在真实 Cubic 设备上验证启动、交互和退出。",step1Title:"创建仓库",step1Text:"新建公开 GitHub 仓库，或参考 clocteck 应用库中的现有项目。",step2Title:"编写应用",step2Text:"以 <code>main.lua</code> 作为入口，准备图标、多语言名称和应用介绍。",step3Title:"设备测试",step3Text:"在 320×240 屏幕和实际手柄上测试，确保能正常退出并释放资源。",step4Title:"邮件提交",step4Text:"把应用 GitHub 地址发到 <code>sales@clocteck.com</code>，等待兼容性与安全审核。",structureTitle:"最小应用结构",structureText:"一个基础应用只需要元数据、Lua 入口和 PNG 图标。如果需要 Web 管理页，可增加 <code>main.html</code>。",structureTree:"my-cubic-app/\n├── app.info       # 应用元数据\n├── main.lua       # Lua 入口\n├── main.png       # 应用图标\n├── info.html      # 详情介绍（可选）\n└── main.html      # WebUI（可选）",appInfoTitle:"<code>app.info</code> 基础写法",appInfoText:"字段使用 <code>key = value</code> 格式。社区应用必须标注运行类型、内容分类和社区归属。",kindText:"<code>app</code> 表示前台应用，<code>service</code> 表示后台服务。社区项目不应使用 <code>launcher</code>。",categoryText:"可选 <code>game</code>、<code>weather</code>、<code>clock</code>、<code>media</code>、<code>tool</code>。",scopeText:"社区提交填写 <code>community</code>；<code>official</code> 由 clocteck 官方维护。",entryText:"指向仓库内实际存在的 Lua 入口和 PNG 图标。",webuiText:"只有需要设备 Web 管理页时才设为 <code>true</code>。",localeText:"建议至少提供简体中文、繁体中文、英文和日文。",submitKicker:"提交审核",submitTitle:"准备好后，把 GitHub 地址发给我们",submitText:"请发邮件到 <strong>sales@clocteck.com</strong>，标题建议使用“Cubic 社区应用提交 - 应用名称”。clocteck 团队会检查元数据、可安装性、基础安全性和设备兼容性；通过后将上架到社区应用。",check1:"邮件中附上公开可访问的 GitHub 仓库地址",check2:"说明应用用途、支持的交互方式和已测试的固件版本",check3:"不要在仓库中提交密码、Token、私钥或其他敏感信息",sendMail:"发送提交邮件",openReference:"打开 GitHub 参考库",mailSubject:"Cubic 社区应用提交"
+        },
+        en:{
+          title:"Cubic App Creation Guide",brandGuide:"App guide",backCommunity:"Back to Community Apps",heroKicker:"Made for Cubic",heroTitle:"Bring your ideas to Cubic.",heroText:"Build apps or services in Lua for the 320×240 display. When your project is ready, send the GitHub repository to clocteck for review and possible listing in Community Apps.",viewRepo:"View GitHub repository",viewAppInfo:"Learn app.info",workflowKicker:"Workflow",workflowTitle:"From idea to Community Apps",workflowLead:"Keep dependencies simple and resource use controlled, then verify launch, interaction, and exit behavior on a real Cubic device.",step1Title:"Create a repository",step1Text:"Create a public GitHub repository or use an existing project in the clocteck app library as a reference.",step2Title:"Build the app",step2Text:"Use <code>main.lua</code> as the entry point and provide an icon, localized names, and descriptions.",step3Title:"Test on device",step3Text:"Test on the 320×240 display and a real controller. Make sure the app exits cleanly and releases its resources.",step4Title:"Submit by email",step4Text:"Email the app's GitHub URL to <code>sales@clocteck.com</code> for compatibility and security review.",structureTitle:"Minimal app structure",structureText:"A basic app only needs metadata, a Lua entry point, and a PNG icon. Add <code>main.html</code> only when a Web management page is needed.",structureTree:"my-cubic-app/\n├── app.info       # App metadata\n├── main.lua       # Lua entry point\n├── main.png       # App icon\n├── info.html      # Details (optional)\n└── main.html      # WebUI (optional)",appInfoTitle:"Basic <code>app.info</code>",appInfoText:"Fields use the <code>key = value</code> format. Community apps must declare their runtime kind, content category, and catalog scope.",kindText:"Use <code>app</code> for a foreground app and <code>service</code> for a background service. Community projects must not use <code>launcher</code>.",categoryText:"Choose <code>game</code>, <code>weather</code>, <code>clock</code>, <code>media</code>, or <code>tool</code>.",scopeText:"Community submissions use <code>community</code>. The <code>official</code> scope is maintained by clocteck.",entryText:"Point to the actual Lua entry file and PNG icon in the repository.",webuiText:"Set this to <code>true</code> only when the app needs a device Web management page.",localeText:"Provide at least Simplified Chinese, Traditional Chinese, English, and Japanese when possible.",submitKicker:"Submit for review",submitTitle:"Send us the GitHub URL when it is ready",submitText:"Email <strong>sales@clocteck.com</strong>. We recommend the subject “Cubic Community App Submission - App Name”. The clocteck team reviews metadata, installability, basic security, and device compatibility before listing approved projects in Community Apps.",check1:"Include a publicly accessible GitHub repository URL",check2:"Explain the app's purpose, controls, and tested firmware versions",check3:"Do not commit passwords, tokens, private keys, or other secrets",sendMail:"Send submission email",openReference:"Open GitHub reference library",mailSubject:"Cubic Community App Submission"
+        },
+        ja:{
+          title:"Cubic アプリ作成ガイド",brandGuide:"アプリガイド",backCommunity:"コミュニティアプリへ戻る",heroKicker:"Cubic のために作る",heroTitle:"あなたのアイデアを Cubic に。",heroText:"320×240 画面向けのアプリやサービスを Lua で作成できます。完成したら GitHub リポジトリを clocteck に送り、審査を通過するとコミュニティアプリに掲載されます。",viewRepo:"GitHub リポジトリを見る",viewAppInfo:"app.info の書き方",workflowKicker:"作成フロー",workflowTitle:"アイデアから公開まで",workflowLead:"依存関係とリソース使用量を抑え、実機で起動・操作・終了を確認してください。",step1Title:"リポジトリを作成",step1Text:"公開 GitHub リポジトリを作成するか、clocteck の既存アプリを参考にします。",step2Title:"アプリを作成",step2Text:"<code>main.lua</code> を入口にし、アイコン、多言語名、説明を用意します。",step3Title:"実機でテスト",step3Text:"320×240 画面と実際のコントローラーでテストし、正常に終了してリソースを解放できることを確認します。",step4Title:"メールで提出",step4Text:"GitHub URL を <code>sales@clocteck.com</code> に送り、互換性と安全性の審査を受けます。",structureTitle:"最小アプリ構成",structureText:"基本アプリに必要なのはメタデータ、Lua 入口、PNG アイコンです。Web 管理画面が必要な場合のみ <code>main.html</code> を追加します。",structureTree:"my-cubic-app/\n├── app.info       # アプリのメタデータ\n├── main.lua       # Lua 入口\n├── main.png       # アプリアイコン\n├── info.html      # 詳細（任意）\n└── main.html      # WebUI（任意）",appInfoTitle:"<code>app.info</code> の基本",appInfoText:"フィールドは <code>key = value</code> 形式です。コミュニティアプリは実行種別、カテゴリ、カタログ範囲を指定します。",kindText:"前面アプリは <code>app</code>、バックグラウンドサービスは <code>service</code> を使います。コミュニティプロジェクトで <code>launcher</code> は使用しません。",categoryText:"<code>game</code>、<code>weather</code>、<code>clock</code>、<code>media</code>、<code>tool</code> から選びます。",scopeText:"コミュニティ提出は <code>community</code> を使用します。<code>official</code> は clocteck が管理します。",entryText:"リポジトリ内に存在する Lua 入口と PNG アイコンを指定します。",webuiText:"デバイスの Web 管理画面が必要な場合のみ <code>true</code> にします。",localeText:"可能であれば簡体字中国語、繁体字中国語、英語、日本語を用意してください。",submitKicker:"審査に提出",submitTitle:"準備できたら GitHub URL を送ってください",submitText:"<strong>sales@clocteck.com</strong> にメールしてください。件名は「Cubic コミュニティアプリ提出 - アプリ名」を推奨します。clocteck がメタデータ、インストール、安全性、互換性を確認し、承認後に掲載します。",check1:"公開アクセスできる GitHub リポジトリ URL を記載する",check2:"用途、操作方法、テスト済みファームウェアを説明する",check3:"パスワード、トークン、秘密鍵などをコミットしない",sendMail:"提出メールを送る",openReference:"GitHub 参考ライブラリを開く",mailSubject:"Cubic コミュニティアプリ提出"
+        },
+        "zh-TW":{
+          title:"Cubic 應用創作指南",brandGuide:"應用指南",backCommunity:"返回社群應用",heroKicker:"為 Cubic 創作",heroTitle:"讓你的創意，出現在 Cubic 上。",heroText:"用 Lua 創作適合 320×240 螢幕的應用或服務。完成後將 GitHub 儲存庫傳給 clocteck，通過審核即可上架到社群應用。",viewRepo:"查看 GitHub 儲存庫",viewAppInfo:"查看 app.info 寫法",workflowKicker:"創作流程",workflowTitle:"從想法到社群上架",workflowLead:"保持依賴簡單、資源占用可控，並在真實 Cubic 裝置上驗證啟動、互動和退出。",step1Title:"建立儲存庫",step1Text:"建立公開 GitHub 儲存庫，或參考 clocteck 應用庫中的現有專案。",step2Title:"編寫應用",step2Text:"以 <code>main.lua</code> 作為入口，準備圖示、多語言名稱和應用介紹。",step3Title:"裝置測試",step3Text:"在 320×240 螢幕和實際控制器上測試，確保能正常退出並釋放資源。",step4Title:"郵件提交",step4Text:"把應用 GitHub 位址寄到 <code>sales@clocteck.com</code>，等待相容性與安全審核。",structureTitle:"最小應用結構",structureText:"基礎應用只需要中繼資料、Lua 入口和 PNG 圖示。如需 Web 管理頁，可增加 <code>main.html</code>。",structureTree:"my-cubic-app/\n├── app.info       # 應用中繼資料\n├── main.lua       # Lua 入口\n├── main.png       # 應用圖示\n├── info.html      # 詳情介紹（可選）\n└── main.html      # WebUI（可選）",appInfoTitle:"<code>app.info</code> 基礎寫法",appInfoText:"欄位使用 <code>key = value</code> 格式。社群應用必須標註執行類型、內容分類和社群歸屬。",kindText:"<code>app</code> 表示前台應用，<code>service</code> 表示背景服務。社群專案不應使用 <code>launcher</code>。",categoryText:"可選 <code>game</code>、<code>weather</code>、<code>clock</code>、<code>media</code>、<code>tool</code>。",scopeText:"社群提交填寫 <code>community</code>；<code>official</code> 由 clocteck 官方維護。",entryText:"指向儲存庫內實際存在的 Lua 入口和 PNG 圖示。",webuiText:"只有需要裝置 Web 管理頁時才設為 <code>true</code>。",localeText:"建議至少提供簡體中文、繁體中文、英文和日文。",submitKicker:"提交審核",submitTitle:"準備好後，把 GitHub 位址寄給我們",submitText:"請寄信到 <strong>sales@clocteck.com</strong>，標題建議使用「Cubic 社群應用提交 - 應用名稱」。clocteck 團隊會檢查中繼資料、可安裝性、基礎安全性和裝置相容性；通過後將上架到社群應用。",check1:"郵件中附上可公開存取的 GitHub 儲存庫位址",check2:"說明應用用途、支援的互動方式和已測試的韌體版本",check3:"不要在儲存庫中提交密碼、Token、私鑰或其他敏感資訊",sendMail:"寄送提交郵件",openReference:"開啟 GitHub 參考庫",mailSubject:"Cubic 社群應用提交"
+        }
+      };
+      function normalizeLanguage(value){const text=String(value||"").replace(/_/g,"-").toLowerCase();if(text.startsWith("en"))return "en";if(text.startsWith("ja"))return "ja";if(text.startsWith("zh-tw")||text.startsWith("zh-hant")||text.startsWith("zh-hk"))return "zh-TW";return "zh-CN";}
+      const params=new URLSearchParams(window.location.search);
+      const requested=params.get("lang")||params.get("language")||"";
+      let stored="";
+      try{stored=localStorage.getItem(LANGUAGE_KEY)||"";}catch(err){}
+      const language=normalizeLanguage(requested||stored||document.documentElement.lang);
+      if(requested){try{localStorage.setItem(LANGUAGE_KEY,language);}catch(err){}}
+      const copy=TEXT[language]||TEXT.en;
+      document.documentElement.lang=language;
+      document.title=copy.title;
+      document.querySelectorAll("[data-i18n]").forEach(function(node){const value=copy[node.dataset.i18n];if(value!=null)node.textContent=value;});
+      document.querySelectorAll("[data-i18n-html]").forEach(function(node){const value=copy[node.dataset.i18nHtml];if(value!=null)node.innerHTML=value;});
+      const storeParams=new URLSearchParams({scope:"community",lang:language});
+      const storeUrl="/apps/launcher/store-preview.html?"+storeParams.toString();
+      document.getElementById("storeBrandLink").href=storeUrl;
+      document.getElementById("storeBackLink").href=storeUrl;
+      document.getElementById("submitMailLink").href="mailto:sales@clocteck.com?subject="+encodeURIComponent(copy.mailSubject);
+      document.body.classList.remove("i18n-pending");
+    })();
+  </script>
+</body>
+</html>
