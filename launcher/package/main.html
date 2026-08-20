@@ -195,6 +195,9 @@ button:disabled{cursor:not-allowed;opacity:.48;box-shadow:none!important;transfo
 .media-assets-grid.kind-game .media-thumb{min-height:108px;aspect-ratio:auto}.media-assets-grid.kind-game .media-thumb::before{width:72px;height:72px;right:-28px;top:-24px}.media-assets-grid.kind-game .media-thumb::after{width:54px;height:54px;left:-22px;bottom:-22px}.media-assets-grid.kind-game .media-type-chip{left:6px;top:6px}.media-assets-grid.kind-game .media-asset-body{display:flex;min-width:0;flex-direction:column;justify-content:center;padding:11px 12px}.media-assets-grid.kind-game .media-asset-path{white-space:normal;word-break:break-all}
 .toast{position:fixed;z-index:100;left:50%;bottom:24px;max-width:calc(100% - 32px);padding:11px 15px;border-radius:12px;background:#152238;color:#fff;box-shadow:0 16px 34px rgba(17,27,44,.24);font-size:13px;font-weight:650;opacity:0;transform:translate(-50%,12px);pointer-events:none;transition:opacity .18s ease,transform .18s ease}.toast.show{opacity:1;transform:translate(-50%,0)}
 
+@media(min-width:781px){
+  [data-view="dashboard"] .dashboard-frame{width:min(1240px,90.9091%);zoom:1.1}
+}
 @media(max-width:980px){
   .wifi-canvas{grid-template-columns:1fr;max-width:700px}.wifi-story{min-height:250px;justify-content:center;padding:35px;border-right:0;border-bottom:1px solid var(--line)}.wifi-simple-intro{width:min(100%,500px)}.wifi-form-side{padding:34px}
   .dashboard-frame{grid-template-columns:76px minmax(0,1fr)}.dash-sidebar{padding:24px 11px}.dash-sidebar .brand-lockup{justify-content:center;padding:0 0 24px}.dash-sidebar .brand-copy,.side-nav span,.sidebar-device{display:none}.side-nav button{justify-content:center;padding:0}.apps-panel{grid-column:span 7}.side-panels{grid-column:span 5}.media-overview{grid-template-columns:1fr}.media-workspace{grid-template-columns:240px minmax(0,1fr)}.media-assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -550,8 +553,8 @@ button:disabled{cursor:not-allowed;opacity:.48;box-shadow:none!important;transfo
 
 <div class="toast" id="previewToast" role="status" aria-live="polite"></div>
 
-<script src="/apps/launcher/vendor/cubic-gif-tools.min.js?v=1.19"></script>
-<script src="/apps/launcher/vendor/cubic-video-tools.js?v=1.19"></script>
-<script src="/apps/launcher/control.js?v=1.19"></script>
+<script src="/apps/launcher/vendor/cubic-gif-tools.min.js?v=1.20"></script>
+<script src="/apps/launcher/vendor/cubic-video-tools.js?v=1.20"></script>
+<script src="/apps/launcher/control.js?v=1.20"></script>
 </body>
 </html>
