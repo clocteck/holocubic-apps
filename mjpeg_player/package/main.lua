@@ -69,6 +69,7 @@ APP.direct_present = false
 APP.decoder_failed = false
 APP.shutdown_complete = false
 APP.shutdown_ok = false
+APP.controller_buttons = 0
 -- App-relative unknown paths are redirected to /main while current_webui is
 -- false, so the hidden lifecycle endpoint lives in the global API namespace.
 -- It remains app-specific and is removed before every registration.
@@ -943,6 +944,28 @@ local function start_timers()
   APP.timers.stats:alarm(1000, tmr.ALARM_AUTO, function()
     if not APP.shutting_down then update_stats() end
   end)
+
+  local PAD_SELECT, PAD_HOME = 4096, 32768
+  if controller and controller.state then
+    APP.timers.controller = tmr.create()
+    APP.timers.controller:alarm(40, tmr.ALARM_AUTO, function()
+      if APP.shutting_down then return end
+      local ok, pad = pcall(function() return controller.state("ble-main") end)
+      local buttons = ok and type(pad) == "table" and tonumber(pad.buttons) or 0
+      buttons = buttons or 0
+      local pressed = buttons & (~APP.controller_buttons)
+      APP.controller_buttons = buttons
+      if (pressed & (PAD_SELECT | PAD_HOME)) ~= 0 then
+        local stopped = APP.shutdown("controller")
+        if stopped then
+          sleep_ms(80)
+          if app and app.exit then pcall(function() app.exit() end) end
+        else
+          show_message("EXIT BLOCKED", "Native cleanup incomplete")
+        end
+      end
+    end)
+  end
 
 end
 

@@ -2,6 +2,10 @@
 
 面向 Clocteck Cubic 320×240 设备的有声 MJPEG-AVI 播放器。Lua 负责 AVI 容器解析、SD 卡顺序读取、按键与 20 FPS 源时间轴；`jpg.so` 调用 ESP32-S3 ROM JPEG 解码器并转换为 RGB565，再通过 LVGL 安全图像缓冲显示；`audio.so` 播放与 AVI 同名的 16 kHz 单声道 WAV 音轨。
 
+## 0.2.8
+
+- 蓝牙手柄 `SELECT` 或 `HOME` 现在会先安全停止音频、异步解码和显示资源，再退出播放器。
+
 ## 0.2.7
 
 - 恢复异步 JPEG 解码和音频流水线，避免同步解码长期占用 Lua/UI 线程导致 Web 清理接口超时。

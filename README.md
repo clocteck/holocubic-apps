@@ -40,7 +40,13 @@ my_app/
 | `icon` | app 图标，通常放在 package 根目录 | `icon = main.png` |
 | `description` | 简短说明 | `description = Minimal demo` |
 | `version` | 版本号 | `version = 0.1.0` |
-| `kind` | `app` 或 `service`，不写通常按普通 app | `kind = app` |
+| `kind` | 运行形态：`app`、`service` 或 `launcher`；`launcher` 只用于启动器 | `kind = app` |
+| `category` | 商店分类：`game`、`weather`、`clock`、`media` 或 `tool` | `category = tool` |
+| `catalog_scope` | 商店归属：`official` 或 `community`；新社区应用应使用 `community` | `catalog_scope = community` |
+| `name_zh` / `name_zh_cn` | 简体中文名称及兼容别名 | `name_zh_cn = 示例` |
+| `name_zh_tw` / `name_zh_hant` | 繁体中文名称及兼容别名 | `name_zh_tw = 範例` |
+| `name_en` / `name_ja` | 英文和日文名称 | `name_en = Example` |
+| `description_zh*` / `description_en` / `description_ja` | 对应语言的简短说明 | `description_en = Minimal demo` |
 | `allow_webui` | service 是否允许 WebUI | `allow_webui = true` |
 | `autostart_service` | service 是否开机/扫描后自启动 | `autostart_service = true` |
 
@@ -48,10 +54,24 @@ my_app/
 
 ```ini
 name = Hello
+name_zh = 示例
+name_zh_cn = 示例
+name_zh_tw = 範例
+name_zh_hant = 範例
+name_en = Hello
+name_ja = サンプル
 kind = app
+category = tool
+catalog_scope = community
 entry = main.lua
 icon = main.png
 description = Minimal DIY app
+description_zh = 最小 DIY 应用示例
+description_zh_cn = 最小 DIY 应用示例
+description_zh_tw = 最小 DIY 應用程式範例
+description_zh_hant = 最小 DIY 應用程式範例
+description_en = Minimal DIY app
+description_ja = 最小構成の DIY アプリ例
 version = 0.1.0
 ```
 
@@ -59,11 +79,21 @@ version = 0.1.0
 
 ```ini
 name = DevTools
-entry = main.lua
+name_zh_cn = 开发工具
+name_zh_tw = 開發工具
+name_en = DevTools
+name_ja = 開発ツール
 kind = service
+category = tool
+catalog_scope = official
+entry = main.lua
 allow_webui = true
 autostart_service = true
 description = Developer tools service
+description_zh = 开发工具服务
+description_zh_tw = 開發工具服務
+description_en = Developer tools service
+description_ja = 開発ツールサービス
 version = 0.0.0
 ```
 
@@ -184,10 +214,20 @@ end)
 
 ```ini
 name = Hello
+name_zh_cn = 示例
+name_zh_tw = 範例
+name_en = Hello
+name_ja = サンプル
 kind = app
+category = tool
+catalog_scope = community
 entry = main.lua
 icon = main.png
 description = Minimal DIY app
+description_zh = 最小 DIY 应用示例
+description_zh_tw = 最小 DIY 應用程式範例
+description_en = Minimal DIY app
+description_ja = 最小構成の DIY アプリ例
 version = 0.1.0
 ```
 

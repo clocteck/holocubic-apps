@@ -73,14 +73,14 @@
       <aside class="panel" aria-labelledby="info-title">
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App info</h2>
         <div class="meta">
-          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">0.2.7</span></div>
+          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">0.2.8</span></div>
           <div class="meta-item"><span class="label zh">视频格式</span><span class="label en">Video format</span><span class="value">MJPEG AVI · 320×240</span></div>
           <div class="meta-item"><span class="label zh">音频格式</span><span class="label en">Audio format</span><span class="value">WAV · 16 kHz · Mono</span></div>
           <div class="meta-item"><span class="label zh">媒体目录</span><span class="label en">Media folder</span><span class="value">/sd/videos</span></div>
           <div class="meta-item"><span class="label zh">开源协议</span><span class="label en">License</span><span class="value">GPL-3.0</span></div>
         </div>
-        <p class="notice zh"><strong>0.2.7 更新：</strong>改用 LVGL 安全显示缓冲；原生异步解码任务支持协作停止并主动让出调度时间。Web 退出会等待显示、音频、文件和任务资源全部释放。</p>
-        <p class="notice en"><strong>0.2.7:</strong> Uses an LVGL-safe display buffer. The native asynchronous decoder now supports cooperative shutdown and yields scheduler time. Web exit waits for display, audio, file, and task resources to be released.</p>
+        <p class="notice zh"><strong>0.2.8 更新：</strong>蓝牙手柄 SELECT 或 HOME 会先安全停止音频、异步解码和显示资源，再退出播放器。</p>
+        <p class="notice en"><strong>0.2.8:</strong> Bluetooth controller SELECT or HOME safely stops audio, asynchronous decoding, and display resources before exiting.</p>
       </aside>
     </div>
     <footer class="footer"><span class="zh">推荐搭配 Launcher 1.17 使用 · 源码与第三方许可：</span><span class="en">Recommended with Launcher 1.17 · Source and third-party licenses: </span><a href="https://github.com/clocteck/holocubic-apps/tree/main/mjpeg_player" target="_blank" rel="noopener">clocteck/holocubic-apps</a></footer>
