@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.21：新增指示灯颜色与 RGB 亮度设置、图片自动适配 320×240，以及 SD 卡实际容量显示。</p><p class="summary en">Launcher 1.21 adds indicator-light color and RGB brightness controls, automatic 320x240 image fitting, and real SD-card capacity usage.</p>
+<p class="summary zh">Launcher 1.22：新增指示灯 RGB 设置、图片自动适配、SD 实际容量显示，并恢复固件更新实时进度。</p><p class="summary en">Launcher 1.22 adds indicator-light RGB controls, automatic image fitting, real SD capacity usage, and live firmware-update progress.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -82,9 +82,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.21</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.22</span></div>
         </div>
-<p class="note zh">1.21 更新内容：支持固件指示灯接口，亮度由网页缩放 RGB 后一次性提交；静态图片上传前按比例缩放到 320×240 范围；媒体页读取固件 SD 容量接口显示实际已用与可用空间，接口不可用时自动回退；同时保留 1.20 的多语言、运行态、低频状态读取和桌面布局优化。</p><p class="note en">Version 1.21 uses the firmware indicator-light API and applies brightness by scaling RGB before one POST, fits static images within 320x240 before upload, and shows real SD used and available capacity with an automatic managed-file fallback. It retains the localization, running-state handling, low-frequency status reads, and desktop layout improvements from 1.20.</p>
+<p class="note zh">1.22 更新内容：支持固件指示灯接口，亮度由网页缩放 RGB 后一次性提交；静态图片上传前按比例缩放到 320×240 范围；媒体页优先显示 SD 实际容量并兼容旧固件回退；固件更新期间每秒仅轮询轻量状态接口，完成、失败、重启或页面隐藏后立即停止。</p><p class="note en">Version 1.22 adds indicator-light RGB control, proportional image fitting within 320x240, real SD capacity with an older-firmware fallback, and one-second polling of the lightweight firmware status endpoint only while an update is active. Polling stops on completion, failure, reboot, or when the page is hidden.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
