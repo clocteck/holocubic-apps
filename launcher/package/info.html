@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.20：恢复多语言应用名称和运行态，优化设备管理布局，并将桌面端控制与媒体页面整体放大约 10%。</p><p class="summary en">Launcher 1.20 restores localized app names and running state, improves the management layout, and enlarges the desktop control and media pages by about 10%.</p>
+<p class="summary zh">Launcher 1.21：新增指示灯颜色与 RGB 亮度设置、图片自动适配 320×240，以及 SD 卡实际容量显示。</p><p class="summary en">Launcher 1.21 adds indicator-light color and RGB brightness controls, automatic 320x240 image fitting, and real SD-card capacity usage.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -61,6 +61,8 @@
           <li><span class="badge">7</span><span><strong>三组重复闹钟</strong><span>每组可选择每日、工作日、周末或指定星期；响铃后按 HOME 或摇动设备即可停止。</span></span></li>
           <li><span class="badge">8</span><span><strong>启动同步时间</strong><span>启动时会执行一次 NTP 对时，统一使用 ntp.aliyun.com。</span></span></li>
 <li><span class="badge">9</span><span><strong>分类资源管理</strong><span>GIF 超出 320×240 时自动压缩，常见视频自动转为设备格式；各分类在固定高度面板内滚动，视频和音乐不在浏览器播放。</span></span></li>
+          <li><span class="badge">10</span><span><strong>指示灯设置</strong><span>支持时可设置指示灯颜色，并通过缩放 RGB 控制亮度；旧固件会自动隐藏入口。</span></span></li>
+          <li><span class="badge">11</span><span><strong>图片与 SD 容量</strong><span>静态图片上传时自动适配 320×240；优先显示 SD 实际已用、总量和可用空间，旧固件回退为媒体文件相加。</span></span></li>
         </ul>
         <ul class="list en">
           <li><span class="badge">1</span><span><strong>App launch</strong><span>Switch apps and launch the selected one.</span></span></li>
@@ -72,15 +74,17 @@
           <li><span class="badge">7</span><span><strong>Three repeating alarms</strong><span>Each alarm supports daily, weekday, weekend, or a selected weekday. Press HOME or shake to stop it.</span></span></li>
           <li><span class="badge">8</span><span><strong>Time sync on startup</strong><span>Launcher syncs time once at startup using ntp.aliyun.com.</span></span></li>
 <li><span class="badge">9</span><span><strong>Resource categories</strong><span>Oversized GIFs are compressed to fit 320x240, common videos are converted for the device, and each category scrolls inside a bounded panel. Video and music are not played in the browser.</span></span></li>
+          <li><span class="badge">10</span><span><strong>Indicator light</strong><span>Supported firmware can set the indicator color and control brightness by scaling RGB values; older firmware hides the control.</span></span></li>
+          <li><span class="badge">11</span><span><strong>Images and SD capacity</strong><span>Static images are fitted within 320x240 before upload. Real SD used, total, and available capacity is shown when supported, with a managed-file fallback.</span></span></li>
         </ul>
       </section>
       <section class="panel" aria-labelledby="info-title">
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.20</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.21</span></div>
         </div>
-<p class="note zh">1.20 更新内容：保留 1.19 的多语言名称、运行态、应用页面入口、一次性状态确认和元数据缓存；桌面端设备控制与媒体资源页面整体放大约 10%，并按可用宽度回收布局，避免产生横向滚动；Wi-Fi 配网页、应用商店、创作指南及 780px 以下手机布局完全不变。</p><p class="note en">Version 1.20 retains the localized names, running state, app-page action, one-shot state confirmation, and metadata cache from 1.19. It enlarges only the desktop device-control and media pages by about 10%, compensates the layout width to avoid horizontal scrolling, and leaves Wi-Fi setup, the store, the creator guide, and mobile layouts at 780px or below unchanged.</p>
+<p class="note zh">1.21 更新内容：支持固件指示灯接口，亮度由网页缩放 RGB 后一次性提交；静态图片上传前按比例缩放到 320×240 范围；媒体页读取固件 SD 容量接口显示实际已用与可用空间，接口不可用时自动回退；同时保留 1.20 的多语言、运行态、低频状态读取和桌面布局优化。</p><p class="note en">Version 1.21 uses the firmware indicator-light API and applies brightness by scaling RGB before one POST, fits static images within 320x240 before upload, and shows real SD used and available capacity with an automatic managed-file fallback. It retains the localization, running-state handling, low-frequency status reads, and desktop layout improvements from 1.20.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
