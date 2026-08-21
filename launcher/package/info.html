@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.22：新增指示灯 RGB 设置、图片自动适配、SD 实际容量显示，并恢复固件更新实时进度。</p><p class="summary en">Launcher 1.22 adds indicator-light RGB controls, automatic image fitting, real SD capacity usage, and live firmware-update progress.</p>
+<p class="summary zh">Launcher 1.23：应用启动后短时间刷新运行状态，WebUI 就绪后立即显示应用页面入口。</p><p class="summary en">Launcher 1.23 briefly polls app state after launch and shows the app-page entry as soon as its WebUI is ready.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -82,9 +82,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.22</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.23</span></div>
         </div>
-<p class="note zh">1.22 更新内容：支持固件指示灯接口，亮度由网页缩放 RGB 后一次性提交；静态图片上传前按比例缩放到 320×240 范围；媒体页优先显示 SD 实际容量并兼容旧固件回退；固件更新期间每秒仅轮询轻量状态接口，完成、失败、重启或页面隐藏后立即停止。</p><p class="note en">Version 1.22 adds indicator-light RGB control, proportional image fitting within 320x240, real SD capacity with an older-firmware fallback, and one-second polling of the lightweight firmware status endpoint only while an update is active. Polling stops on completion, failure, reboot, or when the page is hidden.</p>
+<p class="note zh">1.23 更新内容：从控制页启动应用后，每 500 毫秒刷新一次系统状态，最长持续 5 秒；检测到目标应用的 WebUI 路由后立即停止，并显示应用页面入口，不产生长期后台轮询。</p><p class="note en">Version 1.23 refreshes system state every 500 ms for up to 5 seconds after an app is launched from the dashboard. Polling stops as soon as the target app's WebUI route is ready, so the app-page entry appears without continuous background polling.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
