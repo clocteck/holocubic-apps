@@ -1331,9 +1331,32 @@
       };
     }
 
+    function localInstalledItems(installed,existingIds){
+      const items = [];
+      installed.forEach((info,id)=>{
+        if(!id || id === "launcher" || existingIds.has(id) || String(info && info.source || "").toLowerCase() !== "sd"){return;}
+        const raw = Object.assign({},info || {},{
+          id,
+          app_id:id,
+          catalog_scope:"community",
+          kind:String(info && info.kind || "app"),
+          category:String(info && info.category || "tool"),
+          version:String(info && (info.version || info.app_version) || ""),
+          package_size:Number(info && (info.package_size || info.size) || 0),
+          icon_url:"/api/system/fs/file?path=" + encodeURIComponent("/sd/apps/" + id + "/main.png"),
+          manifest_url:"",
+          description_page_url:""
+        });
+        items.push(normalizeItem(raw,installed));
+      });
+      return items;
+    }
+
     function updateNormalizedApps(){
       const installed = installedMap(state.system);
-      state.apps = state.rawItems.map((item)=>normalizeItem(item,installed)).filter((item)=>item.id);
+      const catalogItems = state.rawItems.map((item)=>normalizeItem(item,installed)).filter((item)=>item.id);
+      const catalogIds = new Set(catalogItems.map((item)=>item.id));
+      state.apps = catalogItems.concat(localInstalledItems(installed,catalogIds));
       state.apps.sort((a,b)=>{
         if(a.installed !== b.installed){return a.installed ? -1 : 1;}
         return a.name.localeCompare(b.name,currentLanguage,{numeric:true,sensitivity:"base"});
