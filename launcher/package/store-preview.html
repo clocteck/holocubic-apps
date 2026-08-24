@@ -1325,7 +1325,7 @@
         descriptionPageUrl:String(raw && raw.description_page_url || ""),
         installed:!!installedInfo,
         installedInfo,
-        update:!!installedInfo && !!remoteVersion && !!installedVersion && compareVersions(remoteVersion,installedVersion) > 0,
+        update:!!installedInfo && !!remoteVersion && compareVersions(remoteVersion,installedVersion || "0.0.0") > 0,
         tags:[categoryLabel(category),kindLabel(kind)],
         raw
       };
@@ -1409,7 +1409,7 @@
 
     function cardMarkup(app){
       const action = actionState(app);
-      const removable = !!(app.installedInfo && app.installedInfo.source === "sd" && app.id !== "launcher");
+      const removable = !!(app.installedInfo && app.installedInfo.source === "sd");
       const uninstalling = state.uninstalling.has(app.id);
       const uninstallButton = removable
         ? '<button class="card-button danger" type="button" data-action="uninstall" data-app-id="' + escapeHtml(app.id) + '"' + (uninstalling ? " disabled" : "") + '>' + (uninstalling ? storeText("uninstalling") : storeText("uninstall")) + '</button>'
@@ -1661,7 +1661,7 @@
     }
 
     async function uninstallApp(app){
-      if(!app || !app.installedInfo || app.installedInfo.source !== "sd" || app.id === "launcher" || state.uninstalling.has(app.id)){return;}
+      if(!app || !app.installedInfo || app.installedInfo.source !== "sd" || state.uninstalling.has(app.id)){return;}
       if(!window.confirm((currentLanguage === "zh-CN" ? "确定卸载「" : "Uninstall ") + app.name + (currentLanguage === "zh-CN" ? "」吗？" : "?"))){return;}
       state.uninstalling.add(app.id);
       render();

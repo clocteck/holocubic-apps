@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.24：恢复 UTC−12 至 UTC+14 的完整时区列表，覆盖夏令时和非整点时区。</p><p class="summary en">Launcher 1.24 restores the complete UTC−12 to UTC+14 time-zone list, including daylight-saving and fractional-hour zones.</p>
+<p class="summary zh">Launcher 1.25：恢复 Launcher 卸载入口，并修复缺少版本信息时不显示更新的问题。</p><p class="summary en">Launcher 1.25 restores Launcher uninstall and fixes missing update actions when local version metadata is unavailable.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -82,9 +82,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.24</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.25</span></div>
         </div>
-<p class="note zh">1.24 更新内容：恢复旧版经过验证的 43 个 POSIX 时区选项，范围从 UTC−12 到 UTC+14；包含北美、欧洲、澳洲和新西兰夏令时规则，以及 UTC+03:30、+04:30、+05:30、+05:45、+06:30、+09:30、+12:45 等非整点时区。保存方式和默认上海时区保持不变。</p><p class="note en">Version 1.24 restores the 43 verified POSIX time-zone choices from UTC−12 through UTC+14, including DST rules for North America, Europe, Australia, and New Zealand, plus half-hour and 45-minute regions. Saving behavior and the default Shanghai zone remain unchanged.</p>
+<p class="note zh">1.25 更新内容：恢复老版本允许卸载 Launcher 的操作；当 Launcher 目录存在但 app.info 或版本字段缺失时，本地版本按 0.0.0 参与比较，使更新按钮正常出现。1.24 的完整时区支持保持不变。</p><p class="note en">Version 1.25 restores Launcher uninstall and compares a missing local app.info version as 0.0.0 so the update action remains available. The complete time-zone support from 1.24 is unchanged.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
