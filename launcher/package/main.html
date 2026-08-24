@@ -126,6 +126,7 @@ button:disabled{cursor:not-allowed;opacity:.48;box-shadow:none!important;transfo
 .connect-btn{width:100%;min-height:49px;margin-top:22px;border:0;border-radius:13px;background:linear-gradient(180deg,#587cf2 0%,#3f63df 100%);color:#fff;font-weight:750;box-shadow:0 12px 24px rgba(77,114,239,.22);transition:transform .16s ease,box-shadow .16s ease}.connect-btn:hover{transform:translateY(-1px);box-shadow:0 15px 28px rgba(77,114,239,.27)}.connect-btn.success{background:linear-gradient(180deg,#39a984 0%,#268e6d 100%);box-shadow:0 12px 24px rgba(45,153,117,.2)}
 .skip-btn{display:block;margin:13px auto 0;padding:5px;border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:650}.skip-btn:hover{color:var(--ink)}
 .wifi-message{min-height:20px;margin:10px 0 -2px;color:var(--green);font-size:12px;text-align:center}.wifi-message.error{color:var(--danger)}
+#passwordField{display:block!important}
 
 /* Dashboard preview */
 .dashboard-frame{
@@ -574,5 +575,29 @@ button:disabled{cursor:not-allowed;opacity:.48;box-shadow:none!important;transfo
 <script src="/apps/launcher/vendor/cubic-gif-tools.min.js?v=1.23"></script>
 <script src="/apps/launcher/vendor/cubic-video-tools.js?v=1.23"></script>
 <script src="/apps/launcher/control.js?v=1.23"></script>
+<script>
+(function(){
+  "use strict";
+  var wifiView=document.getElementById("wifiPreview");
+  var scanButton=document.getElementById("scanPreviewBtn");
+  var scannedOnFirstEntry=false;
+  var observer=new MutationObserver(function(){scanWhenVisible()});
+
+  function scanWhenVisible(){
+    if(scannedOnFirstEntry||!wifiView||wifiView.classList.contains("hidden")){return}
+    scannedOnFirstEntry=true;
+    observer.disconnect();
+    window.setTimeout(function(){
+      if(scanButton&&!scanButton.disabled){scanButton.click()}
+    },0);
+  }
+
+  if(wifiView){
+    observer.observe(wifiView,{attributes:true,attributeFilter:["class"]});
+    scanWhenVisible();
+  }
+  window.addEventListener("pagehide",function(){observer.disconnect()},{once:true});
+})();
+</script>
 </body>
 </html>
