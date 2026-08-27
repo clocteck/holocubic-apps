@@ -5,16 +5,16 @@ end
 
 MJPEG_PLAYER_APP = {}
 local APP = MJPEG_PLAYER_APP
+APP.VERSION = "1.0.1"
 
 local SCREEN_W = 320
 local SCREEN_H = 240
 local TARGET_FPS = 20
 local FRAME_INTERVAL_MS = 1000 / TARGET_FPS
--- The firmware may destroy an app's Lua state without running APP.shutdown.
--- Keeping the native direct-display owner across frames can therefore leave
--- LVGL detached and make Launcher appear black after the player exits.  The
--- native decoder still decodes asynchronously, but completed frames are
--- copied into its persistent LVGL image buffer instead of owning the panel.
+-- Keep panel ownership with LVGL.  The native worker decodes straight into
+-- one of two persistent, 16-byte-aligned LVGL image slots; Lua switches the
+-- image source only after a complete frame is ready, so no full-frame copy is
+-- needed and Launcher keeps its normal display lifecycle.
 local SAFE_LVGL_PRESENT = true
 -- Keep decoding and I2S outside the Lua/UI task.  Synchronous JPEG decoding can
 -- starve the HTTP callback that performs the pre-exit cleanup.  The native
@@ -74,10 +74,19 @@ APP.controller_buttons = 0
 -- false, so the hidden lifecycle endpoint lives in the global API namespace.
 -- It remains app-specific and is removed before every registration.
 APP.safe_exit_route = "/api/mjpeg-player/prepare-exit"
+APP.status_route = "/api/mjpeg-player/status"
 
 local function now_ms()
   if millis then return millis() or 0 end
   return 0
+end
+
+local function now_us()
+  if tmr and tmr.now then
+    local ok, value = pcall(function() return tmr.now() end)
+    if ok and tonumber(value) then return tonumber(value) end
+  end
+  return now_ms() * 1000
 end
 
 local function sleep_ms(ms)
@@ -388,7 +397,12 @@ local function load_jpg_module()
   for _, path in ipairs(candidates) do
     if not file or not file.exists or file.exists(path) then
       local ok, module_or_error = pcall(require, path)
-      if ok and type(module_or_error) == "table" and type(module_or_error.submit) == "function" and type(module_or_error.read_ready_image) == "function" then
+      if ok
+        and type(module_or_error) == "table"
+        and type(module_or_error.submit) == "function"
+        and type(module_or_error.read_ready_image) == "function"
+        and type(module_or_error.commit_image) == "function"
+        and type(module_or_error.cancel_image) == "function" then
         print("[mjpeg] jpg module loaded: " .. path)
         return module_or_error
       end
@@ -505,7 +519,10 @@ local function start_audio(name)
     end
     local started = false
     local start_error = nil
-    local profiles = { { 12, 1024 }, { 6, 512 }, { 4, 512 }, { 4, 256 } }
+    -- PCM already has a large PSRAM ring.  A 6x512 DMA queue still provides
+    -- roughly 192 ms at 16 kHz mono while avoiding the old 12x1024 queue's
+    -- ~24 KB internal-DMA footprint.
+    local profiles = { { 6, 512 }, { 4, 512 }, { 4, 256 } }
     for _, profile in ipairs(profiles) do
       local call_ok, result, call_error = pcall(APP.audio.i2s_start, {
         port = 0,
@@ -601,6 +618,17 @@ end
 
 local function release_display()
   if not APP.jpg or type(APP.jpg.release) ~= "function" then return true end
+  -- Drop LVGL's pointer to the native image descriptor before the module frees
+  -- its two persistent pixel slots.  Deleting only this child is immediate and
+  -- leaves the rest of the shutdown UI intact if native cleanup must be retried.
+  if APP.ui.image and lv_obj_del then
+    pcall(function() lv_obj_del(APP.ui.image) end)
+    APP.ui.image = nil
+  elseif APP.ui.image and lv_img_set_src then
+    pcall(function() lv_img_set_src(APP.ui.image, nil) end)
+  end
+  APP.image_bound = false
+  APP.image_refs = {}
   local last_error = nil
   for attempt = 1, 3 do
     local ok, released, release_error = pcall(function() return APP.jpg.release() end)
@@ -743,9 +771,8 @@ local function submit_jpeg(jpeg, frame_id)
   return true
 end
 
-local function retain_image(image)
-  APP.image_ref_index = ((APP.image_ref_index or 0) % 6) + 1
-  APP.image_refs[APP.image_ref_index] = image
+local function retain_image(image, slot)
+  APP.image_refs[slot] = image
 end
 
 local function present_ready()
@@ -774,29 +801,52 @@ local function present_ready()
     return
   end
   if type(image) ~= "userdata" then return end
+  local slot = type(stats) == "table" and tonumber(stats.image_pool_pending_slot) or nil
+  if not slot or slot < 1 or slot > 2 then
+    APP.errors = APP.errors + 1
+    APP.paused = true
+    show_message("DISPLAY ERROR", "Decoder returned no pending image slot")
+    return
+  end
   if width ~= SCREEN_W or height ~= SCREEN_H then
+    pcall(function() APP.jpg.cancel_image(slot) end)
     APP.errors = APP.errors + 1
     show_message("DECODE SIZE ERROR", tostring(width) .. "x" .. tostring(height))
     APP.paused = true
     return
   end
-  if not APP.image_bound then
-    local set_ok, set_error = pcall(function() lv_img_set_src(APP.ui.image, image) end)
-    if not set_ok then
-      APP.errors = APP.errors + 1
-      show_message("DISPLAY ERROR", tostring(set_error))
-      APP.paused = true
-      return
-    end
-    APP.image_bound = true
-  elseif lv_obj_invalidate then
-    pcall(function() lv_obj_invalidate(APP.ui.image) end)
+  local set_started_us = now_us()
+  local set_ok, set_error = pcall(function() lv_img_set_src(APP.ui.image, image) end)
+  local set_finished_us = now_us()
+  local set_src_us = set_finished_us >= set_started_us and (set_finished_us - set_started_us) or 0
+  if not set_ok then
+    pcall(function() APP.jpg.cancel_image(slot) end)
+    APP.errors = APP.errors + 1
+    show_message("DISPLAY ERROR", tostring(set_error))
+    APP.paused = true
+    return
   end
-  retain_image(image)
+
+  -- Only now may the old front slot become writable.  If commit unexpectedly
+  -- fails, leave the new slot pending (and therefore protected) and pause.
+  local commit_ok, committed, commit_stats = pcall(function()
+    return APP.jpg.commit_image(slot, set_src_us)
+  end)
+  if not commit_ok or committed ~= true then
+    APP.errors = APP.errors + 1
+    APP.paused = true
+    show_message("DISPLAY ERROR", tostring(commit_stats or committed))
+    return
+  end
+
+  APP.image_bound = true
+  retain_image(image, slot)
+  if lv_obj_invalidate then pcall(function() lv_obj_invalidate(APP.ui.image) end) end
   APP.presented = APP.presented + 1
-  if type(stats) == "table" then
-    APP.last_presented_id = tonumber(stats.frame_id) or APP.last_presented_id
-    APP.last_decode_us = tonumber(stats.decode_us) or APP.last_decode_us
+  if type(commit_stats) == "table" then
+    APP.last_presented_id = tonumber(commit_stats.frame_id) or APP.last_presented_id
+    APP.last_decode_us = tonumber(commit_stats.decode_us) or APP.last_decode_us
+    APP.last_push_us = tonumber(commit_stats.push_us) or APP.last_push_us
   end
   if APP.ui.overlay and lv_obj_move_foreground then pcall(function() lv_obj_move_foreground(APP.ui.overlay) end) end
 end
@@ -1009,8 +1059,8 @@ end
 APP.stop = APP.shutdown
 
 local function register_safe_exit_api()
-  if not (httpd and httpd.dynamic and httpd.POST) then
-    print("[mjpeg] safe exit API unavailable")
+  if not (httpd and httpd.dynamic and httpd.GET and httpd.POST) then
+    print("[mjpeg] lifecycle APIs unavailable")
     return false
   end
   local route = APP.safe_exit_route
@@ -1018,6 +1068,7 @@ local function register_safe_exit_api()
   -- Lua closure is no longer useful.  Remove only our private route first.
   if httpd.unregister then
     pcall(function() httpd.unregister(httpd.POST, route) end)
+    pcall(function() httpd.unregister(httpd.GET, APP.status_route) end)
   end
   local ok, route_error = pcall(function()
     return httpd.dynamic(httpd.POST, route, function()
@@ -1048,7 +1099,63 @@ local function register_safe_exit_api()
     print("[mjpeg] safe exit API register failed: " .. tostring(route_error))
     return false
   end
+
+  local status_ok, status_error = pcall(function()
+    return httpd.dynamic(httpd.GET, APP.status_route, function()
+      pcall(function() collectgarbage("collect") end)
+      local usage = {}
+      local decoder = {}
+      local audio_state = {}
+      local audio_memory = {}
+      if sys and type(sys.usage) == "function" then
+        local usage_ok, value = pcall(sys.usage)
+        if usage_ok and type(value) == "table" then usage = value end
+      end
+      if APP.jpg and type(APP.jpg.stats) == "function" then
+        local stats_ok, value = pcall(APP.jpg.stats)
+        if stats_ok and type(value) == "table" then decoder = value end
+      end
+      if APP.audio and type(APP.audio.i2s_play_state) == "function" then
+        local audio_ok, value = pcall(APP.audio.i2s_play_state)
+        if audio_ok and type(value) == "table" then audio_state = value end
+      end
+      if APP.audio and type(APP.audio.stats) == "function" then
+        local audio_ok, value = pcall(APP.audio.stats)
+        if audio_ok and type(value) == "table" then audio_memory = value end
+      end
+      local payload = {
+        ok = true,
+        app_version = APP.VERSION,
+        module_version = APP.jpg and APP.jpg.VERSION or nil,
+        presented = APP.presented,
+        submitted = APP.submitted,
+        usage = usage,
+        decoder = decoder,
+        audio = audio_state,
+        audio_memory = audio_memory,
+      }
+      local body = '{"ok":true}'
+      if json and type(json.encode) == "function" then
+        local encoded_ok, encoded = pcall(json.encode, payload)
+        if encoded_ok and type(encoded) == "string" then body = encoded end
+      end
+      return {
+        status = "200 OK",
+        type = "application/json; charset=utf-8",
+        headers = {
+          ["cache-control"] = "no-store",
+          ["connection"] = "close",
+        },
+        body = body,
+      }
+    end)
+  end)
+  if not status_ok or status_error then
+    print("[mjpeg] status API register failed: " .. tostring(status_error))
+    return false
+  end
   print("[mjpeg] safe exit API ready: " .. route)
+  print("[mjpeg] status API ready: " .. APP.status_route)
   return true
 end
 
@@ -1066,7 +1173,7 @@ if not APP.jpg then
 else
   APP.files = list_videos()
   if #APP.files == 0 then
-    show_message("NO MJPEG AVI", "Copy 160x120 or 320x240 AVI to " .. VIDEO_DIR)
+    show_message("NO MJPEG AVI", "Copy a 320x240 AVI to " .. VIDEO_DIR)
   else
     open_video(1)
   end

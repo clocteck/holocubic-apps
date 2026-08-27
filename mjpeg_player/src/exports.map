@@ -1,0 +1,9 @@
+{
+    global:
+        module_query_v1;
+        module_create_v2;
+        module_luaopen_v1;
+        module_destroy_v1;
+    local:
+        *;
+};

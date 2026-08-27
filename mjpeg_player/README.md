@@ -1,6 +1,15 @@
 # MJPEG 视频播放器
 
-面向 Clocteck Cubic 320×240 设备的有声 MJPEG-AVI 播放器。Lua 负责 AVI 容器解析、SD 卡顺序读取、按键与 20 FPS 源时间轴；`jpg.so` 调用 ESP32-S3 ROM JPEG 解码器并转换为 RGB565，再通过 LVGL 安全图像缓冲显示；`audio.so` 播放与 AVI 同名的 16 kHz 单声道 WAV 音轨。
+面向 Clocteck Cubic 320×240 设备的有声 MJPEG-AVI 播放器。Lua 负责 AVI 容器解析、SD 卡顺序读取、按键与 20 FPS 源时间轴；`jpg.so` 使用 Espressif `esp_new_jpeg` 解码 RGB565，并通过两个持久 LVGL 图像槽交替显示；`audio.so` 播放与 AVI 同名的 16 kHz 单声道 WAV 音轨。
+
+## 1.0.1
+
+- 发布的 `jpg.so` 以 `JPG_USE_ESP_NEW_JPEG=1` 构建，并静态链接 `espressif/esp_new_jpeg 1.0.2` 的 ESP32-S3 优化库；不再走旧的 ROM TJpgDec 路径。
+- 使用两个 320×240 RGB565、16 字节对齐的持久图像槽。工作任务直接解码到当前未显示的槽，完整成帧后由 Lua 切换 `lv_img` 图像源，再释放旧槽。
+- 取消每帧 153,600 字节的 RGB565 整屏复制；解码和 LVGL 共用同一对槽，总帧缓冲占用由三帧降为两帧。
+- 显示仍完全由 LVGL 管理，不接管面板或 DMA 显示所有权，保留安全退出与 Launcher 返回路径。
+- 将低热度的待提交 JPEG 邮箱缓冲改为优先分配到 PSRAM；`esp_new_jpeg` 正在读取的解码输入仍保留内部 RAM，以兼顾内存与速度。
+- 音频 PCM 主环形缓冲继续放在 PSRAM，并把 I²S 内部 DMA 队列从 12×1024 调整为 6×512；两项合计按典型 320×240 帧释放约 24 KB 内部 RAM。
 
 ## 0.2.8
 
@@ -54,8 +63,7 @@
 ## 视频要求
 
 - AVI 容器，视频编码为 MJPEG（FourCC `MJPG`/`JPEG`/`dmb1`）
-- 推荐 320×240、20 FPS 源视频；当前安全显示模式在测试设备上实际约 13–14 FPS
-- 兼容 160×120，解码后放大到 320×240 显示
+- 推荐 320×240、20 FPS 源视频
 - 播放时间轴按源文件帧率运行，落后时跳过旧帧以维持音画同步
 - 基线 JPEG，不支持渐进式 JPEG
 - 自动播放 `/sd/videos` 中与 AVI 同名的 WAV 音轨，例如 `demo.avi` + `demo.wav`
@@ -79,8 +87,10 @@ ffmpeg -i input.mp4 -vf "fps=20,scale=320:240:force_original_aspect_ratio=decrea
 
 ## 设备实测
 
-在固件 1.203 的测试设备上，320×240、20 FPS MJPEG 使用 0.2.7 的 LVGL 安全显示路径时，实际显示约 13–14 FPS。播放器会依据 20 FPS 源时间轴跳过过期帧，避免音画延迟不断累积。连续执行 Web 退出并重新打开测试时，原生任务可正常停止和重建，未出现返回桌面黑屏、任务创建失败或看门狗重启。
+在固件 1.208 的目标设备上，1.0.1 播放 320×240、20 FPS MJPEG 实测为 19.7–20.2 FPS，单帧解码约 19–36 ms，LVGL 图像源切换约 0.1–0.6 ms，持续播放无解码错误。内部 RAM 从旧配置的 276,880/288,836（95%）降到约 247,500–249,500/288,836（85–86%）。连续四轮安全退出并重新启动后，GC 后内部 RAM 保持在 247,492–247,640 字节之间，没有单调增长。
+
+固件 1.203 上的 0.2.7 旧 LVGL 整帧复制路径约为 13–14 FPS，仅作为历史基线。播放器仍会依据 20 FPS 源时间轴跳过过期帧，避免音画延迟不断累积。
 
 ## 第三方组件
 
-SO 实现参考 `clocteck/desktop-mirror` 的 `develop/native_module`，并调用 ESP32-S3 ROM 中的 TJpgDec。请参阅 `THIRD_PARTY_LICENSES.txt`。
+SO 实现参考 `clocteck/desktop-mirror` 的 `develop/native_module`，并静态链接 Espressif `esp_new_jpeg`。请参阅 `THIRD_PARTY_LICENSES.txt`。

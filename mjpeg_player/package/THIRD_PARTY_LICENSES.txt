@@ -1,5 +1,5 @@
-MJPEG Player third-party notices
-================================
+Videos Player third-party notices
+=================================
 
 desktop-mirror native JPEG module
 ---------------------------------
@@ -11,8 +11,8 @@ HoloCubic MP3 Player native audio module
 Source: https://github.com/clocteck/holocubic-apps/tree/main/mp3_player/package/modules
 Used for WAV decoding and I2S playback. Distributed with this GPL-3.0 application.
 
-TJpgDec / ESP32-S3 ROM JPEG decoder
------------------------------------
-TJpgDec copyright: ChaN, 2012
-Header source: Espressif ESP-IDF 5.3.2, components/esp_rom/include/esp32s3/rom/tjpgd.h
-The decoder implementation is supplied by the ESP32-S3 mask ROM and is not bundled in this package.
+Espressif esp_new_jpeg 1.0.2
+----------------------------
+Source: https://components.espressif.com/components/espressif/esp_new_jpeg/versions/1.0.2
+Copyright (c) 2024 ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD
+License: ESPRESSIF MIT License; see licenses/ESPRESSIF-MIT.txt.

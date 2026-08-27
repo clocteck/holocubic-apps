@@ -44,7 +44,7 @@
       <div class="icon" role="img" aria-label="视频播放器图标"></div>
       <div>
         <p class="kicker zh">本地有声视频</p><p class="kicker en">LOCAL VIDEO WITH AUDIO</p>
-        <h1 id="title"><span class="zh">视频播放器</span><span class="en">MJPEG Player</span></h1>
+        <h1 id="title"><span class="zh">视频播放器</span><span class="en">Videos Player</span></h1>
         <p class="summary zh">为 Clocteck Cubic 320×240 屏幕设计的本地播放器。顺序读取 SD 卡中的 MJPEG AVI，并同步播放同名 WAV 音轨。</p>
         <p class="summary en">A local player designed for the Clocteck Cubic 320x240 display. It streams MJPEG AVI files from the SD card and plays matching WAV audio in sync.</p>
       </div>
@@ -57,7 +57,7 @@
           <article class="feature"><span class="feature-mark">▶</span><strong>320×240 有声播放</strong><p>支持 MJPEG AVI 与同目录、同文件名的 16 kHz 单声道 WAV 音轨。</p></article>
           <article class="feature"><span class="feature-mark">⇧</span><strong>浏览器转码上传</strong><p>配合 Launcher 1.17，可把 MP4、MOV、MJPEG 或 AVI 转为设备格式并上传。</p></article>
           <article class="feature"><span class="feature-mark">↔</span><strong>设备按键控制</strong><p>左右切换视频，上键暂停或继续，下键显示性能信息，HOME 安全退出。</p></article>
-          <article class="feature"><span class="feature-mark">✓</span><strong>稳定音画时间轴</strong><p>以 20 FPS 源时间轴播放；设备落后时跳过旧帧，防止音画延迟持续累积。</p></article>
+          <article class="feature"><span class="feature-mark">✓</span><strong>高性能零拷贝显示</strong><p>esp_new_jpeg 直接解码到两个对齐的 LVGL 图像槽，成帧后切换，无整屏复制。</p></article>
           <article class="feature"><span class="feature-mark">◎</span><strong>自动发现文件</strong><p>启动时扫描 <code>/sd/videos</code>，支持播放、切换与循环。</p></article>
           <article class="feature"><span class="feature-mark">⏻</span><strong>安全释放资源</strong><p>退出前停止音频、JPEG 解码任务与定时器，避免返回桌面黑屏或再次打开失败。</p></article>
         </div>
@@ -65,7 +65,7 @@
           <article class="feature"><span class="feature-mark">▶</span><strong>320x240 video with audio</strong><p>Plays MJPEG AVI with a matching 16 kHz mono WAV track in the same folder.</p></article>
           <article class="feature"><span class="feature-mark">⇧</span><strong>Browser conversion</strong><p>Launcher 1.17 converts MP4, MOV, MJPEG, or AVI files and uploads the device-ready result.</p></article>
           <article class="feature"><span class="feature-mark">↔</span><strong>Hardware controls</strong><p>Left/right switches videos, up pauses, down toggles statistics, and HOME exits safely.</p></article>
-          <article class="feature"><span class="feature-mark">✓</span><strong>Stable A/V timeline</strong><p>A 20 FPS source timeline skips stale frames when necessary to prevent growing sync delay.</p></article>
+          <article class="feature"><span class="feature-mark">✓</span><strong>Fast zero-copy display</strong><p>esp_new_jpeg decodes directly into two aligned LVGL image slots and switches only complete frames.</p></article>
           <article class="feature"><span class="feature-mark">◎</span><strong>Automatic discovery</strong><p>Scans <code>/sd/videos</code> at startup and supports switching and looping playback.</p></article>
           <article class="feature"><span class="feature-mark">⏻</span><strong>Safe resource cleanup</strong><p>Stops audio, JPEG worker tasks, and timers before exit to prevent black screens or relaunch failures.</p></article>
         </div>
@@ -73,14 +73,14 @@
       <aside class="panel" aria-labelledby="info-title">
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App info</h2>
         <div class="meta">
-          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">0.2.8</span></div>
+          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">1.0.1</span></div>
           <div class="meta-item"><span class="label zh">视频格式</span><span class="label en">Video format</span><span class="value">MJPEG AVI · 320×240</span></div>
           <div class="meta-item"><span class="label zh">音频格式</span><span class="label en">Audio format</span><span class="value">WAV · 16 kHz · Mono</span></div>
           <div class="meta-item"><span class="label zh">媒体目录</span><span class="label en">Media folder</span><span class="value">/sd/videos</span></div>
           <div class="meta-item"><span class="label zh">开源协议</span><span class="label en">License</span><span class="value">GPL-3.0</span></div>
         </div>
-        <p class="notice zh"><strong>0.2.8 更新：</strong>蓝牙手柄 SELECT 或 HOME 会先安全停止音频、异步解码和显示资源，再退出播放器。</p>
-        <p class="notice en"><strong>0.2.8:</strong> Bluetooth controller SELECT or HOME safely stops audio, asynchronous decoding, and display resources before exiting.</p>
+        <p class="notice zh"><strong>1.0.1 更新：</strong>启用 esp_new_jpeg 与双对齐图像槽；低热度 JPEG 邮箱移到 PSRAM，并缩减音频 DMA 队列，典型释放约 24 KB 内部 RAM。</p>
+        <p class="notice en"><strong>1.0.1:</strong> Adds esp_new_jpeg with two aligned image slots, moves the low-traffic JPEG mailbox to PSRAM, and trims audio DMA to free about 24 KB of internal RAM.</p>
       </aside>
     </div>
     <footer class="footer"><span class="zh">推荐搭配 Launcher 1.17 使用 · 源码与第三方许可：</span><span class="en">Recommended with Launcher 1.17 · Source and third-party licenses: </span><a href="https://github.com/clocteck/holocubic-apps/tree/main/mjpeg_player" target="_blank" rel="noopener">clocteck/holocubic-apps</a></footer>
@@ -89,7 +89,7 @@
     (function(){
       var body=document.body,toggle=document.querySelector("[data-lang-toggle]"),lang="zh";
       function preferredLang(){var requested="";try{var params=new URLSearchParams(window.location.search);requested=params.get("lang")||params.get("language")||""}catch(err){}if(!requested){try{requested=localStorage.getItem("cubic.mainpage.language")||""}catch(err){}}if(!requested){try{requested=localStorage.getItem("mjpeg_player.info.lang")||""}catch(err){}}requested=String(requested||"").toLowerCase();return requested.indexOf("zh")===0?"zh":"en"}
-      function applyLang(next){lang=next==="en"?"en":"zh";body.setAttribute("data-lang",lang);document.documentElement.lang=lang==="zh"?"zh-CN":"en";document.title=lang==="zh"?"视频播放器":"MJPEG Player";if(toggle){toggle.textContent=lang==="zh"?"EN":"中";toggle.setAttribute("aria-label",lang==="zh"?"Switch to English":"切换到中文")}try{localStorage.setItem("mjpeg_player.info.lang",lang)}catch(err){}}
+      function applyLang(next){lang=next==="en"?"en":"zh";body.setAttribute("data-lang",lang);document.documentElement.lang=lang==="zh"?"zh-CN":"en";document.title=lang==="zh"?"视频播放器":"Videos Player";if(toggle){toggle.textContent=lang==="zh"?"EN":"中";toggle.setAttribute("aria-label",lang==="zh"?"Switch to English":"切换到中文")}try{localStorage.setItem("mjpeg_player.info.lang",lang)}catch(err){}}
       lang=preferredLang();if(toggle){toggle.addEventListener("click",function(){applyLang(lang==="zh"?"en":"zh")})}applyLang(lang);
     })();
   </script>

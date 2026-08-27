@@ -17,3 +17,6 @@ info页面要求.md
 /xiaozhi/src/**/config/
 /xiaozhi/src/**/.pio/
 /xiaozhi/src/**/sdkconfig.old
+
+# mjpeg_player native module build output
+/mjpeg_player/src/build/
