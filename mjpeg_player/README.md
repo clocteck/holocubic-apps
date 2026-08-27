@@ -80,7 +80,7 @@ ffmpeg -i input.mp4 -vf "fps=20,scale=320:240:force_original_aspect_ratio=decrea
 
 - 左/右：切换视频
 - 上：暂停/继续
-- 下：显示或隐藏性能信息
+- 下：显示或隐藏性能信息（默认隐藏）
 - HOME：退出应用
 
 播放器以 20 FPS 为目标。设备落后于时间轴时会跳过旧帧，避免整段视频持续变慢。
