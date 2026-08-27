@@ -7,6 +7,31 @@
   var DEFAULT_QUALITY = 0.72;
   var DEFAULT_AUDIO_RATE = 16000;
   var MAX_AVI_BYTES = 0x7fffffff;
+  var IOS_MAX_DURATION_SECONDS = 300;
+  var MAX_JPEG_OUTPUT_BYTES = 256 * 1024 * 1024;
+
+  function isAppleMobile(){
+    var nav = global.navigator || {};
+    var userAgent = String(nav.userAgent || "");
+    return /iPad|iPhone|iPod/i.test(userAgent) ||
+      (String(nav.platform || "") === "MacIntel" && Number(nav.maxTouchPoints || 0) > 1);
+  }
+
+  function maxDurationSeconds(options){
+    var requested = Number(options && options.maxDurationSeconds || 600);
+    if(!isFinite(requested) || requested <= 0) requested = 600;
+    requested = Math.max(1, requested);
+    return isAppleMobile() ? Math.min(requested, IOS_MAX_DURATION_SECONDS) : requested;
+  }
+
+  function appendJpegFrame(output, frame, budget){
+    var nextBytes = budget.bytes + Number(frame && frame.size || 0);
+    if(nextBytes > MAX_JPEG_OUTPUT_BYTES){
+      throw new Error("Converted JPEG frames exceed the 256 MiB memory limit");
+    }
+    budget.bytes = nextBytes;
+    output.push(frame);
+  }
 
   function cancelledError(){
     var error = new Error("Conversion cancelled");
@@ -32,6 +57,22 @@
         requestAnimationFrame(function(){ requestAnimationFrame(resolve); });
       }else{
         setTimeout(resolve, 0);
+      }
+    });
+  }
+
+  function shortDelay(ms, options){
+    return new Promise(function(resolve, reject){
+      var signal = options && options.signal;
+      var timer = setTimeout(function(){ cleanup(); resolve(); }, ms);
+      function cleanup(){
+        clearTimeout(timer);
+        if(signal) signal.removeEventListener("abort", aborted);
+      }
+      function aborted(){ cleanup(); reject(cancelledError()); }
+      if(signal){
+        if(signal.aborted){ aborted(); return; }
+        signal.addEventListener("abort", aborted, { once: true });
       }
     });
   }
@@ -244,11 +285,14 @@
     var sourceFps = /\.avi$/i.test(file.name || "") ? readAviRate(source) : fps;
     if(!isFinite(sourceFps) || sourceFps <= 0) sourceFps = fps;
     var duration = ranges.length / sourceFps;
-    var maxDuration = Math.max(1, Number(options.maxDurationSeconds || 600));
+    var maxDuration = maxDurationSeconds(options);
     if(duration > maxDuration) throw new Error("Video is longer than " + Math.round(maxDuration / 60) + " minutes");
     var targetCount = Math.max(1, Math.round(duration * fps));
+    var audio = await extractAudio(file, outputName(file.name), duration, options);
+    checkCancelled(options);
     var drawing = makeCanvas(width, height);
     var output = [];
+    var budget = { bytes: 0 };
     var lastSourceIndex = -1;
     var lastFrame = null;
     for(var i = 0; i < targetCount; i += 1){
@@ -265,11 +309,11 @@
         lastFrame = await canvasToJpeg(drawing.canvas, quality);
         lastSourceIndex = sourceIndex;
       }
-      output.push(lastFrame);
-      emit(options, { phase: "convert", current: i + 1, total: targetCount, duration: duration, mediaTime: i / fps });
+      appendJpegFrame(output, lastFrame, budget);
+      emit(options, { phase: "convert", current: i + 1, total: targetCount, duration: duration, mediaTime: i / fps, outputBytes: budget.bytes });
       if((i & 7) === 7) await nextPaint();
     }
-    return output;
+    return { frames: output, audio: audio, duration: duration, jpegBytes: budget.bytes };
   }
 
   function waitForVideoEvent(video, eventName, errorText, timeoutMs, options){
@@ -294,12 +338,69 @@
     });
   }
 
+  function beginPresentedFrameWait(video, errorText, timeoutMs, options){
+    if(typeof video.requestVideoFrameCallback !== "function") return null;
+    return new Promise(function(resolve, reject){
+      var frameId = null;
+      var signal = options && options.signal;
+      var timer = setTimeout(function(){
+        cleanup();
+        reject(new Error(errorText || "Video frame decode timed out"));
+      }, timeoutMs || 20000);
+      function cleanup(){
+        clearTimeout(timer);
+        if(frameId !== null && typeof video.cancelVideoFrameCallback === "function"){
+          try{ video.cancelVideoFrameCallback(frameId); }catch(ignore){}
+        }
+        frameId = null;
+        if(signal) signal.removeEventListener("abort", aborted);
+      }
+      function done(now, metadata){
+        frameId = null;
+        cleanup();
+        resolve(metadata || {});
+      }
+      function aborted(){ cleanup(); reject(cancelledError()); }
+      if(signal){
+        if(signal.aborted){ aborted(); return; }
+        signal.addEventListener("abort", aborted, { once: true });
+      }
+      try{
+        frameId = video.requestVideoFrameCallback(done);
+      }catch(error){
+        cleanup();
+        reject(error);
+      }
+    });
+  }
+
+  async function waitForFallbackFrame(options){
+    checkCancelled(options);
+    await shortDelay(32, options);
+    await nextPaint();
+    checkCancelled(options);
+  }
+
+  async function waitForVideoData(video, options){
+    if(video.readyState >= 2) return;
+    await waitForVideoEvent(video, "loadeddata", "Browser did not decode the first video frame", 20000, options);
+  }
+
   async function seekVideo(video, time, options){
     checkCancelled(options);
-    if(Math.abs(video.currentTime - time) < 0.0005 && video.readyState >= 2) return;
-    var waiting = waitForVideoEvent(video, "seeked", "Video frame seek failed", 20000, options);
+    if(Math.abs(video.currentTime - time) < 0.0005){
+      await waitForVideoData(video, options);
+      return;
+    }
+    var frameWaiting = beginPresentedFrameWait(video, "Video frame decode timed out after seek", 20000, options);
+    var seekWaiting = waitForVideoEvent(video, "seeked", "Video frame seek failed", 20000, options);
     video.currentTime = time;
-    await waiting;
+    if(frameWaiting){
+      await Promise.all([seekWaiting, frameWaiting]);
+    }else{
+      await seekWaiting;
+      await waitForFallbackFrame(options);
+    }
     checkCancelled(options);
   }
 
@@ -308,32 +409,54 @@
     var url = URL.createObjectURL(file);
     var video = document.createElement("video");
     video.muted = true;
+    video.defaultMuted = true;
     video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.preload = "auto";
-    video.src = url;
+    video.setAttribute("aria-hidden", "true");
+    video.tabIndex = -1;
+    video.style.cssText = "position:fixed;width:1px;height:1px;left:0;top:0;opacity:.01;pointer-events:none;z-index:2147483647";
+    (document.body || document.documentElement).appendChild(video);
+    var firstFrameWaiting = beginPresentedFrameWait(video, "Browser did not present the first video frame", 20000, options);
+    if(firstFrameWaiting) firstFrameWaiting.catch(function(){});
     try{
+      video.src = url;
+      video.load();
       await waitForVideoEvent(video, "loadedmetadata", "Browser cannot decode this MP4 video", 20000, options);
+      await waitForVideoData(video, options);
+      if(firstFrameWaiting){
+        await firstFrameWaiting;
+      }else{
+        await waitForFallbackFrame(options);
+      }
       var duration = Number(video.duration);
       if(!isFinite(duration) || duration <= 0) throw new Error("Video duration is invalid");
-      var maxDuration = Math.max(1, Number(options.maxDurationSeconds || 600));
+      var maxDuration = maxDurationSeconds(options);
       if(duration > maxDuration) throw new Error("Video is longer than " + Math.round(maxDuration / 60) + " minutes");
       var total = Math.max(1, Math.floor(duration * fps));
+      var audio = await extractAudio(file, outputName(file.name), duration, options);
+      checkCancelled(options);
       var drawing = makeCanvas(width, height);
       var output = [];
+      var budget = { bytes: 0 };
       for(var i = 0; i < total; i += 1){
         checkCancelled(options);
         var time = Math.min(Math.max(0, duration - 0.001), i / fps);
         await seekVideo(video, time, options);
         drawFitted(drawing.ctx, video, video.videoWidth, video.videoHeight, width, height);
-        output.push(await canvasToJpeg(drawing.canvas, quality));
-        emit(options, { phase: "convert", current: i + 1, total: total, duration: duration, mediaTime: time });
+        var frame = await canvasToJpeg(drawing.canvas, quality);
+        appendJpegFrame(output, frame, budget);
+        emit(options, { phase: "convert", current: i + 1, total: total, duration: duration, mediaTime: time, outputBytes: budget.bytes });
         if((i & 3) === 3) await nextPaint();
       }
-      return output;
+      return { frames: output, audio: audio, duration: duration, jpegBytes: budget.bytes };
     }finally{
       video.pause();
       video.removeAttribute("src");
       video.load();
+      if(video.parentNode) video.parentNode.removeChild(video);
       URL.revokeObjectURL(url);
     }
   }
@@ -357,30 +480,32 @@
     var channelCount = Math.max(1, Number(audioBuffer.numberOfChannels || 1));
     var seconds = Math.max(0, Math.min(Number(audioBuffer.duration || 0), Number(duration || audioBuffer.duration || 0)));
     var sampleCount = Math.max(1, Math.floor(seconds * sampleRate));
-    var buffer = new ArrayBuffer(44 + sampleCount * 2);
-    var bytes = new Uint8Array(buffer);
-    var view = new DataView(buffer);
-    writeAscii(bytes, 0, "RIFF");
-    u32(view, 4, 36 + sampleCount * 2);
-    writeAscii(bytes, 8, "WAVE");
-    writeAscii(bytes, 12, "fmt ");
-    u32(view, 16, 16);
-    u16(view, 20, 1);
-    u16(view, 22, 1);
-    u32(view, 24, sampleRate);
-    u32(view, 28, sampleRate * 2);
-    u16(view, 32, 2);
-    u16(view, 34, 16);
-    writeAscii(bytes, 36, "data");
-    u32(view, 40, sampleCount * 2);
+    var header = new Uint8Array(44);
+    var headerView = new DataView(header.buffer);
+    writeAscii(header, 0, "RIFF");
+    u32(headerView, 4, 36 + sampleCount * 2);
+    writeAscii(header, 8, "WAVE");
+    writeAscii(header, 12, "fmt ");
+    u32(headerView, 16, 16);
+    u16(headerView, 20, 1);
+    u16(headerView, 22, 1);
+    u32(headerView, 24, sampleRate);
+    u32(headerView, 28, sampleRate * 2);
+    u16(headerView, 32, 2);
+    u16(headerView, 34, 16);
+    writeAscii(header, 36, "data");
+    u32(headerView, 40, sampleCount * 2);
 
     var channels = [];
     for(var c = 0; c < channelCount; c += 1) channels.push(audioBuffer.getChannelData(c));
     var chunk = 32768;
     return (async function(){
+      var parts = [header];
       for(var start = 0; start < sampleCount; start += chunk){
         checkCancelled(options);
         var end = Math.min(sampleCount, start + chunk);
+        var pcm = new Uint8Array((end - start) * 2);
+        var pcmView = new DataView(pcm.buffer);
         for(var i = start; i < end; i += 1){
           var sourcePosition = i * sourceRate / sampleRate;
           var left = Math.min(channels[0].length - 1, Math.floor(sourcePosition));
@@ -392,19 +517,26 @@
             mix += data[left] + (data[right] - data[left]) * fraction;
           }
           mix = Math.max(-1, Math.min(1, mix / channels.length));
-          view.setInt16(44 + i * 2, mix < 0 ? Math.round(mix * 32768) : Math.round(mix * 32767), true);
+          pcmView.setInt16((i - start) * 2, mix < 0 ? Math.round(mix * 32768) : Math.round(mix * 32767), true);
         }
+        parts.push(pcm);
         emit(options, { phase: "audio", current: end, total: sampleCount, duration: seconds });
         await nextPaint();
       }
-      return new Blob([buffer], { type: "audio/wav" });
+      return new Blob(parts, { type: "audio/wav" });
     })();
   }
 
   async function extractAudio(file, videoName, duration, options){
     var AudioContextClass = global.AudioContext || global.webkitAudioContext;
     if(!AudioContextClass) return { file: null, error: "Web Audio API is unavailable" };
-    var context = new AudioContextClass();
+    var sampleRate = Math.max(8000, Math.min(24000, Number(options.audioSampleRate || DEFAULT_AUDIO_RATE) | 0));
+    var context;
+    try{
+      context = new AudioContextClass({ sampleRate: sampleRate });
+    }catch(ignore){
+      context = new AudioContextClass();
+    }
     var signal = options && options.signal;
     var abortContext = function(){
       if(context && typeof context.close === "function") context.close().catch(function(){});
@@ -417,7 +549,6 @@
       var decoded = await context.decodeAudioData(input);
       checkCancelled(options);
       if(!decoded || !decoded.length || !decoded.duration) return { file: null, error: "No audio track was found" };
-      var sampleRate = Math.max(8000, Math.min(24000, Number(options.audioSampleRate || DEFAULT_AUDIO_RATE) | 0));
       var wav = await makeMonoWav(decoded, sampleRate, duration, options);
       var audioFile = new File([wav], audioOutputName(videoName), { type: "audio/wav", lastModified: Date.now() });
       return { file: audioFile, sampleRate: sampleRate, duration: Math.min(decoded.duration, duration) };
@@ -437,23 +568,25 @@
     var width = Math.max(1, Number(options.width || DEFAULT_WIDTH) | 0);
     var height = Math.max(1, Number(options.height || DEFAULT_HEIGHT) | 0);
     var fps = Math.max(1, Number(options.fps || DEFAULT_FPS) | 0);
+    if(isAppleMobile()) fps = Math.min(fps, DEFAULT_FPS);
     var quality = Math.max(0.35, Math.min(0.95, Number(options.jpegQuality || DEFAULT_QUALITY)));
     var lower = String(file && file.name || "").toLowerCase();
     if(!file) throw new Error("No video file selected");
     checkCancelled(options);
-    var frames;
+    var converted;
     if(/\.(avi|mjpeg|mjpg)$/.test(lower)){
-      frames = await convertMjpeg(file, options, width, height, fps, quality);
+      converted = await convertMjpeg(file, options, width, height, fps, quality);
     }else if(/\.(mp4|m4v|mov)$/.test(lower) || String(file.type || "").indexOf("video/") === 0){
-      frames = await convertBrowserVideo(file, options, width, height, fps, quality);
+      converted = await convertBrowserVideo(file, options, width, height, fps, quality);
     }else{
       throw new Error("Unsupported video format");
     }
+    var frames = converted.frames;
+    var audio = converted.audio || { file: null, error: "Audio track decode failed" };
     emit(options, { phase: "mux", current: frames.length, total: frames.length });
     await nextPaint();
     var avi = buildAvi(frames, width, height, fps);
     var videoFileName = outputName(file.name);
-    var audio = await extractAudio(file, videoFileName, frames.length / fps, options);
     checkCancelled(options);
     emit(options, {
       phase: "done",
@@ -474,12 +607,17 @@
       height: height,
       fps: fps,
       frames: frames.length,
-      size: avi.size
+      size: avi.size,
+      jpegBytes: converted.jpegBytes || 0
     };
   }
 
   global.CubicVideoTools = {
     convertVideo: convertVideo,
-    version: "1.1.0"
+    version: "1.2.0",
+    limits: {
+      iosMaxDurationSeconds: IOS_MAX_DURATION_SECONDS,
+      maxJpegOutputBytes: MAX_JPEG_OUTPUT_BYTES
+    }
   };
 })(window);

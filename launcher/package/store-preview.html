@@ -1293,11 +1293,8 @@
         const id = String(item && item.id || "").trim();
         if(id){map.set(id,item);}
       });
-      const launcherJobs = systemInstallJobs(system)
-        .filter((job)=>String(job && job.app_id || "") === "launcher" && String(job && job.phase || "") === "done")
-        .sort((a,b)=>Number(b.seq || 0) - Number(a.seq || 0));
       if(!map.has("launcher")){
-        map.set("launcher",{id:"launcher",name:"Launcher",kind:"launcher",source:"sd",version:String(launcherJobs[0] && launcherJobs[0].version || "")});
+        map.set("launcher",{id:"launcher",name:"Launcher",kind:"launcher",source:"builtin",version:"0.0.0"});
       }
       return map;
     }
