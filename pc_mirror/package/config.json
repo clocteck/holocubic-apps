@@ -1,0 +1,8 @@
+{
+  "url": "ws://192.168.0.80:8787",
+  "ws_buffer": 8192,
+  "overlay": false,
+  "serial_debug": true,
+  "serial_debug_every": 1,
+  "serial_debug_interval_ms": 5000
+}

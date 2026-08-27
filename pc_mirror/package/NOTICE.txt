@@ -1,0 +1,14 @@
+PC Mirror 0.0.1
+
+This package is based on the pure-Lua receiver from:
+https://github.com/clocteck/desktop-mirror
+
+Upstream revision:
+7ae2816a7a151e935d226bc1de7deb00e0233da5
+
+Modified on 2026-08-27 to add the PC Mirror community-app package,
+localized metadata, original artwork and documentation, dynamic app paths,
+and lifecycle/display safeguards.
+
+License: GNU General Public License v3.0 only (GPL-3.0-only).
+See licenses/GPL-3.0.txt for the full license text.
