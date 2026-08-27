@@ -1,4 +1,812 @@
 # LVGL UI Lua API
+
+[English](#lvgl-ui-lua-api) | [简体中文](#lvgl-ui-lua-api-1)
+
+Notes:
+
+- Object return values are Lua-layer `obj_id` values. `0` is the pseudo-ID of the root and can
+  be used as a parent object.
+- Use `LV_*` constants according to the official LVGL conventions. This document adds only a
+  small number of project-specific constants.
+- See the individual API descriptions for Lua representations of tables, handles, callbacks,
+  and related values.
+
+## Official APIs / Compatibility Layer
+
+### Screen
+
+- `lv_scr_act() -> screen_id`
+- `lv_layer_top() -> layer_id`
+- `lv_scr_load(screen_id)`
+- `lv_scr_load_anim(screen_id, anim_type, time, delay, auto_del)`
+
+Notes:
+
+- `lv_scr_act()` normally returns root `0`. You can also create a separate screen with
+  `lv_obj_create(nil)` and switch to it.
+- `lv_layer_top()` is suitable for dialogs, masks, and overlays. Do not delete the layer itself;
+  clean only its children.
+- `anim_type` in `lv_scr_load_anim()` uses the official LVGL `LV_SCR_LOAD_ANIM_*` constants.
+
+### Object
+
+- `lv_obj_create(parent_id|nil) -> obj_id`
+- `lv_obj_set_pos(obj_id, x, y)`
+- `lv_obj_set_size(obj_id, w, h)`
+- `lv_obj_set_x(obj_id, x)`
+- `lv_obj_set_y(obj_id, y)`
+- `lv_obj_set_width(obj_id, width)`
+- `lv_obj_set_height(obj_id, height)`
+- `lv_obj_set_align(obj_id, align[, x_ofs[, y_ofs]])`
+- `lv_obj_align(obj_id, align[, x_ofs[, y_ofs]])`
+- `lv_obj_align_to(obj_id, base_id, align[, x_ofs[, y_ofs]])`
+- `lv_obj_center(obj_id)`
+- `lv_obj_set_parent(obj_id, new_parent_id)`
+- `lv_obj_get_child(parent_id, idx) -> child_id|nil`
+- `lv_obj_get_child_cnt(parent_id) -> n`
+- `lv_obj_get_index(obj_id) -> idx`
+- `lv_obj_move_foreground(obj_id)`
+- `lv_obj_move_background(obj_id)`
+- `lv_obj_move_to_index(obj_id, idx)`
+- `lv_obj_swap(obj1_id, obj2_id)`
+- `lv_obj_del(obj_id)`
+- `lv_obj_del_async(obj_id)`
+- `lv_obj_clean(obj_id)`
+- `lv_obj_invalidate(obj_id)`
+- `lv_obj_get_x(obj_id) -> x`
+- `lv_obj_get_y(obj_id) -> y`
+- `lv_obj_get_width(obj_id) -> width`
+- `lv_obj_get_height(obj_id) -> height`
+- `lv_obj_get_parent(obj_id) -> parent_id|nil`
+
+Notes:
+
+- Use `lv_obj_create(nil)` to create a separate screen that can be selected by `lv_scr_load*()`.
+- `lv_obj_get_child(parent_id, idx)` follows official LVGL index semantics: `0` is the earliest
+  child created and `-1` is the last child.
+- `lv_obj_move_to_index(obj_id, idx)` also supports official negative-index semantics. `0` moves
+  an object to the background and `-1` moves it to the foreground.
+- `lv_obj_set_parent(obj_id, new_parent_id)` preserves relative coordinates. An object's parent
+  cannot be itself or one of its descendants.
+
+### Event
+
+- `lv_event_send(obj_id, event_code[, param]) -> bool`
+
+### Layout / Flag / State / Scroll
+
+- `lv_obj_set_layout(obj_id, layout)`
+- `lv_obj_set_flex_flow(obj_id, flow)`
+- `lv_obj_set_flex_align(obj_id, main_place, cross_place, track_place)`
+- `lv_obj_set_grid_cell(obj_id, col_align, col_pos, col_span, row_align, row_pos, row_span)`
+- `lv_obj_add_flag(obj_id, flag)`
+- `lv_obj_clear_flag(obj_id, flag)`
+- `lv_obj_add_state(obj_id, state)`
+- `lv_obj_clear_state(obj_id, state)`
+- `lv_obj_has_flag(obj_id, flag) -> bool`
+- `lv_obj_has_state(obj_id, state) -> bool`
+- `lv_obj_scroll_to_view(obj_id[, anim])`
+- `lv_obj_scroll_to_view_recursive(obj_id[, anim])`
+- `lv_obj_scroll_to_x(obj_id, value[, anim])`
+- `lv_obj_scroll_to_y(obj_id, value[, anim])`
+- `lv_obj_set_scroll_dir(obj_id, dir)`
+- `lv_obj_set_scroll_snap_x(obj_id, snap)`
+- `lv_obj_set_scroll_snap_y(obj_id, snap)`
+
+### Style
+
+Shared styles:
+
+- `lv_style_t() -> style`
+- `lv_style_init(style)`
+- `lv_style_reset(style)`
+- `lv_style_set_bg_color(style, color_hex)`
+- `lv_style_set_bg_opa(style, opa)`
+- `lv_style_set_border_width(style, width)`
+- `lv_style_set_border_color(style, color_hex)`
+- `lv_style_set_radius(style, radius)`
+- `lv_style_set_pad_all(style, value)`
+- `lv_style_set_text_color(style, color_hex)`
+- `lv_style_set_text_font(style, font)`
+- `lv_style_set_opa(style, opa)`
+- `lv_style_set_transform_width(style, value)`
+- `lv_style_set_transform_height(style, value)`
+- `lv_style_set_blend_mode(style, blend_mode)`
+
+Object styles:
+
+- `lv_obj_add_style(obj_id, style, selector)`
+- `lv_obj_remove_style(obj_id, style_or_nil, selector)`
+- `lv_obj_remove_style_all(obj_id)`
+- `lv_obj_report_style_change(style_or_nil)`
+- `lv_obj_refresh_style(obj_id, part, prop)`
+- `lv_obj_set_style_bg_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_bg_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_bg_grad_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_bg_grad_dir(obj_id, dir, selector)`
+- `lv_obj_set_style_bg_main_stop(obj_id, stop, selector)`
+- `lv_obj_set_style_bg_grad_stop(obj_id, stop, selector)`
+- `lv_obj_set_style_bg_img_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_bg_img_recolor(obj_id, color_hex, selector)`
+- `lv_obj_set_style_bg_img_recolor_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_bg_img_tiled(obj_id, enabled, selector)`
+- `lv_obj_set_style_border_width(obj_id, width, selector)`
+- `lv_obj_set_style_border_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_border_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_border_side(obj_id, side, selector)`
+- `lv_obj_set_style_min_width(obj_id, value, selector)`
+- `lv_obj_set_style_max_width(obj_id, value, selector)`
+- `lv_obj_set_style_min_height(obj_id, value, selector)`
+- `lv_obj_set_style_max_height(obj_id, value, selector)`
+- `lv_obj_set_style_radius(obj_id, radius, selector)`
+- `lv_obj_set_style_clip_corner(obj_id, enabled, selector)`
+- `lv_obj_set_style_border_post(obj_id, enabled, selector)`
+- `lv_obj_set_style_outline_width(obj_id, width, selector)`
+- `lv_obj_set_style_outline_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_outline_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_outline_pad(obj_id, pad, selector)`
+- `lv_obj_set_style_shadow_width(obj_id, width, selector)`
+- `lv_obj_set_style_shadow_ofs_x(obj_id, value, selector)`
+- `lv_obj_set_style_shadow_ofs_y(obj_id, value, selector)`
+- `lv_obj_set_style_shadow_spread(obj_id, value, selector)`
+- `lv_obj_set_style_shadow_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_shadow_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_translate_x(obj_id, value, selector)`
+- `lv_obj_set_style_translate_y(obj_id, value, selector)`
+- `lv_obj_set_style_transform_width(obj_id, value, selector)`
+- `lv_obj_set_style_transform_height(obj_id, value, selector)`
+- `lv_obj_set_style_transform_zoom(obj_id, value, selector)`
+- `lv_obj_set_style_transform_angle(obj_id, value, selector)`
+- `lv_obj_set_style_transform_pivot_x(obj_id, value, selector)`
+- `lv_obj_set_style_transform_pivot_y(obj_id, value, selector)`
+- `lv_obj_set_style_anim_time(obj_id, ms, selector)`
+- `lv_obj_set_style_blend_mode(obj_id, blend_mode, selector)`
+- `lv_obj_set_style_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_pad_left(obj_id, left, selector)`
+- `lv_obj_set_style_pad_top(obj_id, top, selector)`
+- `lv_obj_set_style_pad_right(obj_id, right, selector)`
+- `lv_obj_set_style_pad_bottom(obj_id, bottom, selector)`
+- `lv_obj_set_style_pad_row(obj_id, value, selector)`
+- `lv_obj_set_style_pad_column(obj_id, value, selector)`
+- `lv_obj_set_style_pad_all(obj_id, value, selector)`
+- `lv_obj_set_style_text_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_text_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_text_align(obj_id, align, selector)`
+- `lv_obj_set_style_text_font(obj_id, font, selector)`
+- `lv_obj_set_style_text_letter_space(obj_id, value, selector)`
+- `lv_obj_set_style_text_line_space(obj_id, value, selector)`
+- `lv_obj_set_style_img_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_img_recolor(obj_id, color_hex, selector)`
+- `lv_obj_set_style_img_recolor_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_line_width(obj_id, width, selector)`
+- `lv_obj_set_style_line_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_line_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_line_rounded(obj_id, enabled, selector)`
+- `lv_obj_set_style_line_dash_width(obj_id, width, selector)`
+- `lv_obj_set_style_line_dash_gap(obj_id, gap, selector)`
+- `lv_obj_set_style_arc_width(obj_id, width, selector)`
+- `lv_obj_set_style_arc_color(obj_id, color_hex, selector)`
+- `lv_obj_set_style_arc_opa(obj_id, opa, selector)`
+- `lv_obj_set_style_arc_rounded(obj_id, enabled, selector)`
+
+Notes:
+
+- Shared style sequence: `lv_style_t()` -> `lv_style_init()` -> `lv_style_set_*()` ->
+  `lv_obj_add_style()`.
+- After changing a shared style, call `lv_obj_report_style_change(style)` or
+  `lv_obj_refresh_style(obj_id, part, prop)` to refresh it.
+- `lv_obj_set_style_*` changes an object's local style.
+  `lv_obj_remove_style(obj_id, nil, selector)` removes styles by selector.
+- `blend_mode` can use `LV_BLEND_MODE_NORMAL`, `LV_BLEND_MODE_ADDITIVE`,
+  `LV_BLEND_MODE_SUBTRACTIVE`, or `LV_BLEND_MODE_MULTIPLY`.
+
+### Label
+
+- `lv_label_create(parent_id) -> label_id`
+- `lv_label_set_text(label_id, text)`
+- `lv_label_set_text_fmt(label_id, fmt, ...)`
+- `lv_label_set_long_mode(label_id, mode)`
+
+### Line
+
+- `lv_line_create(parent_id) -> line_id`
+- `lv_line_set_points(line_id, point_array[, point_cnt])`
+- `lv_line_set_points(line_id, nil)` -- Clear the point array
+- `lv_line_set_y_invert(line_id, enabled)`
+- `lv_line_get_y_invert(line_id) -> bool`
+
+Notes:
+
+- `point_array` can be a flat array such as `{x1, y1, x2, y2, ...}` or an array of point
+  tables such as `{{x=0, y=0}, {x=20, y=12}}`.
+- `point_cnt` is optional and is inferred when omitted. Passing `0` is equivalent to clearing
+  the points.
+- A non-clearing call requires at least two points.
+
+### Button
+
+- `lv_btn_create(parent_id) -> btn_id`
+
+### Checkbox
+
+- `lv_checkbox_create(parent_id) -> cb_id`
+- `lv_checkbox_set_text(cb_id, text)`
+- `lv_checkbox_get_text(cb_id) -> string|nil`
+
+### Dropdown
+
+- `lv_dropdown_create(parent_id) -> dd_id`
+- `lv_dropdown_set_options(dd_id, options_text)`
+- `lv_dropdown_set_options_static(dd_id, options_text)`
+- `lv_dropdown_add_option(dd_id, text, pos)`
+- `lv_dropdown_clear_options(dd_id)`
+- `lv_dropdown_set_selected(dd_id, index)`
+- `lv_dropdown_get_selected(dd_id) -> index`
+- `lv_dropdown_get_selected_str(dd_id) -> string`
+- `lv_dropdown_set_dir(dd_id, dir)`
+- `lv_dropdown_set_symbol(dd_id, symbol)`
+- `lv_dropdown_open(dd_id)`
+- `lv_dropdown_close(dd_id)`
+- `lv_dropdown_is_open(dd_id) -> bool`
+- `lv_dropdown_set_selected_highlight(dd_id, enabled)`
+
+Notes:
+
+- Following official LVGL 8.3 semantics, separate entries in `options_text` with `"\n"`.
+- Use with `LV_DROPDOWN_POS_LAST` and `LV_DIR_*` constants as needed.
+- `lv_dropdown_get_selected_str()` returns the current option string directly.
+- `lv_dropdown_set_options_static()` is suitable for fixed option text.
+- `symbol` may be an `LV_SYMBOL_*` value, ordinary text, an image source, a path, or `nil`.
+  Passing `nil` clears the symbol on the right.
+
+### Button Matrix
+
+- `lv_btnmatrix_create(parent_id) -> btnm_id`
+- `lv_btnmatrix_set_map(btnm_id, map_table)`
+- `lv_btnmatrix_set_ctrl_map(btnm_id, ctrl_map_table)`
+- `lv_btnmatrix_set_btn_ctrl(btnm_id, btn_index, ctrl)`
+- `lv_btnmatrix_clear_btn_ctrl(btnm_id, btn_index, ctrl)`
+- `lv_btnmatrix_set_btn_ctrl_all(btnm_id, ctrl)`
+- `lv_btnmatrix_clear_btn_ctrl_all(btnm_id, ctrl)`
+- `lv_btnmatrix_set_one_checked(btnm_id, enabled)`
+- `lv_btnmatrix_set_selected_btn(btnm_id, btn_index)`
+- `lv_btnmatrix_get_selected_btn(btnm_id) -> btn_index`
+- `lv_btnmatrix_get_btn_text(btnm_id, btn_index) -> string|nil`
+- `lv_btnmatrix_has_btn_ctrl(btnm_id, btn_index, ctrl) -> bool`
+
+Notes:
+
+- Supported constants include `LV_BTNMATRIX_BTN_NONE`, `LV_BTNMATRIX_CTRL_HIDDEN`,
+  `LV_BTNMATRIX_CTRL_NO_REPEAT`, `LV_BTNMATRIX_CTRL_DISABLED`,
+  `LV_BTNMATRIX_CTRL_CHECKABLE`, `LV_BTNMATRIX_CTRL_CHECKED`,
+  `LV_BTNMATRIX_CTRL_CLICK_TRIG`, `LV_BTNMATRIX_CTRL_POPOVER`,
+  `LV_BTNMATRIX_CTRL_RECOLOR`, `LV_BTNMATRIX_CTRL_CUSTOM_1`, and
+  `LV_BTNMATRIX_CTRL_CUSTOM_2`.
+- `lv_btnmatrix_set_map(btnm_id, map_table)` automatically appends the terminating empty string
+  `""` required by LVGL. Put `"\n"` in the table for line breaks.
+- The length of `ctrl_map_table` in `lv_btnmatrix_set_ctrl_map()` is based on the number of
+  actual buttons and excludes `"\n"` entries.
+- Each `ctrl_map_table` element can bitwise-OR a width from `1..7` with
+  `LV_BTNMATRIX_CTRL_*` control bits.
+
+### Textarea
+
+- `lv_textarea_create(parent_id) -> ta_id`
+- `lv_textarea_set_text(ta_id, text)`
+- `lv_textarea_get_text(ta_id) -> string`
+- `lv_textarea_add_text(ta_id, text)`
+- `lv_textarea_add_char(ta_id, ch)`
+- `lv_textarea_del_char(ta_id)`
+- `lv_textarea_del_char_forward(ta_id)`
+- `lv_textarea_set_placeholder_text(ta_id, text)`
+- `lv_textarea_set_one_line(ta_id, enabled)`
+- `lv_textarea_set_password_mode(ta_id, enabled)`
+- `lv_textarea_set_password_show_time(ta_id, ms)`
+- `lv_textarea_set_password_bullet(ta_id, text)`
+- `lv_textarea_set_accepted_chars(ta_id, chars_or_nil)`
+- `lv_textarea_set_max_length(ta_id, n)`
+- `lv_textarea_set_cursor_pos(ta_id, pos)`
+- `lv_textarea_get_cursor_pos(ta_id) -> pos`
+- `lv_textarea_set_cursor_click_pos(ta_id, enabled)`
+- `lv_textarea_set_text_selection(ta_id, enabled)`
+- `lv_textarea_clear_selection(ta_id)`
+
+Notes:
+
+- `ch` in `lv_textarea_add_char(ta_id, ch)` accepts a one-character string or an integer Unicode
+  code point. Use `lv_textarea_add_text()` for multi-character strings.
+- Pass `nil` to `lv_textarea_set_accepted_chars()` to clear the character allowlist.
+- Use with `LV_TEXTAREA_CURSOR_LAST` and `LV_PART_TEXTAREA_PLACEHOLDER` as needed.
+
+### Keyboard
+
+- `lv_keyboard_create(parent_id) -> kb_id`
+- `lv_keyboard_set_textarea(kb_id, ta_id_or_nil)`
+- `lv_keyboard_get_textarea(kb_id) -> ta_id|nil`
+- `lv_keyboard_set_mode(kb_id, mode)`
+- `lv_keyboard_get_mode(kb_id) -> mode`
+- `lv_keyboard_set_popovers(kb_id, enabled)`
+
+Notes:
+
+- Supported constants include `LV_KEYBOARD_MODE_TEXT_LOWER`, `LV_KEYBOARD_MODE_TEXT_UPPER`,
+  `LV_KEYBOARD_MODE_SPECIAL`, `LV_KEYBOARD_MODE_NUMBER`, `LV_KEYBOARD_MODE_USER_1`,
+  `LV_KEYBOARD_MODE_USER_2`, `LV_KEYBOARD_MODE_USER_3`, and `LV_KEYBOARD_MODE_USER_4`.
+- `lv_keyboard_set_textarea(kb_id, nil)` unbinds the textarea.
+- Once bound, the keyboard's default event handler writes key content to the target textarea.
+
+### Roller
+
+- `lv_roller_create(parent_id) -> roller_id`
+- `lv_roller_set_options(roller_id, options_text, mode)`
+- `lv_roller_set_selected(roller_id, index[, anim])`
+- `lv_roller_get_selected(roller_id) -> index`
+- `lv_roller_get_selected_str(roller_id) -> string`
+- `lv_roller_set_visible_row_count(roller_id, n)`
+- `lv_roller_get_option_cnt(roller_id) -> n`
+
+Notes:
+
+- Following official LVGL 8.3 semantics, separate entries in `options_text` with `"\n"`.
+- Use `LV_ROLLER_MODE_NORMAL` or `LV_ROLLER_MODE_INFINITE`.
+- `anim` in `lv_roller_set_selected(...[, anim])` may be `LV_ANIM_OFF` or `LV_ANIM_ON`.
+- `lv_roller_get_selected_str()` returns the current option string directly.
+
+### Spinbox
+
+- `lv_spinbox_create(parent_id) -> spinbox_id`
+- `lv_spinbox_set_value(spinbox_id, value)`
+- `lv_spinbox_get_value(spinbox_id) -> value`
+- `lv_spinbox_set_range(spinbox_id, min, max)`
+- `lv_spinbox_set_digit_format(spinbox_id, digit_count, separator_position)`
+- `lv_spinbox_set_step(spinbox_id, step)`
+- `lv_spinbox_set_rollover(spinbox_id, enabled)`
+- `lv_spinbox_step_next(spinbox_id)`
+- `lv_spinbox_step_prev(spinbox_id)`
+- `lv_spinbox_increment(spinbox_id)`
+- `lv_spinbox_decrement(spinbox_id)`
+
+Notes:
+
+- `digit_count` excludes the sign and decimal point. `separator_position = 0` hides the decimal
+  point.
+- Following official LVGL semantics, `step` normally uses powers of ten such as `1`, `10`,
+  `100`, or `1000`.
+
+### Table
+
+- `lv_table_create(parent_id) -> table_id`
+- `lv_table_set_row_cnt(table_id, row_cnt)`
+- `lv_table_set_col_cnt(table_id, col_cnt)`
+- `lv_table_set_col_width(table_id, col, width)`
+- `lv_table_set_cell_value(table_id, row, col, text)`
+- `lv_table_get_cell_value(table_id, row, col) -> string|nil`
+- `lv_table_add_cell_ctrl(table_id, row, col, ctrl)`
+- `lv_table_clear_cell_ctrl(table_id, row, col, ctrl)`
+- `lv_table_get_selected_cell(table_id) -> row, col`
+
+Notes:
+
+- `table` is a lightweight drawn widget and does not create a real child object for every cell.
+  It is suitable for status pages, parameter pages, Wi-Fi lists, and similar UIs.
+- `lv_table_get_cell_value()` returns `nil` for an invalid object or out-of-range cell. A valid
+  empty cell returns an empty string.
+- `lv_table_get_selected_cell()` returns `row, col` or `nil, nil` when no cell is selected.
+- Supported constants include `LV_TABLE_CELL_NONE`, `LV_TABLE_CELL_CTRL_MERGE_RIGHT`,
+  `LV_TABLE_CELL_CTRL_TEXT_CROP`, and `LV_TABLE_CELL_CTRL_CUSTOM_1` through
+  `LV_TABLE_CELL_CTRL_CUSTOM_4`.
+
+### Group / Focus
+
+- `lv_group_create() -> group_handle`
+- `lv_group_del(group_handle)`
+- `lv_group_add_obj(group_handle, obj_id)`
+- `lv_group_remove_obj(obj_id)`
+- `lv_group_remove_all_objs(group_handle)`
+- `lv_group_focus_obj(obj_id)`
+- `lv_group_focus_next(group_handle)`
+- `lv_group_focus_prev(group_handle)`
+- `lv_group_get_focused(group_handle) -> obj_id|nil`
+- `lv_group_set_wrap(group_handle, enabled)`
+- `lv_group_set_editing(group_handle, enabled)`
+- `lv_group_get_editing(group_handle) -> bool`
+- `lv_group_set_default(group_handle)`
+
+Notes:
+
+- `group_handle` is a resource handle, not an `obj_id`.
+- After `lv_group_set_default(group_handle)`, newly created group-compatible widgets
+  automatically join the default group.
+- `lv_group_set_default(nil)` clears the default group.
+
+### List
+
+- `lv_list_create(parent_id) -> list_id`
+- `lv_list_add_text(list_id, text) -> text_id`
+- `lv_list_add_btn(list_id[, icon], text) -> btn_id`
+- `lv_list_get_btn_text(list_id, btn_id) -> string|nil`
+
+### Menu
+
+- `lv_menu_create(parent_id) -> menu_id`
+- `lv_menu_page_create(menu_id[, title]) -> page_id`
+- `lv_menu_section_create(parent_id) -> section_id`
+- `lv_menu_cont_create(parent_id) -> cont_id`
+- `lv_menu_separator_create(parent_id) -> separator_id`
+- `lv_menu_set_page(menu_id[, page_id])`
+- `lv_menu_set_sidebar_page(menu_id[, page_id])`
+- `lv_menu_set_mode_header(menu_id, mode_header)`
+- `lv_menu_set_mode_root_back_btn(menu_id, mode_root_back_btn)`
+- `lv_menu_set_load_page_event(menu_id, obj_id, page_id)`
+- `lv_menu_clear_history(menu_id)`
+- `lv_menu_get_cur_main_page(menu_id) -> page_id|nil`
+- `lv_menu_get_cur_sidebar_page(menu_id) -> page_id|nil`
+- `lv_menu_get_main_header(menu_id) -> header_id|nil`
+- `lv_menu_get_main_header_back_btn(menu_id) -> btn_id|nil`
+- `lv_menu_get_sidebar_header(menu_id) -> header_id|nil`
+- `lv_menu_get_sidebar_header_back_btn(menu_id) -> btn_id|nil`
+- `lv_menu_back_btn_is_root(menu_id, obj_id) -> bool`
+
+### Switch
+
+- `lv_switch_create(parent_id) -> switch_id`
+
+### Tabview
+
+- `lv_tabview_create(parent_id, tab_pos, tab_size) -> tabview_id`
+- `lv_tabview_add_tab(tabview_id, name) -> page_id`
+- `lv_tabview_set_act(tabview_id, tab_index[, anim])`
+- `lv_tabview_get_tab_act(tabview_id) -> tab_index`
+- `lv_tabview_get_content(tabview_id) -> content_id|nil`
+- `lv_tabview_get_tab_btns(tabview_id) -> tab_btns_id|nil`
+- `lv_tabview_rename_tab(tabview_id, tab_index, new_name)`
+
+### Image
+
+- `lv_img_create(parent_id) -> img_id`
+- `lv_img_set_offset_x(img_id, x)`
+- `lv_img_set_offset_y(img_id, y)`
+- `lv_img_set_zoom(img_id, zoom)`
+- `lv_img_set_angle(img_id, angle)`
+- `lv_img_set_pivot(img_id, x, y)`
+- `lv_img_set_size_mode(img_id, mode)`
+- `lv_img_set_antialias(img_id, enabled)`
+
+Notes:
+
+- `LV_IMG_SIZE_MODE_VIRTUAL`: When the image object is larger than its source, LVGL tiles the
+  image across the object's area.
+- `LV_IMG_SIZE_MODE_REAL`: When used with
+  `lv_obj_set_size(img_id, LV_SIZE_CONTENT, LV_SIZE_CONTENT)`, the object follows the actual
+  drawn image dimensions. This is useful for content-based centering or centering after scaling
+  down.
+
+### Slider / Bar
+
+- `lv_slider_create(parent_id) -> slider_id`
+- `lv_slider_set_range(slider_id, min, max)`
+- `lv_slider_set_mode(slider_id, mode)`
+- `lv_slider_set_value(slider_id, value[, anim])`
+- `lv_slider_set_left_value(slider_id, value[, anim])`
+- `lv_slider_get_value(slider_id) -> value`
+- `lv_slider_get_left_value(slider_id) -> value`
+- `lv_slider_get_min_value(slider_id) -> value`
+- `lv_slider_get_max_value(slider_id) -> value`
+- `lv_slider_get_mode(slider_id) -> mode`
+- `lv_slider_is_dragged(slider_id) -> bool`
+- `lv_bar_create(parent_id) -> bar_id`
+- `lv_bar_set_range(bar_id, min, max)`
+- `lv_bar_set_mode(bar_id, mode)`
+- `lv_bar_set_value(bar_id, value[, anim])`
+- `lv_bar_set_start_value(bar_id, value[, anim])`
+- `lv_bar_get_value(bar_id) -> value`
+
+### Arc
+
+- `lv_arc_create(parent_id) -> arc_id`
+- `lv_arc_set_range(arc_id, min, max)`
+- `lv_arc_set_value(arc_id, value)`
+- `lv_arc_get_value(arc_id) -> value`
+- `lv_arc_set_bg_angles(arc_id, start, end)`
+- `lv_arc_set_angles(arc_id, start, end)`
+- `lv_arc_set_rotation(arc_id, rotation)`
+- `lv_arc_set_mode(arc_id, mode)`
+- `lv_arc_set_change_rate(arc_id, rate)`
+
+### Chart
+
+- `lv_chart_create(parent_id) -> chart_id`
+- `lv_chart_set_type(chart_id, type)`
+- `lv_chart_set_point_count(chart_id, count)`
+- `lv_chart_set_range(chart_id, axis, min, max)`
+- `lv_chart_set_update_mode(chart_id, mode)`
+- `lv_chart_set_div_line_count(chart_id, hdiv, vdiv)`
+- `lv_chart_set_zoom_x(chart_id, zoom)`
+- `lv_chart_set_zoom_y(chart_id, zoom)`
+- `lv_chart_set_axis_tick(chart_id, axis, major_len, minor_len, major_cnt, minor_cnt, label_en, draw_size)`
+- `lv_chart_get_point_count(chart_id) -> n`
+- `lv_chart_get_pressed_point(chart_id) -> idx`
+- `lv_chart_refresh(chart_id)`
+
+### Meter
+
+- `lv_meter_create(parent_id) -> meter_id`
+
+### Resource APIs
+
+- `lv_img_set_src(img_id, src)`
+- `lv_obj_set_style_bg_img_src(obj_id, src, selector)`
+- `lv_obj_set_style_text_font(obj_id, font, selector)`
+- `lv_font_load(path) -> font`
+- `lv_font_free(font)`
+- `lv_snapshot_take(obj_id[, cf]) -> snapshot`
+- `lv_snapshot_free(snapshot)`
+- `lv_snapshot_buf_size_needed(obj_id[, cf]) -> size`
+- `lv_snapshot_save_to_png(snapshot, path) -> true | nil, err`
+
+Notes:
+
+- `src` may be a path, symbol, or image handle.
+- `lv_img_set_src(img_id, nil)` synchronously clears the source and releases tracked
+  memory/userdata image references.
+- `src` may also be a full userdata whose first field is `lv_img_dsc_t`. Lua UI keeps a
+  registry reference until the image source is replaced, the object is deleted, or the UI is
+  cleaned up.
+- For userdata image sources, clear the image source before calling the module-side free API,
+  because LVGL stores the descriptor pointer and does not copy pixel data.
+- `font` may be a built-in font or a value returned by `lv_font_load()`.
+- Built-in font names use forms such as `LV_FONT_MONTSERRAT_14`. Available sizes are 8, 10, 12,
+  14, 16, 20, 24, and 28.
+- A snapshot defaults to `cf=LV_IMG_CF_TRUE_COLOR_ALPHA` and returns `nil, err` on failure.
+- Do not release a handle while an object still references it.
+- `lv_snapshot_save_to_png` supports `/sd/...` and `S:/...` paths. You must still call
+  `lv_snapshot_free` after saving.
+
+### Chart / Meter Handles
+
+- `lv_chart_add_series(chart_id, color[, axis]) -> series`
+- `lv_chart_add_cursor(chart_id, color, dir) -> cursor`
+- `lv_chart_set_series_color(chart_id, series, color)`
+- `lv_chart_hide_series(chart_id, series, hidden)`
+- `lv_chart_set_x_start_point(chart_id, series, start_point)`
+- `lv_chart_set_all_value(chart_id, series, value)`
+- `lv_chart_set_next_value(chart_id, series, value)`
+- `lv_chart_set_next_value2(chart_id, series, x_value, y_value)`
+- `lv_chart_set_value_by_id(chart_id, series, index, value)`
+- `lv_chart_set_value_by_id2(chart_id, series, index, x_value, y_value)`
+- `lv_chart_set_cursor_pos(chart_id, cursor, x, y)`
+- `lv_chart_set_cursor_point(chart_id, cursor, series_or_nil, point_id)`
+- `lv_chart_get_point_pos_by_id(chart_id, series, point_id) -> x, y`
+- `lv_meter_add_scale(meter_id) -> scale`
+- `lv_meter_set_scale_ticks(meter_id, scale, cnt, width, len, color)`
+- `lv_meter_set_scale_major_ticks(meter_id, scale, nth, width, len, color, label_gap)`
+- `lv_meter_set_scale_range(meter_id, scale, min, max, angle_range, rotation)`
+- `lv_meter_add_arc(meter_id, scale, width, color[, r_mod]) -> indicator`
+- `lv_meter_add_needle_line(meter_id, scale, width, color[, r_mod]) -> indicator`
+- `lv_meter_add_needle_img(meter_id, scale, img_src, pivot_x, pivot_y) -> indicator`
+- `lv_meter_add_scale_lines(meter_id, scale, color_start, color_end, local, width_mod) -> indicator`
+- `lv_meter_set_indicator_value(meter_id, indicator, value)`
+- `lv_meter_set_indicator_start_value(meter_id, indicator, value)`
+- `lv_meter_set_indicator_end_value(meter_id, indicator, value)`
+
+Notes:
+
+- `series`, `cursor`, `scale`, and `indicator` are handles used by subsequent APIs.
+- `series_or_nil` in `lv_chart_set_cursor_point()` may be `nil`.
+
+### Event Callback
+
+`fn(e)` receives an event table. The `event_dsc` returned by `lv_obj_add_event_cb()` can be
+used to remove that callback.
+
+- `lv_obj_add_event_cb(obj_id, fn, event_code[, user_data]) -> event_dsc|nil`
+- `lv_obj_remove_event_cb(obj_id, fn) -> bool`
+- `lv_obj_remove_event_dsc(obj_id, event_dsc) -> bool`
+- `lv_event_get_code(e) -> event_code`
+- `lv_event_get_target(e) -> target_id`
+- `lv_event_get_current_target(e) -> current_target_id`
+- `lv_event_get_user_data(e) -> any`
+- `lv_event_get_param(e) -> any`
+
+### Animation
+
+Notes:
+
+- Common sequence: `lv_anim_t()` -> `lv_anim_init()` -> set the target, execution function,
+  values, and timing -> `lv_anim_start()`.
+- Pass a function token such as `lv_obj_set_x` as `exec_cb`. A custom execution function
+  receives `(anim_handle, value)`.
+- Pass a function token such as `lv_anim_path_linear` or `lv_anim_path_ease_out` as `path_cb`.
+
+APIs:
+
+- `lv_anim_t() -> anim_id`
+- `lv_anim_init(anim_id)`
+- `lv_anim_reset(anim_id)`
+- `lv_anim_set_var(anim_id, obj_id)`
+- `lv_anim_set_exec_cb(anim_id, exec_cb)`
+- `lv_anim_set_custom_exec_cb(anim_id, lua_fn)`
+- `lv_anim_set_values(anim_id, start_value, end_value)`
+- `lv_anim_set_time(anim_id, time_ms)`
+- `lv_anim_set_delay(anim_id, delay_ms)`
+- `lv_anim_set_path_cb(anim_id, path_cb)`
+- `lv_anim_set_playback_time(anim_id, time_ms)`
+- `lv_anim_set_playback_delay(anim_id, delay_ms)`
+- `lv_anim_set_repeat_count(anim_id, count)`
+- `lv_anim_set_repeat_delay(anim_id, delay_ms)`
+- `lv_anim_set_early_apply(anim_id, en)`
+- `lv_anim_set_start_cb(anim_id, lua_fn_or_nil)`
+- `lv_anim_set_ready_cb(anim_id, lua_fn_or_nil)`
+- `lv_anim_set_deleted_cb(anim_id, lua_fn_or_nil)`
+- `lv_anim_set_user_data(anim_id, data)`
+- `lv_anim_get_user_data(anim_id) -> data`
+- `lv_anim_start(anim_id) -> running_anim_handle|nil`
+- `lv_anim_del(obj_id, exec_cb_or_nil) -> bool`
+- `lv_anim_del_all()`
+- `lv_anim_count_running() -> n`
+- `lv_anim_speed_to_time(speed, start, end) -> time_ms`
+
+Supported execution functions:
+
+- `lv_obj_set_x`
+- `lv_obj_set_y`
+- `lv_obj_set_width`
+- `lv_obj_set_height`
+
+Path-function tokens:
+
+- `lv_anim_path_linear`
+- `lv_anim_path_step`
+- `lv_anim_path_ease_in`
+- `lv_anim_path_ease_out`
+- `lv_anim_path_ease_in_out`
+- `lv_anim_path_overshoot`
+- `lv_anim_path_bounce`
+
+Other constants:
+
+- `LV_ANIM_REPEAT_INFINITE`
+
+Additional notes:
+
+- Lua callbacks set by `lv_anim_set_start_cb()`, `lv_anim_set_ready_cb()`, and
+  `lv_anim_set_deleted_cb()` receive `(anim_handle)`.
+- Use `anim_handle` with `lv_anim_get_user_data()` to retrieve Lua-side user data in those
+  callbacks.
+- `lv_anim_del(obj_id, nil)` deletes all ordinary animations on the object and also deletes
+  custom animations started through `lv_anim_set_custom_exec_cb()` whose `var` is that object.
+
+Example:
+
+```lua
+local a = lv_anim_t()
+lv_anim_init(a)
+lv_anim_set_var(a, obj_id)
+lv_anim_set_exec_cb(a, lv_obj_set_x)
+lv_anim_set_values(a, 0, 120)
+lv_anim_set_time(a, 300)
+lv_anim_set_delay(a, 0)
+lv_anim_set_path_cb(a, lv_anim_path_ease_out)
+lv_anim_start(a)
+```
+
+## Semi-official APIs / Project Differences
+
+### GIF
+
+- `lv_gif_create(parent_id) -> gif_id`
+- `lv_gif_set_src(gif_id, path_or_nil)`
+
+Notes:
+
+- `lv_gif_set_src(gif_id, nil)` stops playback and keeps the final frame.
+- Playback advances automatically. Delete the object with `lv_obj_del(gif_id)`.
+
+### Layout Helper
+
+- `lv_pct(value) -> coord` -- Percentage coordinate
+- `lv_grid_fr(value) -> coord` -- Grid `fr` unit
+- `lv_obj_set_grid_dsc_array(obj_id, col_dsc, row_dsc)` -- Convert Lua tables to grid
+  descriptor arrays
+
+### Image Resource
+
+- `lv_img_set_src()`
+
+Notes:
+
+- `src` supports `S:/...`, `/sd/...`, `.jpg/.jpeg`, `.sjpg`, RGB565 BMP, and a JPEG binary
+  string.
+
+## Custom APIs
+
+### List Internal Objects
+
+These APIs access internal child objects of a list button:
+
+- `lv_list_get_btn_label(list_id, btn_id) -> label_id|nil`
+- `lv_list_get_btn_icon(list_id, btn_id) -> img_id|nil`
+
+### Canvas
+
+Notes:
+
+- The recommended format is `LV_IMG_CF_TRUE_COLOR`. Use
+  `LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED` when a black transparent key is required.
+- For high-frequency updates, wrap each frame in `lv_canvas_frame_begin()` and
+  `lv_canvas_frame_end()`.
+- Usage sequence: `create -> frame_begin -> fill/draw -> frame_end`.
+- `color` uses `0xRRGGBB` and `opa` uses `0..255`.
+
+Common APIs:
+
+- `lv_canvas_create(parent_id, w, h[, fmt]) -> canvas_id`
+- `lv_canvas_fill_bg(canvas_id, color[, opa])` -- Fill the background
+- `lv_canvas_set_px_color(canvas_id, x, y, color)` /
+  `lv_canvas_set_px_opa(canvas_id, x, y[, opa])`
+- `lv_canvas_blit_rgb565(canvas_id, x, y, w, h, data[, opts])`
+- `lv_canvas_draw_rect(canvas_id, x, y, w, h, dsc_or_color[, opa])`
+- `lv_canvas_draw_line(canvas_id, points[, point_cnt[, dsc]])` or
+  `lv_canvas_draw_line(canvas_id, x1, y1, x2, y2, color[, opa[, width]])`
+- `lv_canvas_draw_arc(canvas_id, cx, cy, radius, start_deg, end_deg[, dsc_or_color[, opa[, width]]])`
+- `lv_canvas_draw_img(canvas_id, x, y, src[, dsc])`
+- `lv_canvas_draw_text(canvas_id, x, y, max_w, text[, dsc])`
+- `lv_canvas_transform(canvas_id, src_canvas_id, angle, zoom, x, y[, pivot_x, pivot_y[, antialias]])`
+- `lv_canvas_blur_hor(canvas_id, area, radius)` /
+  `lv_canvas_blur_ver(canvas_id, area, radius)`
+- `lv_canvas_frame_begin(canvas_id)` / `lv_canvas_frame_end(canvas_id)`
+
+Parameter conventions:
+
+- `rect dsc`: `bg_color`, `bg_opa`, `radius`, `border_width`, `border_color`,
+  `border_opa`
+- `line/arc dsc`: `color`, `opa`, `width`
+- `text dsc`: `color`, `opa`, `align`, `font_size`, `font_handle`
+- `img dsc`: `opa`
+- `points` is a flat array: `{x1, y1, x2, y2, ...}`. `point_cnt` is inferred when omitted.
+- `src` accepts a path string, `{ handle = image_or_snapshot_handle }`, or
+  `{ canvas_id = other_canvas_id }`.
+- Pass `nil` for `area` to select the entire canvas, or pass
+  `{x1=..., y1=..., x2=..., y2=...}`.
+- `lv_canvas_draw_arc()` angles are in degrees. `angle` in `lv_canvas_transform()` is in
+  0.1-degree units, and `zoom=256` means `1x`.
+- `data` in `lv_canvas_blit_rgb565()` is an RGB565 Lua binary string. `opts` accepts `offset`,
+  `stride`/`stride_bytes`, `byte_order`, `swap_rb`, and `full_rewrite`/`full`.
+
+Compatibility APIs:
+
+- `lv_canvas_begin(canvas_id)` is equivalent to `lv_canvas_frame_begin(canvas_id)`.
+- `lv_canvas_end(canvas_id)` is equivalent to `lv_canvas_frame_end(canvas_id)`.
+- `lv_canvas_fill(canvas_id, color[, opa])` is equivalent to
+  `lv_canvas_fill_bg(canvas_id, color[, opa])`.
+- `lv_canvas_draw_polyline(canvas_id, points, point_cnt, color[, opa[, width]])` is equivalent
+  to `lv_canvas_draw_line(...)`.
+
+Available constants:
+
+- `LV_IMG_CF_TRUE_COLOR`, `LV_IMG_CF_TRUE_COLOR_ALPHA`,
+  `LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED`, `LV_RADIUS_CIRCLE`
+
+Example:
+
+```lua
+local cvs = lv_canvas_create(root, 304, 186, LV_IMG_CF_TRUE_COLOR)
+lv_canvas_frame_begin(cvs)
+lv_canvas_fill_bg(cvs, 0x0C1218, 255)
+lv_canvas_draw_rect(cvs, 0, 0, 304, 186, {
+  bg_color = 0x17222D,
+  bg_opa = 255,
+  radius = 12
+})
+lv_canvas_draw_text(cvs, 10, 8, 160, "Canvas", { color = 0xEAF2FA, font_size = 14 })
+lv_canvas_frame_end(cvs)
+```
+
+---
+
+# LVGL UI Lua API
+
+[English](#lvgl-ui-lua-api) | [简体中文](#lvgl-ui-lua-api-1)
 说明：
 - 对象返回值都是 Lua 层 `obj_id`；`0` 是 root 伪 id，可作为父对象。
 - `LV_*` 常量按 LVGL 官方用法使用；本文只补充少量项目相关常量。
@@ -665,3 +1473,4 @@ lv_canvas_draw_rect(cvs, 0, 0, 304, 186, {
 })
 lv_canvas_draw_text(cvs, 10, 8, 160, "Canvas", { color = 0xEAF2FA, font_size = 14 })
 lv_canvas_frame_end(cvs)
+```

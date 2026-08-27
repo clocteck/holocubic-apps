@@ -1,4 +1,448 @@
+# Host ABI Dynamic Module Interface
+
+[English](#host-abi-dynamic-module-interface) | [简体中文](#host-abi-动态模块接口)
+
+The Host ABI is designed for ESP32-S3 `.so` dynamic modules stored in an app's `modules/`
+directory. It lets C/C++ modules directly use host capabilities such as files, I2S, tasks,
+sockets, network-interface state, and mDNS. It is suitable for audio/video streaming, protocol
+stacks, and other hot paths that should not be affected by fluctuations in foreground Lua
+scheduling.
+
+Only C functions, fixed-width integers, POD structures, and opaque handles cross the ABI
+boundary. Arduino C++ objects do not. A module must not link directly against the firmware's
+internal `SD`, `Serial`, LVGL, or lwIP symbols.
+
+## Headers and Compatibility
+
+The only source of truth is the following file in the firmware project:
+
+```text
+src/dynmod/module_abi.h
+```
+
+Synchronize this header into the module project before compiling a `.so`. Some legacy examples
+under regular app directories include older copies of `module_abi.h`; do not use those copies to
+determine the capabilities of newer firmware.
+
+The current ABI version is `MODULE_SDK_VERSION == 0x00030000`. Functions are resolved
+individually through stable `MODULE_PROC_*` IDs. `module_host_api_v2` is only a module-local
+cache table and is not passed as one complete structure across the `.so` boundary. The host can
+therefore append optional capabilities without changing existing IDs.
+
+## Module Directory and Loading
+
+Example deployment:
+
+```text
+/sd/apps/my_app/
+├── app.info
+├── main.lua
+└── modules/
+    └── stream.so
+```
+
+Lua currently loads a module through an explicit absolute path:
+
+```lua
+local stream = require("/sd/apps/my_app/modules/stream.so")
+```
+
+## Required Exports
+
+Every module exports the following four C symbols:
+
+```c
+const module_manifest_t *module_query_v1(void);
+
+int32_t module_create_v2(module_host_resolve_v2_fn resolve,
+                         void *resolve_ctx,
+                         const module_open_info_t *info,
+                         void **out_instance);
+
+int32_t module_luaopen_v1(void *instance, lua_State *L);
+
+void module_destroy_v1(void *instance);
+```
+
+The lifecycle order is:
+
+```text
+query -> create -> luaopen -> use the module from Lua -> destroy -> dlclose
+```
+
+- `module_query_v1()` returns a static `module_manifest_t`.
+- `module_create_v2()` resolves the Host API, allocates an instance, and writes it to
+  `out_instance`.
+- `module_luaopen_v1()` returns `MODULE_OK` on success and leaves the module table on top of
+  the Lua stack.
+- `module_destroy_v1()` stops tasks, closes connections, unregisters mDNS/BLE, and releases the
+  instance. No module code may execute after it returns.
+
+Minimal skeleton:
+
+```c
+#include "module_abi.h"
+
+typedef struct demo_instance_t {
+    module_host_api_v2 host;
+} demo_instance_t;
+
+static const module_manifest_t manifest = {
+    MODULE_MANIFEST_MAGIC,
+    MODULE_SDK_VERSION,
+    sizeof(module_manifest_t),
+    "demo",
+    "0.1.0",
+    "Host ABI demo",
+    0,
+    MODULE_BOOTSTRAP_ABI_VERSION,
+};
+
+const module_manifest_t *module_query_v1(void)
+{
+    return &manifest;
+}
+
+int32_t module_create_v2(module_host_resolve_v2_fn resolve,
+                         void *resolve_ctx,
+                         const module_open_info_t *info,
+                         void **out_instance)
+{
+    demo_instance_t *instance;
+    module_host_api_v2 host;
+    int32_t err;
+    (void)info;
+
+    if (!resolve || !out_instance) return MODULE_ERR_INVALID_ARG;
+    *out_instance = NULL;
+
+    err = module_sdk_resolve_host_v2(resolve, resolve_ctx, &host);
+    if (err != MODULE_OK) return err;
+
+    instance = (demo_instance_t *)host.heap.calloc(
+        1, sizeof(*instance), MODULE_HEAP_INTERNAL | MODULE_HEAP_8BIT);
+    if (!instance) return MODULE_ERR_NO_MEMORY;
+
+    instance->host = host;
+    *out_instance = instance;
+    return MODULE_OK;
+}
+```
+
+The networking, BLE, directory, and synchronization groups are optional. Successful resolution
+does not mean every optional function is available. Check function pointers before using them:
+
+```c
+if (!instance->host.socket.open || !instance->host.socket.poll) {
+    return MODULE_ERR_UNSUPPORTED;
+}
+```
+
+## Host API Groups
+
+| Group | APIs | Description |
+| --- | --- | --- |
+| `serial` | `write/print/println/flush` | Serial logging and binary output |
+| `sd` | `begin/mounted/mount_point/exists/mkdir/remove/rename/open` | SD filesystem entry points |
+| `file` | `close/available/read/write/seek/position/size_bytes/flush/is_directory` | Opaque file handles |
+| `display` | `width/height/get_caps/acquire/release/startWrite/pushImageDMA/endWrite/fillScreen/setAddrWindow/pushPixelsDMA` | Exclusive direct RGB565 output; not LVGL |
+| `audio` | `begin/write/available/end` | Reserved; a real PCM bridge is not connected yet |
+| `time` | `millis/micros/delay/yield` | Time and task yielding |
+| `heap` | `malloc/calloc/realloc/free/free_size/largest_free_block` | Allocation with Internal, PSRAM, DMA, and other capabilities |
+| `task` | `create/remove/yield/delay/create_ex` | Host-managed module tasks |
+| `lua` | `gettop/settop/type`, check/push, table/global, registry, closure, userdata, and more | Register a Lua table during `luaopen`; `newuserdata` is optional |
+| `i2s` | `begin/write/read/availableForWrite/flush/mute/end` | Audio input and output |
+| `diag` | `update_context/set_rom_path/heartbeat` | Diagnostic context after a crash |
+| `dir` | `open/open_next/name/path/is_dir/size_bytes/close` | Optional directory iteration |
+| `ble` | `open/close`, `gap_*`, `gattc_*`, `event_poll` | Optional; authorized only for background Services |
+| `sync` | `create_counting/create_mutex/take/give/destroy` | Optional opaque synchronization objects |
+| `socket` | `open/bind/listen/accept/connect/recv/recvfrom/send/sendto/poll/setsockopt/getsockname/shutdown/close` | Optional IPv4 TCP/UDP |
+| `netif` | `get_snapshot/wait_event` | Optional network-interface snapshots and race-free event waiting |
+| `mdns` | `service_register/service_update_txt/service_unregister` | Optional service publication |
+
+Use the `module_abi.h` synchronized into the module project as the authority for exact
+prototypes, structures, and constants. The following sections focus on the newer networking
+interfaces and lifecycle rules that are easy to get wrong.
+
+## Socket API
+
+The Socket API is a blocking IPv4 API intended for worker tasks created through
+`host->task.create/create_ex()`. Avoid blocking for long periods in `module_luaopen_v1()` or
+on the Lua callback stack.
+
+```c
+int32_t open(uint32_t type, module_socket_handle_t *out_socket);
+int32_t bind(module_socket_handle_t socket, const module_socket_addr_t *local_addr);
+int32_t listen(module_socket_handle_t socket, uint32_t backlog);
+int32_t accept(module_socket_handle_t listener,
+               module_socket_handle_t *out_socket,
+               module_socket_addr_t *out_peer_addr);
+int32_t connect(module_socket_handle_t socket, const module_socket_addr_t *peer_addr);
+int32_t recv(module_socket_handle_t socket, void *buf, size_t capacity,
+             size_t *out_received);
+int32_t recvfrom(module_socket_handle_t socket, void *buf, size_t capacity,
+                 size_t *out_received, module_socket_addr_t *out_peer_addr);
+int32_t send(module_socket_handle_t socket, const void *data, size_t len,
+             size_t *out_sent);
+int32_t sendto(module_socket_handle_t socket, const void *data, size_t len,
+               const module_socket_addr_t *peer_addr, size_t *out_sent);
+int32_t poll(module_socket_poll_item_t *items, size_t count,
+             uint32_t timeout_ms, size_t *out_ready);
+int32_t setsockopt(module_socket_handle_t socket, uint32_t option, int32_t value);
+int32_t getsockname(module_socket_handle_t socket,
+                    module_socket_addr_t *out_local_addr);
+int32_t shutdown(module_socket_handle_t socket, uint32_t how);
+int32_t close(module_socket_handle_t socket);
+```
+
+### Types and Addresses
+
+```c
+MODULE_SOCKET_TYPE_STREAM       /* TCP */
+MODULE_SOCKET_TYPE_DGRAM        /* UDP */
+MODULE_SOCKET_INVALID           /* -1 */
+```
+
+`module_socket_addr_t.address[4]` stores bytes in dotted-decimal order. For example,
+`192.168.1.20` is `{192, 168, 1, 20}`. `port` uses host byte order; do not call
+`htons()`. Zero-initialize every size-versioned ABI structure, then set
+`size = sizeof(struct)`:
+
+```c
+module_socket_addr_t peer = {0};
+peer.size = sizeof(peer);
+peer.address[0] = 192;
+peer.address[1] = 168;
+peer.address[2] = 1;
+peer.address[3] = 20;
+peer.port = 7000;
+```
+
+The current interface accepts numeric IPv4 addresses only and does not provide DNS hostname
+resolution.
+
+### Poll Events
+
+```c
+MODULE_SOCKET_POLL_READ
+MODULE_SOCKET_POLL_WRITE
+MODULE_SOCKET_POLL_ERROR
+MODULE_SOCKET_POLL_HANGUP
+```
+
+Populate `size/socket/events` in every `module_socket_poll_item_t`; the host writes back
+`revents`. A timeout is not an error: `poll()` returns `MODULE_OK` with
+`out_ready == 0`. `count` must not exceed the current firmware's lwIP socket limit. A module
+must not hard-code a larger array count.
+
+### Socket Options
+
+```c
+MODULE_SOCKET_OPT_REUSE_ADDR
+MODULE_SOCKET_OPT_BROADCAST
+MODULE_SOCKET_OPT_KEEP_ALIVE
+MODULE_SOCKET_OPT_TCP_NO_DELAY
+MODULE_SOCKET_OPT_RECV_TIMEOUT_MS
+MODULE_SOCKET_OPT_SEND_TIMEOUT_MS
+```
+
+For `setsockopt()`, use `0/1` for Boolean options and milliseconds for timeout options.
+Use `MODULE_SOCKET_SHUTDOWN_READ/WRITE/BOTH` to select the shutdown direction.
+
+### Send and Receive Conventions
+
+- `send/sendto` may send only part of the buffer. On success, advance by `out_sent` and loop;
+  never assume the entire buffer was sent in one call.
+- For TCP, `recv()` returning `MODULE_OK` with `out_received == 0` means the peer performed
+  an orderly shutdown.
+- A buffer is only loaned to the host for the duration of a call. The host does not retain its
+  pointer after the call returns.
+- Close every socket created on every path. To wake a blocked worker, call `shutdown()` before
+  `close()` when needed.
+
+Typical code for sending a complete buffer:
+
+```c
+static int32_t send_all(const module_socket_api_t *socket_api,
+                        module_socket_handle_t socket,
+                        const uint8_t *data,
+                        size_t len)
+{
+    size_t offset = 0;
+    while (offset < len) {
+        size_t sent = 0;
+        int32_t err = socket_api->send(socket, data + offset, len - offset, &sent);
+        if (err != MODULE_OK) return err;
+        if (sent == 0) return MODULE_ERR_IO;
+        offset += sent;
+    }
+    return MODULE_OK;
+}
+```
+
+## Netif API
+
+The former `get_state/get_ipv4/get_mac/get_link_generation` calls have been combined into one
+atomic snapshot. This reduces the number of calls and prevents state changes between separate
+reads:
+
+```c
+int32_t get_snapshot(uint32_t netif, module_netif_snapshot_t *out_snapshot);
+
+int32_t wait_event(uint32_t netif,
+                   uint32_t observed_generation,
+                   uint32_t timeout_ms,
+                   module_netif_snapshot_t *out_snapshot);
+```
+
+Network interfaces:
+
+```c
+MODULE_NETIF_DEFAULT
+MODULE_NETIF_WIFI_STA
+MODULE_NETIF_WIFI_AP
+```
+
+`snapshot.state` is a combination of these bits:
+
+```c
+MODULE_NETIF_STATE_STARTED
+MODULE_NETIF_STATE_LINK_UP
+MODULE_NETIF_STATE_IPV4_READY
+```
+
+Correct race-free waiting sequence:
+
+```c
+module_netif_snapshot_t snapshot = {0};
+snapshot.size = sizeof(snapshot);
+
+int32_t err = host->netif.get_snapshot(MODULE_NETIF_WIFI_STA, &snapshot);
+while (err == MODULE_OK && running) {
+    uint32_t generation = snapshot.generation;
+
+    if (snapshot.state & MODULE_NETIF_STATE_IPV4_READY) {
+        /* Use snapshot.ipv4 and snapshot.mac. */
+    }
+
+    snapshot.size = sizeof(snapshot);
+    err = host->netif.wait_event(MODULE_NETIF_WIFI_STA,
+                                 generation,
+                                 10000,
+                                 &snapshot);
+    if (err == MODULE_ERR_BUSY) {
+        err = MODULE_OK; /* Timeout only; continue checking the stop flag. */
+    }
+}
+```
+
+If `observed_generation` is stale, `wait_event()` returns the latest snapshot immediately.
+Otherwise, it waits for the next start, link, or IPv4 change. A timeout returns
+`MODULE_ERR_BUSY`; `MODULE_WAIT_FOREVER` means wait indefinitely.
+
+## mDNS API
+
+```c
+int32_t service_register(const char *instance,
+                         const char *service_type,
+                         const char *protocol,
+                         uint16_t port,
+                         const module_mdns_txt_record_t *txt_records,
+                         size_t txt_count,
+                         module_mdns_service_handle_t *out_handle);
+
+int32_t service_update_txt(module_mdns_service_handle_t handle,
+                           const module_mdns_txt_record_t *txt_records,
+                           size_t txt_count);
+
+int32_t service_unregister(module_mdns_service_handle_t handle);
+```
+
+RAOP example:
+
+```c
+module_mdns_txt_record_t txt[] = {
+    {"txtvers", "1"},
+    {"ch", "2"},
+};
+module_mdns_service_handle_t handle = NULL;
+
+int32_t err = host->mdns.service_register("Cubic Player",
+                                           "_raop",
+                                           "_tcp",
+                                           7000,
+                                           txt,
+                                           sizeof(txt) / sizeof(txt[0]),
+                                           &handle);
+```
+
+`register/update_txt` copies the instance, service, protocol, key, and value strings before
+returning, so the module may release temporary strings after the call. A handle is a host object
+and may only be passed back to update or unregister. It must be unregistered before the module is
+destroyed. Insufficient resources or an unavailable system mDNS service returns the corresponding
+error; never assume registration will succeed.
+
+## Memory, Tasks, and Unloading
+
+Common heap capabilities:
+
+```c
+MODULE_HEAP_DEFAULT
+MODULE_HEAP_INTERNAL
+MODULE_HEAP_PSRAM
+MODULE_HEAP_DMA
+MODULE_HEAP_EXEC
+MODULE_HEAP_8BIT
+MODULE_HEAP_32BIT
+```
+
+- Prefer `MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT` for large network and decoding buffers.
+- Use `MODULE_HEAP_INTERNAL | MODULE_HEAP_DMA | MODULE_HEAP_8BIT` for DMA buffers.
+- Release memory allocated through the Host with the same Host API.
+- Background tasks must be created through `host->task` and registered to their owner. The host
+  cannot safely unload the `.so` while module code is still executing in a task.
+- `module_destroy_v1()` should set the stop flag and wake blocked calls first, then wait for or
+  remove tasks, and finally release sockets, files, mDNS, BLE, synchronization objects, and
+  instance memory.
+
+## BLE and Display Restrictions
+
+BLE resources are authorized by owner. `module_open_info_t.owner_token` may be nonzero only when
+a module is loaded by a background Service; a regular foreground app module cannot open a BLE
+session. BLE callback data reaches the module through its fixed `event_poll()` queue. Do not let
+the host retain module function pointers as asynchronous callbacks.
+
+`display` is an exclusive, high-frequency RGB565 output interface that bypasses LVGL. Use it only
+when a module explicitly takes over the display. It currently does not support general pixel
+formats, arbitrary images with stride, or full `fillScreen` color capability. Regular app UIs
+should continue to use Lua LVGL; background overlays should use `service_ui`.
+
+## Error Codes
+
+| Error code | Meaning |
+| --- | --- |
+| `MODULE_OK` | Success |
+| `MODULE_ERR_FAILED` | Unclassified failure |
+| `MODULE_ERR_INVALID_ARG` | Invalid argument or structure `size` |
+| `MODULE_ERR_NO_MEMORY` | Insufficient memory or fixed resources |
+| `MODULE_ERR_NOT_FOUND` | Target not found |
+| `MODULE_ERR_UNSUPPORTED` | The current host does not provide this optional capability |
+| `MODULE_ERR_BUSY` | Resource busy or wait timed out |
+| `MODULE_ERR_IO` | I/O failure |
+| `MODULE_ERR_BAD_STATE` | The current lifecycle/state does not allow this operation |
+| `MODULE_ERR_VERSION` | Incompatible ABI version |
+
+Unused Host ABI functions do not run by themselves and do not create ongoing CPU overhead.
+Resolving and storing function pointers when loading a module only adds a small amount of
+per-instance memory. Sockets, netif events, mDNS, and similar resources are created only after the
+module calls the corresponding APIs. Any background cost ultimately depends on whether the module
+itself creates tasks, timers, connections, or service registrations.
+
+---
+
 # Host ABI 动态模块接口
+
+[English](#host-abi-dynamic-module-interface) | [简体中文](#host-abi-动态模块接口)
 
 Host ABI 用于放在 app `modules/` 目录中的 ESP32-S3 `.so` 动态模块。它让 C/C++
 模块直接使用宿主的文件、I2S、任务、Socket、网卡状态和 mDNS 等能力，适合音视频流、

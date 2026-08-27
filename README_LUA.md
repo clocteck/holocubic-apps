@@ -1,4 +1,701 @@
+# Lua Usage Guide
+
+[English](#lua-usage-guide) | [简体中文](#lua-使用说明)
+
+This document covers the Lua APIs most commonly used in scripts. See
+[README_LVGL.md](README_LVGL.md) for LVGL widgets, styles, layouts, and animation APIs.
+
+## Relationship to NodeMCU
+
+This project follows NodeMCU module names and its event-driven style wherever practical. When a
+detail is unclear, consult the NodeMCU ESP32 documentation first:
+
+- NodeMCU ESP32 documentation: https://nodemcu.readthedocs.io/en/dev-esp32/
+
+The APIs are divided into two groups to make them easier to learn:
+
+- **Fully compatible APIs:** Names and calling conventions are generally consistent with
+  NodeMCU ESP32, so the official module documentation can be used directly.
+- **Extended APIs:** Modules added by this project or convenience extensions built on the
+  NodeMCU style. This document is authoritative for these APIs.
+- To report an issue, contact QQ group 780412532.
+
+## Compatibility Quick Reference
+
+- Fully compatible: `tmr`, `sjson`, `time`, `wifi`, `net`, `httpd`, `i2s`, `mqtt`
+- Extended: `file`, `http`, `websocket`, `zlib`, `np`, `viper`, `app`, `sys`,
+  `key`, `nes`
+
+## Basic Conventions
+
+- Built-in modules are already registered as global tables and do not need `require`. Examples
+  include `tmr`, `file`, `wifi`, and `http`.
+- Prefer explicit `/sd/...` file paths. Paths without a prefix are normally resolved relative
+  to the SD-card root.
+- Network, key, timer, and HTTPD callbacks run inside the Lua runtime. Do not block for long
+  periods inside callbacks.
+- Prefer `tmr` for periodic work. In long loops, use `app.exiting()` or `sleep(ms)` to detect
+  exit requests.
+- A common return convention is `value | nil, err`. Some compatibility APIs instead return a
+  Boolean, raise an error, or report a status code through a callback; see the summaries below.
+
+## Minimal Examples
+
+Timer:
+
+```lua
+local t = tmr.create()
+
+t:alarm(1000, tmr.ALARM_AUTO, function()
+  print("tick", tmr.time())
+end)
+```
+
+Wi-Fi connection:
+
+```lua
+wifi.mode(wifi.STATION, false)
+wifi.start()
+
+wifi.sta.on("got_ip", function(_, info)
+  print("ip:", info.ip)
+end)
+
+wifi.sta.config({
+  ssid = "mywifi",
+  pwd = "12345678"
+}, false)
+
+wifi.sta.connect()
+```
+
+HTTP request:
+
+```lua
+http.get("https://example.com/", {}, function(code, body)
+  if code ~= 200 or not body then
+    print("http failed:", code)
+    return
+  end
+
+  print(body)
+end)
+```
+
+## Events and Resource Cleanup
+
+- `tmr.delay(us)` busy-waits and is suitable only for very short hardware-timing delays. Do
+  not use it for long delays in network, UI, or file operations.
+- Call `timer:unregister()` when a `tmr.ALARM_AUTO` timer is no longer needed.
+- Unregister handlers added with `app.on("key", fn)`, `key.on(...)`,
+  `wifi.sta.on(...)`, or `socket:on(...)` when exiting or rebuilding a page.
+- Files opened by a dynamic HTTPD handler must be closed when `body` generation completes.
+  Static file serving and the Lua VM may access the same file concurrently, so dynamic reads
+  offer more control.
+
+## Fully Compatible APIs
+
+### tmr Timers
+
+Constants: `tmr.ALARM_SINGLE`, `tmr.ALARM_AUTO`, `tmr.ALARM_SEMI`.
+
+Common APIs:
+
+- `tmr.create() -> timer`
+- `tmr.delay(us)`
+- `tmr.now() -> us`
+- `tmr.time() -> s`
+- `tmr.softwd(seconds[, callback])`
+- `tmr.wdclr()`
+- `timer:alarm(interval_ms, mode, callback) -> bool`
+- `timer:register(interval_ms, mode, callback)`
+- `timer:start() -> bool`
+- `timer:stop() -> bool`
+- `timer:unregister()`
+- `timer:interval(interval_ms)`
+- `timer:state() -> started, mode | nil`
+
+### sjson
+
+`sjson` uses an exception-raising convention. Wrap it in `pcall` when parsing external input.
+
+- `sjson.encode(value[, opts]) -> string`
+- `sjson.decode(text[, opts]) -> value`
+- `sjson.encoder(value[, opts]) -> encoder`
+- `encoder:read([size]) -> string|nil`
+- `sjson.decoder([opts]) -> decoder`
+- `decoder:write(chunk) -> value|nil`
+- `decoder:result() -> value`
+
+### time
+
+- `time.get() -> sec, usec`
+- `time.set(sec[, usec])`
+- `time.getlocal() -> table`
+- `time.settimezone(timezone)`
+- `time.initntp([server])`
+- `time.ntpenabled() -> bool`
+- `time.ntpstop()`
+- `time.epoch2cal(sec) -> table`
+- `time.cal2epoch(calendar) -> sec`
+
+### wifi
+
+A foreground app receives the complete `wifi` module. A background Service receives only the
+read-only `wifi.sta.getmac()` API; all other Wi-Fi APIs and constants are unavailable there.
+
+Common modes: `wifi.NULLMODE`, `wifi.STATION`, `wifi.SOFTAP`, `wifi.STATIONAP`.
+
+- `wifi.mode(mode[, save])`
+- `wifi.start()`
+- `wifi.stop()`
+- `wifi.getmode() -> mode`
+- `wifi.getchannel() -> primary, secondary`
+- `wifi.sta.config(cfg[, save])`
+- `wifi.sta.connect()`
+- `wifi.sta.disconnect()`
+- `wifi.sta.getip() -> ip, netmask, gateway | nil`
+- `wifi.sta.getmac() -> mac`
+- `wifi.sta.scan(cfg, callback)`
+- `wifi.sta.on(event, callback_or_nil)`
+- `wifi.ap.config(cfg[, save])`
+- `wifi.ap.getip() -> ip, netmask, gateway | nil`
+- `wifi.ap.on(event, callback_or_nil)`
+
+Common station events: `"start"`, `"stop"`, `"connected"`, `"disconnected"`, `"got_ip"`.
+
+### net TCP/UDP
+
+Constants: `net.TCP`, `net.UDP`. Common events: `"connection"`, `"receive"`, `"sent"`,
+`"disconnection"`, `"dns"`.
+
+- `net.createConnection([type[, secure]]) -> socket|udpsocket`
+- `net.createServer([type[, timeout]]) -> server|udpsocket`
+- `net.createUDPSocket() -> udpsocket`
+- `net.dns.resolve(host, callback)`
+- `socket:on(event, callback_or_nil)`
+- `socket:connect(port, host)`
+- `socket:send(data[, callback])`
+- `socket:close()`
+- `server:listen([port][, ip], callback)`
+- `udpsocket:listen([port][, ip])`
+- `udpsocket:send(port, ip, data)`
+
+### httpd HTTP Server
+
+`httpd` provides an HTTP server on the device. Static files are served from `webroot`, while
+dynamic routes return response tables from Lua handlers.
+
+- `httpd.start(config)`
+- `httpd.stop()`
+- `httpd.static(route, content_type) -> nil|err`
+- `httpd.dynamic(method, route, handler) -> nil|err`
+- `httpd.unregister(method, route) -> 1|nil`
+
+Common `config` fields: `webroot`, `auto_index`, `max_handlers`.
+
+Common dynamic-handler `req` fields: `method`, `uri`, `query`, `headers`, `getbody()`.
+
+Common response-table fields: `status`, `type`, `headers`, `body`, `getbody`. Use either
+`body` or `getbody`, not both.
+
+### i2s
+
+- `i2s.start(i2s_num, cfg[, callback])`
+- `i2s.stop(i2s_num)`
+- `i2s.read(i2s_num, size[, wait_ms]) -> string`
+- `i2s.write(i2s_num, data)`
+- `i2s.mute(i2s_num)`
+
+Common `cfg` fields: `mode`, `rate`, `bits`, `channel`, `format`, `buffer_count`,
+`buffer_len`, `data_out_pin`.
+
+### uart Serial Input
+
+`uart` is available only to foreground apps, and the serial-port ID is currently fixed at `0`.
+`uart.read()` is nonblocking and returns `nil` when no data is available:
+
+```lua
+uart.setup(0, 115200)
+
+local data = uart.read(0)       -- Read all data currently available
+local part = uart.read(0, 32)   -- Read at most 32 bytes
+local all  = uart.read(0, "*a") -- Read all data currently available
+local line = uart.read(0, "*l") -- Read through newline or the currently available fragment
+```
+
+You can also receive data asynchronously through a newline delimiter. Callback data includes the
+trailing `\n`:
+
+```lua
+uart.on("data", "\n", function(data)
+  print("uart:", data)
+end)
+
+-- Stop listening
+uart.on("data")
+```
+
+`uart.read()` and `uart.on()` consume the same serial input; do not use them at the same time.
+
+### mqtt
+
+Common events: `"connect"`, `"connfail"`, `"offline"`, `"message"`, `"suback"`,
+`"unsuback"`, `"puback"`.
+
+- `mqtt.Client(clientid, keepalive[, username[, password[, cleansession]]]) -> client`
+- `client:on(event, callback_or_nil)`
+- `client:connect(host[, port[, secure[, autoreconnect]]][, on_connect[, on_fail]]) -> bool`
+- `client:publish(topic, payload, qos, retain[, callback]) -> bool`
+- `client:subscribe(topic_or_table, qos_or_callback[, callback]) -> bool`
+- `client:unsubscribe(topic_or_table[, callback]) -> bool`
+- `client:lwt(topic, message[, qos[, retain]])`
+- `client:close()`
+
+## Extended APIs
+
+### file
+
+`file` retains common NodeMCU file APIs and adds directory iteration, file status, and whole-file
+reads and writes. Prefer `/sd/...` paths.
+
+Core APIs:
+
+- `file.open(path[, mode]) -> fd|nil`
+- `file.close([fd])`
+- `file.read([fd][, n_or_char]) -> string|nil`
+- `file.readline([fd]) -> string|nil`
+- `file.write([fd], data) -> true|nil`
+- `file.writeline([fd], data) -> true|nil`
+- `file.seek([fd][, whence[, offset]]) -> pos|nil`
+- `file.flush([fd]) -> true|nil`
+- `file.exists(path) -> bool`
+- `file.list([pattern]) -> table`
+- `file.mkdir(path) -> bool`
+- `file.rmdir(path) -> bool`
+- `file.remove(path)`
+- `file.rename(old, new) -> bool`
+- `file.fsinfo() -> remain, used, total`
+
+Extended APIs:
+
+- `file.listdir([dir]) -> array`
+- `file.stat(path) -> table|nil`
+- `file.getcontents(path) -> string|nil`
+- `file.putcontents(path, contents) -> true|nil`
+
+Common `mode` values: `"r"`, `"w"`, `"a"`, `"r+"`, `"w+"`, `"a+"`. Common `whence`
+values: `"set"`, `"cur"`, `"end"`.
+
+```lua
+local fd = file.open("/sd/test.txt", "w+")
+if fd then
+  fd:writeline("hello")
+  fd:seek("set", 0)
+  print(fd:readline())
+  fd:close()
+end
+
+for _, e in ipairs(file.listdir("/sd")) do
+  print(e.name, e.size, e.is_dir)
+end
+```
+
+### http Requests
+
+`http` is a convenience request layer. Without a `callback`, it synchronously returns
+`code, body, headers`. With a `callback`, it asynchronously calls
+`callback(code, body, headers)`.
+
+- `http.get(url[, options][, callback])`
+- `http.post(url, options, body[, callback])`
+- `http.put(url, options, body[, callback])`
+- `http.delete(url[, options][, body][, callback])`
+- `http.request(url, method[, options][, body][, callback])`
+- `http.createConnection(url[, method][, options]) -> connection`
+
+Common `options` fields: `headers`, `timeout`, `max_redirects`, `cert`, `bufsz`.
+
+```lua
+local code, body = http.get("http://example.com")
+print("sync:", code, body)
+
+http.post("https://httpbin.org/post", {
+  headers = { ["Content-Type"] = "text/plain" }
+}, "hello", function(code)
+  print("post:", code)
+end)
+```
+
+Connection objects are useful for streamed reads, connection reuse, or delayed acknowledgments:
+
+- `connection:on(event[, callback])`
+- `connection:request()`
+- `connection:setmethod(method)`
+- `connection:seturl(url)`
+- `connection:setheader(name[, value])`
+- `connection:setbody([data])`
+- `connection:ack()`
+- `connection:close()`
+
+Event names: `"connect"`, `"headers"`, `"data"`, `"complete"`.
+
+### websocket
+
+- `websocket.createClient() -> client`
+- `client:config(params)`
+- `client:connect(url)`
+- `client:on(event, callback_or_nil)`
+- `client:send(message[, opcode]) -> nil|err`
+- `client:close()`
+
+Constants: `websocket.TEXT`, `websocket.BINARY`. Event names: `"connection"`,
+`"receive"`, `"close"`.
+
+### zlib Compression
+
+- `zlib.isgzip(data) -> bool`
+- `zlib.gunzip(data) -> string|nil, err`
+- `zlib.inflate(data) -> string|nil, err`
+- `zlib.crc32(data[, crc]) -> integer`
+
+### np Array Computation
+
+`np` provides simple array, matrix, FFT, and related computation. Direct array access uses Lua's
+`1-based` indexing, while `viper.buf` remains `0-based`.
+
+Creation and conversion:
+
+- `np.array(table_or_array[, dtype]) -> array`
+- `np.zeros(shape[, dtype]) -> array`
+- `np.empty(shape[, dtype]) -> array`
+- `np.frombuffer(buffer[, dtype[, count[, offset]]]) -> array`
+- `np.shape(array) -> table`
+- `array:shape() -> table`
+- `array:to_table() -> table`
+- `array:fill(value)`
+
+Common computations:
+
+- `np.add(a, b[, out])`
+- `np.multiply(a, b[, out])`
+- `np.divide(a, b[, out])`
+- `np.sqrt(a[, out])`
+- `np.square(a[, out])`
+- `np.clip(a, min, max[, out])`
+- `np.where(cond, x, y[, out])`
+- `np.sum(a[, axis_or_options[, out]])`
+- `np.matmul(a, b[, out])`
+- `np.convolve2d(src, kernel[, out_or_options[, options]])`
+- `np.hanning(M) -> array`
+- `np.fft.rfft(a[, n]) -> re, im`
+- `np.fft.rfftfreq(n[, d]) -> array`
+
+```lua
+local a = np.array({1, 2, 3})
+local b = np.array({10, 20, 30})
+local out = np.empty(np.shape(a))
+
+np.add(a, b, out)
+np.multiply(out, 2, out)
+
+print(out:to_table()[1])
+```
+
+### viper Hot-Path Functions
+
+`viper` compiles small C-like functions to machine code for use from Lua. Hot loops can run more
+than 10 times faster than equivalent direct Lua code. The viper library is open source at
+https://github.com/clocteck/esp32-viper.
+
+- `viper.compile_c(source[, opts]) -> fn`
+- `viper.buf(size) -> buffer`
+- `buffer:len() -> bytes`
+- `buffer:get8(index) / buffer:set8(index, value)`
+- `buffer:get16(index) / buffer:set16(index, value)`
+- `buffer:get32(index) / buffer:set32(index, value)`
+- `buffer:getf32(index) / buffer:setf32(index, value)`
+
+Buffer indexes are `0-based`. Pointer parameters accept `viper.buf` by default.
+
+```lua
+local src = [=[
+uint32_t sum8(uint8_t *buf, int32_t n) {
+  uint32_t sum = 0;
+  for (int32_t i = 0; i < n; i = i + 1) {
+    sum = sum + buf[i];
+  }
+  return sum;
+}
+]=]
+
+local fn = viper.compile_c(src)
+local buf = viper.buf(16)
+buf:set8(0, 10)
+buf:set8(1, 20)
+print(fn(buf, buf:len()))
+```
+
+### app Management
+
+`app` interacts with the application manager. Regular apps most often use it to detect or
+request an exit, launch another app, and register app-level events.
+
+- `app.exiting() -> bool`: Check for an exit request inside a long-running loop.
+- `app.exit() -> true|nil, err`: Request that the current app exit.
+- `app.on(name, callback_or_nil)`: Register or unregister an app event.
+- `app.list() -> array`: Get the app list.
+- `app.current() -> table|nil`: Get information about the current app.
+- `app.launch(id) -> true|nil, err`: Launch a specific app.
+- `app.last_error() -> string|nil`: Read the most recent app error.
+- `app.rescan() -> true|nil, err`: Rescan the app list.
+
+`app.on(name, fn)` registers an app-level event. Registering the same `name` again replaces the
+old callback. Use `app.on(name, nil)` or `app.on(name)` to unregister it. Unregister handlers
+created by the page before the page or app exits.
+
+Common events:
+
+- `app.on("key", function(name, evt_type, evt_code, ts_ms) ... end)`: Generic key event.
+  `name` is always `"key"`, and `evt_type`/`evt_code` correspond to constants in the `key`
+  module. Prefer `key.on()` for ordinary key handling.
+- `app.on("imu", function(name, roll, pitch, gx, gy, gz, ts_ms) ... end)`: IMU orientation
+  event. `roll` and `pitch` are zero-calibrated degrees. The current source publishes only
+  `roll` and `pitch`; `gx`, `gy`, and `gz` are reserved and normally `0`.
+
+`app.on` is a lightweight generic event channel. If Lua has not dispatched an event yet, only
+the newest pending data for the same event name is retained. Do not block for long periods in a
+callback. For high-rate events, update state in the callback and perform expensive work in the
+main loop or a timer.
+
+```lua
+app.on("imu", function(_, roll, pitch, gx, gy, gz, ts_ms)
+  print("tilt:", roll, pitch, ts_ms)
+end)
+
+-- Unregister before destroying the page or exiting the app
+app.on("imu", nil)
+```
+
+## BLE Services, Controllers, and IPC
+
+The low-level `ble` module is registered only for background Services. API names and IRQ numbers
+follow MicroPython, including `ble.gap_scan()`, `ble.gap_connect()`, `ble.gattc_*()`, and
+`ble.irq()`. A foreground app does not scan for or connect to BLE directly; it consumes the
+normalized controller state published by a Service.
+
+When subscribing to notifications, use `ble.gattc_discover_descriptors()` to find UUID `0x2902`.
+After receiving `IRQ_GATTC_DESCRIPTOR_RESULT=13`, write the CCCD through
+`ble.gattc_write()`. Do not assume the descriptor handle is the characteristic value handle
+plus one.
+
+A Service publishes state through `controller.publish`, which exists only in a Service:
+
+```lua
+controller.publish("ble-main", {
+  connected = true,
+  buttons = 0x00000001,
+  lx = 0, ly = 0, rx = 0, ry = 0,
+  lt = 0, rt = 0,
+  name = "My Controller",
+  device_id = "AA:BB:CC:DD:EE:FF",
+})
+```
+
+If `pressed/released` is omitted, the lower layer computes edges from the previous `buttons`
+value. Only one Service may publish each source. When a Service exits, it automatically publishes
+`connected=false` once and releases all buttons.
+
+A foreground app reads or subscribes to state as follows:
+
+```lua
+local state = controller.state("ble-main")
+
+controller.on("ble-main", function(source, event)
+  if event.pressed ~= 0 then
+    print(source, event.buttons, event.pressed)
+  end
+end)
+
+-- Unregister when the page or app is destroyed
+controller.on("ble-main", nil)
+```
+
+State fields include `seq/timestamp_ms/connected/buttons/pressed/released`, dual sticks
+`lx/ly/rx/ry`, triggers `lt/rt`, and `name/device_id/source`. `controller.sources()` returns
+the list of currently published sources.
+
+The mapping page and Service communicate through binary-safe IPC. Endpoints are globally unique
+and each payload is limited to 1024 bytes. A mapping can be transferred with
+`json.encode/decode`:
+
+```lua
+-- BLE Service
+ipc.listen("ble-controller", function(topic, payload, timestamp_ms)
+  if topic == "set_mapping" then
+    local mapping = json.decode(payload)
+    -- Validate and save the mapping, then apply it before subsequent publishes.
+  end
+end)
+
+-- Settings page
+local ok, err = ipc.send("ble-controller", "set_mapping", json.encode(mapping))
+
+-- Release the owned endpoint when the Service/page exits
+ipc.listen("ble-controller", nil)
+```
+
+`ipc.endpoints()` lists current endpoints. If an endpoint with the same name is owned by another
+Lua state, `ipc.listen()` returns `nil, err`.
+
+When an app, Service, or Launcher changes state, the application manager sends an event to the
+fixed `app-lifecycle` endpoint. Entering an app produces `launcher.stopped` followed by
+`app.started`; exiting produces `app.stopped` followed by `launcher.started`. Services use
+`service.started` and `service.stopped`. The payload is JSON containing `id` and
+`instance_id`. Launcher always uses `{"id":"launcher","instance_id":0}`:
+
+```lua
+ipc.listen("app-lifecycle", function(topic, payload, timestamp_ms)
+  local event = json.decode(payload)
+  print(topic, event.id, event.instance_id, timestamp_ms)
+end)
+```
+
+Use the service and WebUI APIs as needed: `app.services()`, `app.start_service(id)`,
+`app.stop_service(id_or_instance)`, `app.route_base()`, and `app.set_home_exit(enabled)`.
+The lower layer detects WebUI availability from whether the current app registers the
+`route_base .. "/"` home route.
+
+If a Service with the same ID is already running, `app.start_service(id)` restarts the old
+instance. A Service whose manifest sets `autostart_service=true` is considered persistent. If it
+exits or is stopped, the application manager starts it again after about two seconds. To disable
+it for an extended period, turn off that manifest option or uninstall the corresponding Service.
+
+### Service UI and HOME
+
+HOME is routed only to the owner of the topmost visible Service Canvas. If that Service registered
+a matching `key.on(key.HOME, ...)` or `app.on("key", ...)` handler, the complete HOME gesture is
+delivered to the Service; its Canvas remains visible and the foreground app does not also receive
+the gesture. If there is no listener, the firmware hides the Canvas.
+
+```lua
+local canvas = service_ui.acquire(0, 0, 320, 240)
+service_ui.show(canvas)
+
+key.on(key.HOME, function(evt_type, timestamp_ms)
+  if evt_type == key.SHORT then
+    -- The Service handles it. Call service_ui.hide(canvas) explicitly when appropriate.
+    do_something()
+  end
+end)
+
+-- After unregistering, HOME returns to firmware-controlled Canvas hiding.
+key.off(key.HOME)
+```
+
+A Service may receive `key.START`, `key.SHORT`, `key.LONG_START`, `key.LONG_REPEAT`, and
+`key.LONG_END`. Even when `key.on()` specifies only one event type, the Service takes ownership
+of the complete HOME gesture. The callback runs asynchronously in the Service's Lua task; the
+firmware does not wait synchronously for Lua to return.
+
+### device Credentials
+
+Both foreground apps and background Services can use `device.credentials`. The device ID and
+device key are stored together as one NVS record, and a system worker performs Flash access.
+
+```lua
+local ok, err = device.credentials.set({
+  device_id = "device-001",
+  device_key = "secret-key"
+})
+
+local credentials, load_err = device.credentials.get()
+if credentials then
+  print(credentials.device_id)
+elseif load_err then
+  print("load failed", load_err)
+else
+  -- First boot or credentials already cleared
+end
+
+local cleared, clear_err = device.credentials.clear()
+```
+
+- `set(credentials) -> true | nil, err`: `device_id` and `device_key` must both be strings of
+  at least one byte, with limits of 64 and 256 bytes respectively.
+- `get() -> credentials | nil [, err]`: Returns only `nil` on first boot or after clearing;
+  storage errors return `nil, err`.
+- `clear() -> true | nil, err`: Returns `true` even when no credentials exist.
+
+### sys Device Control
+
+`sys` provides device-level status and simple controls. Avoid repeatedly changing brightness,
+CPU frequency, or the LED inside a high-frequency loop.
+
+- Version and status: `sys.version()`, `sys.usage()`.
+- Screen brightness: `sys.setbrightness(level)`, `sys.getbrightness()`.
+- CPU frequency: `sys.setcpufreq(mhz)`, `sys.getcpufreq()`.
+- RGB LED: `sys.setled(r, g, b)`, `sys.setled("#RRGGBB")`, `sys.setled()`,
+  `sys.getled()`.
+
+### key Input
+
+`key` handles physical-key events for the current Lua app. Prefer this module for key input.
+
+- `key.on(code, fn)`: Listen to one key; the callback is `fn(evt_type, ts_ms)`.
+- `key.on(fn)`: Listen to all keys; the callback is `fn(code, evt_type, ts_ms)`.
+- `key.off(code)`: Stop listening to a specific key.
+- `key.off()`: Remove all key listeners registered by the current app.
+- `key.off(code, type)`: Unregister one event type precisely; most scripts rarely need this.
+
+Key constants: `key.LEFT`, `key.RIGHT`, `key.UP`, `key.DOWN`, `key.HOME`.
+Event constants: `key.START`, `key.SHORT`, `key.LONG_START`, `key.LONG_REPEAT`,
+`key.LONG_END`, `key.EXIT`.
+
+Event meanings:
+
+- `key.START`: Press started.
+- `key.SHORT`: Released after a short press.
+- `key.LONG_START`: Long-press threshold reached; currently about `800ms`.
+- `key.LONG_REPEAT`: Repeated during a long press; currently about every `200ms`.
+- `key.LONG_END`: Released after a long press.
+- `key.EXIT`: System exit event; regular apps normally do not handle it separately.
+
+```lua
+key.on(key.LEFT, function(evt_type, ts_ms)
+  if evt_type == key.SHORT then
+    print("left short", ts_ms)
+  elseif evt_type == key.LONG_REPEAT then
+    print("left repeat", ts_ms)
+  end
+end)
+
+key.on(key.HOME, function(evt_type)
+  if evt_type == key.SHORT then
+    app.exit()
+  end
+end)
+```
+
+### Global Helper Functions
+
+- `millis() -> integer`
+- `sleep(ms) -> bool`
+- `print(...)`
+- `lv_lvgl_monitor_reset()`
+- `lv_lvgl_monitor_get() -> render_cnt, time_sum_ms, px_sum, last_time_ms, last_px`
+
+### UI
+
+Lua UI code directly uses global `lv_*` functions and LVGL constants. See
+[README_LVGL.md](README_LVGL.md) for the unified reference covering widgets, layouts, styles,
+events, animations, GIFs, canvas, and related APIs.
+
+---
+
 # Lua 使用说明
+
+[English](#lua-usage-guide) | [简体中文](#lua-使用说明)
 
 本文只说明 Lua 脚本中常用接口的写法。LVGL 控件、样式、布局和动画接口见 `README_LVGL.md`。
 
