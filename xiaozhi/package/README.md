@@ -49,6 +49,9 @@ This foreground app keeps its own runtime and takes ownership of the microphone 
 `/sd/apps/xiaozhi/config.json`；`service.json` 相关的后台唤醒、悬浮 UI 和退避 App
 仍由 `xiaozhi-service` 的 WebUI 管理。进入 IPC 模式后，`xiaozhi` 不再重复发布配置页。
 
+自动会话的无交互休眠时间读取 `/sd/apps/xiaozhi-service/service.json` 中的
+`session_idle_timeout_sec`，支持 `10`、`20`、`30`、`60` 秒，默认 `20` 秒。
+
 ### 前台 UI 插件
 
 前台 App UI 插件放在：

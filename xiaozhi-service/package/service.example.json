@@ -3,6 +3,7 @@
   "ui_mode": "app",
   "ui_type": "window",
   "ui_character": "xiaozhi_chibi",
+  "session_idle_timeout_sec": 20,
   "deny_apps": {
     "Spectrum": true,
     "mp3_player": true,

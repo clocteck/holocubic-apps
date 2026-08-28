@@ -2,12 +2,14 @@ local M = {}
 
 local APP_ID = "time-calendar-weather-memo"
 local APP_DIR = "/sd/apps/" .. APP_ID
+local APP_INFO = APP_DIR .. "/app.info"
 local MEMO_FILE = APP_DIR .. "/memos.json"
+local INSTALL_ERROR = "请先安装备忘录 App（time-calendar-weather-memo）"
 
 local DEFAULT_MEMOS = {
-  "项目复盘",
-  "阅读二十分钟",
-  "散步放松",
+  "",
+  "",
+  "",
 }
 
 M.tools = {
@@ -16,6 +18,18 @@ M.tools = {
     description = "读取 time-calendar-weather-memo 应用当前保存的三条备忘录内容。",
     inputSchema = {
       type = "object",
+      additionalProperties = false,
+    },
+  },
+  {
+    name = "memo.add",
+    description = "在第一条空白位置新建一条备忘录；三条都已有内容时应先删除或修改。",
+    inputSchema = {
+      type = "object",
+      properties = {
+        text = { type = "string", description = "新备忘录内容。" },
+      },
+      required = { "text" },
       additionalProperties = false,
     },
   },
@@ -37,6 +51,23 @@ M.tools = {
         },
       },
       required = { "index", "text" },
+      additionalProperties = false,
+    },
+  },
+  {
+    name = "memo.delete",
+    description = "删除指定序号的备忘录，将该位置清空。index 为 1 到 3。",
+    inputSchema = {
+      type = "object",
+      properties = {
+        index = {
+          type = "integer",
+          minimum = 1,
+          maximum = 3,
+          description = "要删除的备忘录序号，范围 1 到 3。",
+        },
+      },
+      required = { "index" },
       additionalProperties = false,
     },
   },
@@ -104,10 +135,31 @@ local function read_text(path)
   return raw
 end
 
+local function path_exists(path)
+  if file and file.exists then
+    local ok, exists = pcall(function() return file.exists(path) end)
+    if ok then return exists == true end
+  end
+  if file and file.stat then
+    local ok, stat = pcall(function() return file.stat(path) end)
+    if ok then return stat ~= nil and stat ~= false end
+  end
+  return read_text(path) ~= nil
+end
+
+local function app_installed()
+  return path_exists(APP_INFO)
+end
+
 local function write_text(path, body)
-  if not file or not file.open then
+  if not file then
     return nil, "file api unavailable"
   end
+  if file.putcontents then
+    local ok, saved = pcall(function() return file.putcontents(path, body) end)
+    if ok and saved then return true end
+  end
+  if not file.open then return nil, "file api unavailable" end
   local fd = file.open(path, "w+")
   if not fd then
     return nil, "failed to open memo file for writing"
@@ -162,16 +214,29 @@ local function notify_calendar_reload()
 end
 
 local function read_memos()
+  if not app_installed() then
+    return nil, false, INSTALL_ERROR
+  end
   local raw = read_text(MEMO_FILE)
+  if raw == nil then
+    local memos = normalize_memos(nil)
+    local body, enc_err = encode_json({ memos = memos })
+    if not body then return nil, false, enc_err end
+    local ok, write_err = write_text(MEMO_FILE, body)
+    if not ok then return nil, false, write_err end
+    notify_calendar_reload()
+    return memos, false
+  end
   local doc = decode_json(raw)
   local exists = type(raw) == "string"
   if type(doc) == "table" and type(doc.memos) == "table" then
     return normalize_memos(doc.memos), exists
   end
-  return normalize_memos(nil), exists
+  return nil, exists, "备忘录数据格式错误，请在备忘录 App 中重新保存"
 end
 
 local function save_memos(memos)
+  if not app_installed() then return nil, INSTALL_ERROR end
   local body, enc_err = encode_json({ memos = normalize_memos(memos) })
   if not body then
     return nil, enc_err
@@ -184,19 +249,43 @@ local function save_memos(memos)
   return true
 end
 
-local function result(memos, existed)
-  return {
+local function result(memos, existed, extra)
+  local out = {
     app_id = APP_ID,
     path = MEMO_FILE,
+    installed = true,
     existed = existed and true or false,
     memos = memos,
   }
+  if type(extra) == "table" then
+    for key, value in pairs(extra) do out[key] = value end
+  end
+  return out
 end
 
 M.handlers = {
   ["memo.get"] = function(arguments, ctx)
-    local memos, existed = read_memos()
+    local memos, existed, err = read_memos()
+    if not memos then return ctx.error_result(err) end
     return ctx.text_result(result(memos, existed))
+  end,
+
+  ["memo.add"] = function(arguments, ctx)
+    arguments = type(arguments) == "table" and arguments or {}
+    if type(arguments.text) ~= "string" or arguments.text == "" then
+      return ctx.error_result("text must be a non-empty string")
+    end
+    local memos, _, read_err = read_memos()
+    if not memos then return ctx.error_result(read_err) end
+    local index = nil
+    for i = 1, 3 do
+      if memos[i] == "" then index = i; break end
+    end
+    if not index then return ctx.error_result("三条备忘录已满，请先删除或指定序号修改") end
+    memos[index] = arguments.text
+    local ok, err = save_memos(memos)
+    if not ok then return ctx.error_result(err) end
+    return ctx.text_result(result(memos, true, { index = index, created = true }))
   end,
 
   ["memo.set"] = function(arguments, ctx)
@@ -208,13 +297,29 @@ M.handlers = {
     if type(arguments.text) ~= "string" then
       return ctx.error_result("text must be a string")
     end
-    local memos = read_memos()
+    local memos, _, read_err = read_memos()
+    if not memos then return ctx.error_result(read_err) end
     memos[index] = arguments.text
     local ok, err = save_memos(memos)
     if not ok then
       return ctx.error_result(err)
     end
-    return ctx.text_result(result(memos, true))
+    return ctx.text_result(result(memos, true, { index = index }))
+  end,
+
+  ["memo.delete"] = function(arguments, ctx)
+    arguments = type(arguments) == "table" and arguments or {}
+    local index = tonumber(arguments.index)
+    if not index or index < 1 or index > 3 or index ~= math.floor(index) then
+      return ctx.error_result("index must be an integer from 1 to 3")
+    end
+    local memos, _, read_err = read_memos()
+    if not memos then return ctx.error_result(read_err) end
+    local deleted = memos[index] ~= ""
+    memos[index] = ""
+    local ok, err = save_memos(memos)
+    if not ok then return ctx.error_result(err) end
+    return ctx.text_result(result(memos, true, { index = index, deleted = deleted }))
   end,
 
   ["memo.set_all"] = function(arguments, ctx)

@@ -36,6 +36,7 @@ M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
 M.TIMEZONE = "CST-8"
+M.SESSION_IDLE_TIMEOUT_SEC = 20
 M.UI_TYPE = nil
 M.APP_UI_TYPE = nil
 M.UI_CHARACTER = nil
@@ -179,6 +180,14 @@ local function decode_json(raw)
   return nil
 end
 
+local function normalize_session_idle_timeout(value)
+  value = math.floor(tonumber(value) or 20)
+  if value == 10 or value == 20 or value == 30 or value == 60 then
+    return value
+  end
+  return 20
+end
+
 local function read_wake_service_config()
   local raw = read_text("/sd/apps/xiaozhi-service/service.json")
   local obj = raw and decode_json(raw) or nil
@@ -186,6 +195,7 @@ local function read_wake_service_config()
     return {
       enabled = true,
       ui_mode = "app",
+      session_idle_timeout_sec = 20,
       deny_apps = default_deny_apps(),
     }
   end
@@ -269,6 +279,9 @@ local function apply_wake_service(wake_service)
       if type(app_id) == "string" and enabled == true then deny_apps[app_id] = true end
     end
     M.wake_service.deny_apps = deny_apps
+  end
+  if type(wake_service) == "table" then
+    M.SESSION_IDLE_TIMEOUT_SEC = normalize_session_idle_timeout(wake_service.session_idle_timeout_sec)
   end
   local mode = type(wake_service) == "table" and wake_service.ui_mode or nil
   if mode == "floating" or mode == "service_ui" then

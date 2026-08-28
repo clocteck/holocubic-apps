@@ -37,6 +37,7 @@ function M.new(cfg)
     native_font = nil,
     native_font_path = nil,
     render_timer = nil,
+    hide_timer = nil,
   }
 
   local function rect(x, y, w, h, color, radius, opa)
@@ -72,6 +73,10 @@ function M.new(cfg)
   end
 
   local function release_canvas()
+    if self.hide_timer then
+      pcall(function() self.hide_timer:unregister() end)
+      self.hide_timer = nil
+    end
     if not self.canvas then return end
     if service_ui.hide then pcall(service_ui.hide, self.canvas) end
     if service_ui.release then pcall(service_ui.release, self.canvas) end
@@ -129,10 +134,25 @@ function M.new(cfg)
     self.role = tostring(role or "system")
     self.text = tostring(content or "")
     render_now()
+    if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
+    local persistent = self.role == "system" and self.text:find("验证码", 1, true) ~= nil
+    if self.text ~= "" and not persistent and tmr and tmr.create then
+      local timer = tmr.create()
+      self.hide_timer = timer
+      timer:alarm(6000, tmr.ALARM_SINGLE, function(instance)
+        pcall(function() instance:unregister() end)
+        if self.hide_timer == timer then self.hide_timer = nil end
+        self.text = ""
+        self.notice = ""
+        release_canvas()
+      end)
+    end
   end
 
   function self:clear_chat_messages()
     self.text = ""
+    self.notice = ""
+    if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
   end
 
   function self:on_state(state)

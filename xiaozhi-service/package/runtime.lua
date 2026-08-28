@@ -28,7 +28,12 @@ function M.new(cfg, load_module)
   end
 
   local function default_wake_service_config()
-    return { enabled = true, ui_mode = "app", deny_apps = default_deny_apps() }
+    return {
+      enabled = true,
+      ui_mode = "app",
+      session_idle_timeout_sec = 20,
+      deny_apps = default_deny_apps(),
+    }
   end
 
   local self = {
@@ -74,6 +79,7 @@ function M.new(cfg, load_module)
     tts_text_ready = false,
     tts_audio_queue = {},
     tts_audio_timer = nil,
+    session_idle_timer = nil,
     web = nil,
     indicator = Indicator.new(),
     stopped = false,
@@ -564,6 +570,41 @@ function M.new(cfg, load_module)
     end
   end
 
+  local function cancel_session_idle_timer()
+    if not self.session_idle_timer then return end
+    pcall(function() self.session_idle_timer:stop() end)
+    pcall(function() self.session_idle_timer:unregister() end)
+    self.session_idle_timer = nil
+  end
+
+  local function session_idle_timeout_sec()
+    local value = math.floor(tonumber(cfg.SESSION_IDLE_TIMEOUT_SEC) or 20)
+    if value == 10 or value == 20 or value == 30 or value == 60 then return value end
+    return 20
+  end
+
+  local function schedule_session_idle_timer()
+    cancel_session_idle_timer()
+    if self.stopped or self.state.state ~= State.LISTENING
+        or self.listening_mode == State.LISTEN_MANUAL or not tmr or not tmr.create then
+      return false
+    end
+    local timeout_sec = session_idle_timeout_sec()
+    local timer = tmr.create()
+    self.session_idle_timer = timer
+    timer:alarm(timeout_sec * 1000, tmr.ALARM_SINGLE, function(instance)
+      pcall(function() instance:unregister() end)
+      if self.session_idle_timer ~= timer then return end
+      self.session_idle_timer = nil
+      if not self.stopped and self.state.state == State.LISTENING
+          and self.listening_mode ~= State.LISTEN_MANUAL then
+        print("[xiaozhi] session idle timeout", tostring(timeout_sec) .. "s")
+        stop_listening()
+      end
+    end)
+    return true
+  end
+
   local function dismiss_from_home()
     local state = self.state.state
     if state ~= State.CONNECTING and state ~= State.LISTENING and state ~= State.SPEAKING then
@@ -809,6 +850,11 @@ function M.new(cfg, load_module)
       self.ui_notice = ""
     end
     self.ui:on_state(new_state)
+    if new_state == State.LISTENING then
+      schedule_session_idle_timer()
+    else
+      cancel_session_idle_timer()
+    end
     if self.audio_suspended_by_app then
       refresh_metrics()
       notify_ipc()
@@ -1157,6 +1203,7 @@ function M.new(cfg, load_module)
     end)
     self.protocol:on("chat", function(role, text)
       if role == "user" then cancel_external_return() end
+      if role == "user" then schedule_session_idle_timer() end
       self.ui_role = tostring(role or "system")
       self.ui_text = tostring(text or "")
       self.ui:set_chat_message(role, text)
@@ -1591,6 +1638,7 @@ function M.new(cfg, load_module)
     self.temporary_wake_backoff_source = nil
     cancel_external_return()
     cancel_tts_audio_timer()
+    cancel_session_idle_timer()
     self.tts_audio_queue = {}
     unbind_keys()
     if self.protocol then
@@ -1884,6 +1932,7 @@ function M.new(cfg, load_module)
         characters = list_ui_characters(),
       },
       wake_service_enabled = service_wake_enabled(),
+      session_idle_timeout_sec = session_idle_timeout_sec(),
       device_mac = Identity.device_id() or "",
       last_error = p.last_error or "",
       volume = math.max(0, math.min(100, math.floor(tonumber(cfg.AUDIO.volume) or 100))),
@@ -1927,6 +1976,7 @@ function M.new(cfg, load_module)
       audio_suspended_app_id = self.audio_suspended_app_id or "",
       temporary_wake_backoff = self.temporary_wake_backoff == true,
       temporary_wake_backoff_source = self.temporary_wake_backoff_source or "",
+      session_idle_timeout_sec = session_idle_timeout_sec(),
     }
   end
 
@@ -2012,11 +2062,18 @@ function M.new(cfg, load_module)
     return true, { url = url, ota_url = ota_url, version = version, token_set = token ~= "" }
   end
 
-  function self:set_ui_config(app_ui_type, service_ui_mode, service_ui_type, service_ui_character, deny_apps)
+  function self:set_ui_config(app_ui_type, service_ui_mode, service_ui_type, service_ui_character, deny_apps,
+      session_idle_timeout_value)
     app_ui_type = clean_ui_type(app_ui_type)
     service_ui_type = clean_ui_type(service_ui_type)
     service_ui_character = clean_ui_type(service_ui_character) or "xiaozhi_chibi"
     service_ui_mode = tostring(service_ui_mode or ""):lower()
+    local next_session_idle_timeout = math.floor(tonumber(session_idle_timeout_value)
+      or tonumber(cfg.SESSION_IDLE_TIMEOUT_SEC) or 20)
+    if next_session_idle_timeout ~= 10 and next_session_idle_timeout ~= 20
+        and next_session_idle_timeout ~= 30 and next_session_idle_timeout ~= 60 then
+      return false, "自动休眠时间仅支持 10、20、30 或 60 秒"
+    end
     local app_ui_installed = path_exists((cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info")
     if app_ui_installed then
       if not app_ui_type then
@@ -2059,6 +2116,7 @@ function M.new(cfg, load_module)
       doc.ui_mode = service_ui_mode
       doc.ui_type = service_ui_type
       doc.ui_character = service_ui_character
+      doc.session_idle_timeout_sec = next_session_idle_timeout
       doc.deny_apps = next_deny_apps
     end)
     if not service_saved then return false, service_err end
@@ -2069,6 +2127,7 @@ function M.new(cfg, load_module)
     cfg.UI_MODE = service_ui_mode
     cfg.UI_TYPE = service_ui_type
     cfg.UI_CHARACTER = service_ui_character
+    cfg.SESSION_IDLE_TIMEOUT_SEC = next_session_idle_timeout
     cfg.UI = cfg.UI or {}
     cfg.UI.type = service_ui_type
     cfg.UI.character = service_ui_character
@@ -2076,12 +2135,14 @@ function M.new(cfg, load_module)
     unbind_keys()
     bind_keys()
     rebuild_service_ui("ui config changed", true)
+    if self.state.state == State.LISTENING then schedule_session_idle_timer() end
     notify_ipc()
     return true, {
       app_ui_type = app_ui_type,
       service_ui_mode = service_ui_mode,
       service_ui_type = service_ui_type,
       service_ui_character = service_ui_character,
+      session_idle_timeout_sec = next_session_idle_timeout,
       deny_apps = next_deny_apps,
       deny_app_options = deny_app_options(next_deny_apps),
     }

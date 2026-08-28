@@ -66,6 +66,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
   "ui_mode": "app",
   "ui_type": "window",
   "ui_character": "xiaozhi_chibi",
+  "session_idle_timeout_sec": 20,
   "deny_apps": {
     "Spectrum": true,
     "mp3_player": true,
@@ -81,13 +82,14 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - `ui_mode`：`"app"` 表示唤醒后打开小智前台 App；`"floating"` 表示使用悬浮 UI。
 - `ui_type`：后台悬浮 UI 类型，对应 `/sd/apps/xiaozhi-service/ui/<type>.lua`。当前内置 `window` 小窗模式、`subtitle` 字幕模式、`wechat` 微信气泡、`assistant` 助手形象。
 - `ui_character`：`assistant` 样式使用的角色资源名，对应 `/sd/apps/xiaozhi-service/ui/character/<name>.rgb565`。
+- `session_idle_timeout_sec`：自动会话在无交互时回到待命的时间，只支持 `10`、`20`、`30`、`60` 秒，默认 `20` 秒。
 - `deny_apps`：这些前台应用运行时静默暂停小智服务，避免音频、性能或输入冲突；默认是 `Spectrum`、`mp3_player`、`holo-retro-go`、`FluidPendant`。
 
 服务 WebUI 提供两个 UI 配置区：
 
 - “主应用 UI”：写入 `/sd/apps/xiaozhi/config.json` 的 `ui.type`，控制前台小智 App。
 - “启用后台唤醒”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `enabled`。关闭后立即停止后台唤醒监听和当前后台对话；再次开启后在空闲状态恢复唤醒监听。
-- “后台服务 UI”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `ui_mode`、`ui_type` 和 `ui_character`，控制后台唤醒后打开 App 还是使用悬浮 UI。
+- “后台服务 UI”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `ui_mode`、`ui_type`、`ui_character` 和 `session_idle_timeout_sec`，控制后台呈现及无交互自动休眠时间。
 - “退避 App”：写入 `/sd/apps/xiaozhi-service/service.json` 的 `deny_apps`。勾选的 App 在前台运行时会暂停小智后台唤醒/音频，避免音频、性能或输入冲突。
 - “自定义服务”：写入 `/sd/apps/xiaozhi-service/config.json` 的 `ota.url` 和可选 `websocket.url/token/version`。这里只要求 OTA 地址必填；WebSocket 地址可留空，由 OTA 激活流程下发。
 
@@ -112,8 +114,13 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 - `device.set_wifi_ap`：开启或关闭 Wi-Fi AP 热点模式。
 - `device.set_bluetooth`：开启或关闭蓝牙手柄服务，并返回当前蓝牙状态。
 - `memo.get`：读取 `/sd/apps/time-calendar-weather-memo/memos.json` 的三条备忘录。
+- `memo.add`：在第一条空白位置新建备忘录。
 - `memo.set`：修改指定序号的一条备忘录。
+- `memo.delete`：删除指定序号的备忘录并清空该位置。
 - `memo.set_all`：一次替换全部三条备忘录。
+
+备忘录 App 未安装时工具会明确返回“请先安装备忘录 App”。App 已安装但
+`memos.json` 尚不存在时会安全初始化为三条空记录。
 
 备忘录写入成功后会向 `time-calendar-weather-memo` endpoint 发送 `memos.reload`，
 使正在前台运行的日历立即刷新。没有 IPC 或日历未运行时文件仍会保存，并在下次进入

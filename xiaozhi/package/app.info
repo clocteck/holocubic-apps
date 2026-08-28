@@ -17,4 +17,4 @@ description_zh_tw = 連接官方或自架小智伺服器，支援語音對話、
 description_zh_hant = 連接官方或自架小智伺服器，支援語音對話、裝置 MCP 與表情介面
 description_en = Connects to official or self-hosted Xiaozhi servers with voice chat, device MCP, and emoji UI
 description_ja = 公式またはセルフホストの Xiaozhi サーバーに接続し、音声会話、デバイス MCP、絵文字 UI に対応します
-version = 1.1.6
+version = 1.1.7

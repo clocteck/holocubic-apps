@@ -195,13 +195,15 @@ function M.new(cfg)
     self.message = content
     if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
     render()
-    if tmr and tmr.create then
+    local persistent = self.role == "system" and content:find("验证码", 1, true) ~= nil
+    if not persistent and tmr and tmr.create then
       local timer = tmr.create()
       self.hide_timer = timer
       timer:alarm(5000, tmr.ALARM_SINGLE, function(instance)
         pcall(function() instance:unregister() end)
         if self.hide_timer == timer then self.hide_timer = nil end
-        if self.state == "idle" then release_canvas() end
+        self.message = ""
+        release_canvas()
       end)
     end
   end

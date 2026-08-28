@@ -95,7 +95,14 @@ local PAGE = [=[<!doctype html>
           <option value="floating">悬浮显示</option>
         </select>
       </label>
-      <label class="field"></label>
+      <label class="field">无交互自动休眠
+        <select id="sessionIdleTimeout">
+          <option value="10">10 秒</option>
+          <option value="20">20 秒</option>
+          <option value="30">30 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+      </label>
       <label class="field">悬浮界面类型
         <select id="serviceUiType"></select>
       </label>
@@ -149,6 +156,7 @@ async function refresh(){
       q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';
       fillOptions(q('#serviceUiType'),s.ui_options&&s.ui_options.float,s.service_ui_type,'window');
       fillOptions(q('#serviceUiCharacter'),s.ui_options&&s.ui_options.characters,s.service_ui_character,'xiaozhi_chibi');
+      q('#sessionIdleTimeout').value=String(s.session_idle_timeout_sec||20);
       fillDenyApps(s.deny_app_options,s.deny_apps);
       q('#wakeEnabled').checked=s.wake_service_enabled===true;
       syncServiceUiDisabled();
@@ -169,7 +177,7 @@ q('#wakeEnabled').onchange=e=>pushWakeEnabled(e.target.checked);
 q('#saveCustom').onclick=async()=>{let b=q('#saveCustom');b.disabled=true;try{let s=await api('./api/server',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ota_url:q('#customOtaUrl').value,url:q('#customUrl').value,token:q('#customToken').value,version:Number(q('#customVersion').value)})});q('#message').textContent='自定义服务已保存，唤醒后连接';q('#server').textContent=s.url?'服务器：'+s.url:'OTA：'+s.ota_url;q('#customToken').value='';q('#customToken').placeholder=s.token_set?'已设置；留空将清除':'可选'}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
 q('#saveMac').onclick=async()=>{let b=q('#saveMac');b.disabled=true;try{let s=await api('./api/mac',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:q('#deviceMac').value})});q('#deviceMac').value=s.mac;q('#message').textContent=s.unchanged?'MAC 未变化':(s.pairing_required?'设备身份已修改，正在重新获取配对码':'设备身份已修改，正在重启服务');if(s.restarting)setTimeout(refresh,1800);else b.disabled=false}catch(e){q('#message').textContent=e.message;b.disabled=false}};
 q('#pair').onclick=async()=>{q('#pair').disabled=true;try{await api('./api/repair',{method:'POST'});q('#message').textContent='正在请求官方配对码…';setTimeout(refresh,1800)}catch(e){q('#message').textContent=e.message}finally{setTimeout(()=>q('#pair').disabled=false,2500)}};
-q('#saveUi').onclick=async()=>{let b=q('#saveUi');b.disabled=true;try{let s=await api('./api/ui',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_ui_type:q('#appUiType').value,service_ui_mode:q('#serviceUiMode').value,service_ui_type:q('#serviceUiType').value,service_ui_character:q('#serviceUiCharacter').value,deny_apps:collectDenyApps()})});q('#message').textContent='UI 配置已保存，已立即生效';q('#appUiType').value=s.app_ui_type;q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';q('#serviceUiType').value=s.service_ui_type;q('#serviceUiCharacter').value=s.service_ui_character;if(s.deny_apps)fillDenyApps(s.deny_app_options,s.deny_apps);syncServiceUiDisabled()}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
+q('#saveUi').onclick=async()=>{let b=q('#saveUi');b.disabled=true;try{let s=await api('./api/ui',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_ui_type:q('#appUiType').value,service_ui_mode:q('#serviceUiMode').value,service_ui_type:q('#serviceUiType').value,service_ui_character:q('#serviceUiCharacter').value,session_idle_timeout_sec:Number(q('#sessionIdleTimeout').value),deny_apps:collectDenyApps()})});q('#message').textContent='UI 和自动休眠配置已保存，已立即生效';q('#appUiType').value=s.app_ui_type;q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';q('#serviceUiType').value=s.service_ui_type;q('#serviceUiCharacter').value=s.service_ui_character;q('#sessionIdleTimeout').value=String(s.session_idle_timeout_sec||20);if(s.deny_apps)fillDenyApps(s.deny_app_options,s.deny_apps);syncServiceUiDisabled()}catch(e){q('#message').textContent=e.message}finally{b.disabled=false}};
 refresh();
 setInterval(refresh,2000);
 </script>
@@ -246,7 +254,8 @@ function M.new(runtime, cfg)
 
     local function ui(req)
       local doc = request_json(req)
-      local saved, result = runtime:set_ui_config(doc.app_ui_type, doc.service_ui_mode, doc.service_ui_type, doc.service_ui_character, doc.deny_apps)
+      local saved, result = runtime:set_ui_config(doc.app_ui_type, doc.service_ui_mode, doc.service_ui_type,
+        doc.service_ui_character, doc.deny_apps, doc.session_idle_timeout_sec)
       if not saved then return json_response("400 Bad Request", { ok = false, error = result }) end
       result.ok = true
       return json_response("200 OK", result)

@@ -20,6 +20,7 @@ function M.new(cfg, load_module)
     mcp = nil,
     timer = nil,
     wake_open_timer = nil,
+    session_idle_timer = nil,
     listening_mode = State.LISTEN_AUTO,
     pending_wake_word = nil,
     indicator = Indicator.new(),
@@ -147,6 +148,41 @@ function M.new(cfg, load_module)
     end
   end
 
+  local function cancel_session_idle_timer()
+    if not self.session_idle_timer then return end
+    pcall(function() self.session_idle_timer:stop() end)
+    pcall(function() self.session_idle_timer:unregister() end)
+    self.session_idle_timer = nil
+  end
+
+  local function session_idle_timeout_sec()
+    local value = math.floor(tonumber(cfg.SESSION_IDLE_TIMEOUT_SEC) or 20)
+    if value == 10 or value == 20 or value == 30 or value == 60 then return value end
+    return 20
+  end
+
+  local function schedule_session_idle_timer()
+    cancel_session_idle_timer()
+    if self.stopped or self.state.state ~= State.LISTENING
+        or self.listening_mode == State.LISTEN_MANUAL or not tmr or not tmr.create then
+      return false
+    end
+    local timeout_sec = session_idle_timeout_sec()
+    local timer = tmr.create()
+    self.session_idle_timer = timer
+    timer:alarm(timeout_sec * 1000, tmr.ALARM_SINGLE, function(instance)
+      pcall(function() instance:unregister() end)
+      if self.session_idle_timer ~= timer then return end
+      self.session_idle_timer = nil
+      if not self.stopped and self.state.state == State.LISTENING
+          and self.listening_mode ~= State.LISTEN_MANUAL then
+        print("[xiaozhi] session idle timeout", tostring(timeout_sec) .. "s")
+        stop_listening()
+      end
+    end)
+    return true
+  end
+
   local function wake_word_invoke(wake_word)
     local s = self.state.state
     print("[xiaozhi] wake detected", tostring(wake_word), "state=" .. tostring(s))
@@ -187,8 +223,16 @@ function M.new(cfg, load_module)
   local function on_state_changed(_, new_state)
     self.indicator:on_state(new_state)
     self.ui:on_state(new_state)
+    if new_state == State.LISTENING then
+      schedule_session_idle_timer()
+    else
+      cancel_session_idle_timer()
+    end
     if new_state == State.IDLE then
       self.ui:clear_chat_messages()
+      if self.protocol and self.protocol:is_audio_channel_opened() then
+        self.protocol:close_audio_channel(false)
+      end
       self.audio:set_mode("wake")
     elseif new_state == State.CONNECTING then
       if not self.audio:is_wake_bridge() then
@@ -245,6 +289,7 @@ function M.new(cfg, load_module)
       end
     end)
     self.protocol:on("chat", function(role, text)
+      if role == "user" then schedule_session_idle_timer() end
       self.ui:set_chat_message(role, text)
     end)
     self.protocol:on("emotion", function(emotion)
@@ -472,6 +517,7 @@ function M.new(cfg, load_module)
       pcall(function() self.wake_open_timer:unregister() end)
       self.wake_open_timer = nil
     end
+    cancel_session_idle_timer()
     unbind_keys()
     if self.protocol then
       self.protocol:stop()
@@ -651,7 +697,12 @@ function M.new(cfg, load_module)
   end
 
   local function default_service_config()
-    return { enabled = true, ui_mode = "app", deny_apps = default_deny_apps() }
+    return {
+      enabled = true,
+      ui_mode = "app",
+      session_idle_timeout_sec = 20,
+      deny_apps = default_deny_apps(),
+    }
   end
 
   local function read_service_config()
@@ -715,6 +766,7 @@ function M.new(cfg, load_module)
       device_mac = Identity.device_id() or "",
       last_error = p.last_error or "",
       volume = math.max(0, math.min(100, math.floor(tonumber(cfg.AUDIO.volume) or 100))),
+      session_idle_timeout_sec = session_idle_timeout_sec(),
     }
   end
 

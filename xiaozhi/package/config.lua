@@ -8,12 +8,14 @@ M.APP_DIR = "/sd/apps/xiaozhi"
 M.XZ_MODULE = M.APP_DIR .. "/xiaozhi.so"
 M.WAKE_MODULE = M.APP_DIR .. "/wake.so"
 M.CONFIG_PATH = M.APP_DIR .. "/config.json"
+M.SERVICE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
 M.MCP_DIR = M.APP_DIR .. "/mcp"
 M.WAKE_MODEL_DIR = M.APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
 M.WAKE_INDEX = M.WAKE_MODEL_DIR .. "/wn9_index"
 M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
 M.TIMEZONE = "CST-8"
+M.SESSION_IDLE_TIMEOUT_SEC = 20
 M.UI_TYPE = nil
 M.ASSET_DIR = M.APP_DIR .. "/assets"
 M.EMOJI_GIF_DIR = M.ASSET_DIR .. "/emojis/gif"
@@ -214,9 +216,26 @@ local function apply_ui_config(ui)
   end
 end
 
+local function apply_session_idle_timeout(value)
+  value = math.floor(tonumber(value) or 20)
+  if value == 10 or value == 20 or value == 30 or value == 60 then
+    M.SESSION_IDLE_TIMEOUT_SEC = value
+  else
+    M.SESSION_IDLE_TIMEOUT_SEC = 20
+  end
+end
+
+local function apply_service_runtime_config()
+  local doc = decode_json(read_text(M.SERVICE_CONFIG_PATH))
+  if type(doc) == "table" then
+    apply_session_idle_timeout(doc.session_idle_timeout_sec)
+  end
+end
+
 function M.load()
   local raw = read_text(M.CONFIG_PATH)
   if not raw then
+    apply_service_runtime_config()
     return M
   end
 
@@ -227,12 +246,16 @@ function M.load()
     apply_audio(obj.audio or obj.audio_params)
     apply_ui_config(obj.ui)
     apply_ui_config({ type = obj.ui_type })
+    if obj.session_idle_timeout_sec ~= nil then
+      apply_session_idle_timeout(obj.session_idle_timeout_sec)
+    end
     if type(obj.wake_word) == "string" and obj.wake_word ~= "" then
       M.WAKE_WORD = obj.wake_word
     end
     if type(obj.timezone) == "string" and obj.timezone ~= "" then
       M.TIMEZONE = obj.timezone
     end
+    apply_service_runtime_config()
     return M
   end
 
@@ -245,6 +268,7 @@ function M.load()
   local wake_word = pick_string(raw, "wake_word")
   local timezone = pick_string(raw, "timezone")
   local ui_type = pick_string(raw, "ui_type")
+  local session_idle_timeout_sec = pick_number(raw, "session_idle_timeout_sec")
 
   if url and url:match("^wss?://") then
     M.websocket.url = url
@@ -262,6 +286,7 @@ function M.load()
     M.TIMEZONE = timezone
   end
   apply_ui_config({ type = ui_type })
+  if session_idle_timeout_sec then apply_session_idle_timeout(session_idle_timeout_sec) end
   if ota_block ~= "" then
     local ota_url = pick_string(ota_block, "url")
     local enabled = pick_bool(ota_block, "enabled")
@@ -288,6 +313,7 @@ function M.load()
     })
   end
 
+  apply_service_runtime_config()
   return M
 end
 
