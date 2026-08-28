@@ -15,7 +15,7 @@ local DEFAULT_MEMOS = {
 M.tools = {
   {
     name = "memo.get",
-    description = "读取 time-calendar-weather-memo 应用当前保存的三条备忘录内容。",
+    description = "查看、读取或列出备忘录 App 当前保存的三条内容。当用户询问“查看备忘录”“备忘录里有什么”“记事本内容”或“我记了什么”时必须调用本工具，并以设备文件中的结果为准。",
     inputSchema = {
       type = "object",
       additionalProperties = false,
@@ -23,7 +23,7 @@ M.tools = {
   },
   {
     name = "memo.add",
-    description = "在第一条空白位置新建一条备忘录；三条都已有内容时应先删除或修改。",
+    description = "向备忘录 App 添加或新建一条内容。当用户要求“添加备忘录”“记一下”或“新建记事”时调用；写入第一条空白位置，三条都已有内容时应先删除或修改。",
     inputSchema = {
       type = "object",
       properties = {
@@ -35,7 +35,7 @@ M.tools = {
   },
   {
     name = "memo.set",
-    description = "修改 time-calendar-weather-memo 应用的一条备忘录。index 为 1 到 3。",
+    description = "修改或替换备忘录 App 中指定的一条内容。当用户要求修改第几条备忘录时调用，index 为 1 到 3。",
     inputSchema = {
       type = "object",
       properties = {
@@ -56,7 +56,7 @@ M.tools = {
   },
   {
     name = "memo.delete",
-    description = "删除指定序号的备忘录，将该位置清空。index 为 1 到 3。",
+    description = "删除或清空备忘录 App 中指定序号的内容。当用户要求删除第几条备忘录时调用，index 为 1 到 3。",
     inputSchema = {
       type = "object",
       properties = {

@@ -18,7 +18,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 `/sd/apps/xiaozhi-service/service.json` 启停服务并读取音频资源冲突黑名单。
 `ui_mode` 控制唤醒后的 UI 呈现：
 
-- `"app"`：唤醒时记录当前前台应用并尝试启动 `/sd/apps/xiaozhi`，前台 app 只通过 IPC 呈现 UI；对话回到待命后自动跳回唤醒前应用。前台 App 不可用时，本次运行自动退回 service 悬浮 UI。
+- `"app"`：唤醒时记录当前前台应用，先停止后台音频，再等待 200 ms 启动 `/sd/apps/xiaozhi`；前台 app 只通过 IPC 呈现 UI。对话回到待命后自动跳回唤醒前应用。前台 App 不可用时，本次运行自动退回 service 悬浮 UI。
 - `"floating"`：服务通过 `xiaozhi-service/ui.lua` 进入 UI 驱动，加载 `/sd/apps/xiaozhi-service/ui/<type>.lua`，并用固件 `service_ui` API 绘制悬浮 UI；服务启动时不显示，只有唤醒、验证码、对话或错误时显示。
 
 `deny_apps` 中的前台应用会独占性能、麦克风或扬声器。服务监听固件
@@ -31,7 +31,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 再按设备灯珠通道映射用 `sys.setled(0, 165, 239)` 将其设为橙色；会话退出、异常结束或服务停止时恢复唤醒前的颜色。
 老固件缺少 RGB LED API 时只输出英文串口错误，不影响语音功能。
 
-唤醒或讲话期间短按 HOME 会立即停止当前录音/回答、关闭协议会话并回到待命，
+弹窗可见时短按 HOME 会立即关闭弹窗；唤醒或讲话期间还会停止当前录音/回答、关闭协议会话并回到待命，
 不会向服务端发送额外的 `listen.detect`，也不会播放告别语音；
 这样兼容只允许 `detect` 上报唤醒词的官方服务端。
 前台 App UI 模式会在 Service 进入待命后退出或返回唤醒前应用。空闲且悬浮 Canvas
@@ -63,7 +63,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 ```json
 {
   "enabled": true,
-  "ui_mode": "app",
+  "ui_mode": "floating",
   "ui_type": "window",
   "ui_character": "xiaozhi_chibi",
   "session_idle_timeout_sec": 20,
@@ -79,7 +79,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 字段说明：
 
 - `enabled`：是否允许后台唤醒服务运行。
-- `ui_mode`：`"app"` 表示唤醒后打开小智前台 App；`"floating"` 表示使用悬浮 UI。
+- `ui_mode`：`"floating"`（默认）表示使用 `window` 小窗；`"app"` 表示唤醒后先释放后台音频资源，等待 200 ms 再打开小智前台 App。
 - `ui_type`：后台悬浮 UI 类型，对应 `/sd/apps/xiaozhi-service/ui/<type>.lua`。当前内置 `window` 小窗模式、`subtitle` 字幕模式、`wechat` 微信气泡、`assistant` 助手形象。
 - `ui_character`：`assistant` 样式使用的角色资源名，对应 `/sd/apps/xiaozhi-service/ui/character/<name>.rgb565`。
 - `session_idle_timeout_sec`：自动会话在无交互时回到待命的时间，只支持 `10`、`20`、`30`、`60` 秒，默认 `20` 秒。
@@ -130,7 +130,7 @@ runtime 内完成。空闲时不显示界面；检测到唤醒词后通过 `xiao
 
 ### MCP 插件
 
-默认工具也以插件形式放在 `xiaozhi-service/mcp/device.lua`。启动时会扫描：
+默认工具以插件形式放在 `xiaozhi-service/mcp/device.lua` 和 `xiaozhi-service/mcp/memo.lua`。启动时会扫描：
 
 ```text
 /sd/apps/xiaozhi-service/mcp/*.lua

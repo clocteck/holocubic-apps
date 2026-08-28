@@ -607,7 +607,7 @@ end
 
 local function read_wake_service_config()
   local cfg = decode_json(read_text("/sd/apps/xiaozhi-service/service.json"))
-    or { enabled = true, ui_mode = "app" }
+    or { enabled = true, ui_mode = "floating", ui_type = "window" }
   if type(cfg.deny_apps) ~= "table" then
     cfg.deny_apps = {
       Spectrum = true,

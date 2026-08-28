@@ -153,7 +153,7 @@ async function refresh(){
     }
     if(!uiLoaded){
       fillOptions(q('#appUiType'),s.ui_options&&s.ui_options.app,s.app_ui_type,'subtitle');
-      q('#serviceUiMode').value=s.service_ui_mode==='floating'?'floating':'app';
+      q('#serviceUiMode').value=s.service_ui_mode==='app'?'app':'floating';
       fillOptions(q('#serviceUiType'),s.ui_options&&s.ui_options.float,s.service_ui_type,'window');
       fillOptions(q('#serviceUiCharacter'),s.ui_options&&s.ui_options.characters,s.service_ui_character,'xiaozhi_chibi');
       q('#sessionIdleTimeout').value=String(s.session_idle_timeout_sec||20);

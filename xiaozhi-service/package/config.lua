@@ -37,7 +37,7 @@ M.WAKE_DATA = M.WAKE_MODEL_DIR .. "/wn9_data"
 M.WAKE_WORD = "你好小智"
 M.TIMEZONE = "CST-8"
 M.SESSION_IDLE_TIMEOUT_SEC = 20
-M.UI_TYPE = nil
+M.UI_TYPE = "window"
 M.APP_UI_TYPE = nil
 M.UI_CHARACTER = nil
 M.ASSET_DIR = M.SERVICE_DIR .. "/assets"
@@ -118,9 +118,11 @@ M.ota = {
 
 M.wake_service = {
   enabled = false,
+  ui_mode = "floating",
+  ui_type = "window",
   deny_apps = default_deny_apps(),
 }
-M.UI_MODE = "app"
+M.UI_MODE = "floating"
 
 M.UI = {
   gif_enabled = true,
@@ -194,7 +196,8 @@ local function read_wake_service_config()
   if type(obj) ~= "table" then
     return {
       enabled = true,
-      ui_mode = "app",
+      ui_mode = "floating",
+      ui_type = "window",
       session_idle_timeout_sec = 20,
       deny_apps = default_deny_apps(),
     }

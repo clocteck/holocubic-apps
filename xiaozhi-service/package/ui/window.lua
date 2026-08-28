@@ -153,6 +153,7 @@ function M.new(cfg)
     self.text = ""
     self.notice = ""
     if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
+    release_canvas()
   end
 
   function self:on_state(state)

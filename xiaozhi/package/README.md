@@ -106,7 +106,7 @@ return {
 
 ## 设备控制
 
-连接建立后，小智会通过 MCP 向服务端公布默认 `device` 插件里的以下工具：
+连接建立后，小智会通过 MCP 向服务端公布默认 `device` 和 `memo` 插件里的以下工具：
 
 - `device.get_status`：查询设备、网络和内存状态。
 - `device.list_apps`：列出设备上已安装的应用。
@@ -114,12 +114,19 @@ return {
 - `device.sync_time`：通过 NTP 立即同步系统时间。
 - `device.set_brightness`：设置屏幕亮度，范围 `0` 到 `100`。
 - `device.set_bluetooth`：开启或关闭蓝牙手柄服务，并返回当前蓝牙状态。
+- `memo.get`：查看备忘录 App 保存的三条内容。
+- `memo.add`：在第一条空白位置新建备忘录。
+- `memo.set`：修改指定序号的备忘录。
+- `memo.delete`：删除并清空指定序号的备忘录。
+- `memo.set_all`：一次替换全部三条备忘录。
+
+备忘录 App 未安装时工具会返回“请先安装备忘录 App”；已安装但尚无数据文件时会初始化三条空记录。
 
 服务端必须支持小智协议的 MCP 消息转发，并在智能体中启用设备工具调用。启动应用会在工具结果发回后延迟执行，避免切换应用导致应答丢失。
 
 ### MCP 插件
 
-默认工具也以插件形式放在 `mcp/device.lua`。启动时会扫描：
+默认工具以插件形式放在 `mcp/device.lua` 和 `mcp/memo.lua`。启动时会扫描：
 
 ```text
 /sd/apps/xiaozhi/mcp/*.lua

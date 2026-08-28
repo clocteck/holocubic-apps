@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "ui_mode": "app",
+  "ui_mode": "floating",
   "ui_type": "window",
   "ui_character": "xiaozhi_chibi",
   "session_idle_timeout_sec": 20,

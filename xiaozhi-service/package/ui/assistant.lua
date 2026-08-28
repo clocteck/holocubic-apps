@@ -347,7 +347,9 @@ function M.new(cfg)
 
   function self:clear_chat_messages()
     self.user_text, self.assistant_text = "", ""
+    self.notice = ""
     self.bubble_pages, self.bubble_page_index = { "" }, 1
+    release_canvas()
   end
 
   function self:on_state(state)

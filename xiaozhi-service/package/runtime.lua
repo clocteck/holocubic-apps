@@ -12,6 +12,7 @@ function M.new(cfg, load_module)
   local XIAOZHI_WAKE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
   local XIAOZHI_WAKE_TARGET_PATH = "/sd/apps/xiaozhi_wake/target_app_id.txt"
   local FOREGROUND_HANDOFF_PATH = "/sd/apps/xiaozhi-service/pending-wake.json"
+  local FOREGROUND_LAUNCH_DELAY_MS = 200
 
   local function default_deny_apps()
     local source = type(cfg.DEFAULT_DENY_APPS) == "table" and cfg.DEFAULT_DENY_APPS or {
@@ -30,7 +31,8 @@ function M.new(cfg, load_module)
   local function default_wake_service_config()
     return {
       enabled = true,
-      ui_mode = "app",
+      ui_mode = "floating",
+      ui_type = "window",
       session_idle_timeout_sec = 20,
       deny_apps = default_deny_apps(),
     }
@@ -46,6 +48,7 @@ function M.new(cfg, load_module)
     mcp = nil,
     timer = nil,
     wake_open_timer = nil,
+    foreground_launch_timer = nil,
     external_return_timer = nil,
     lifecycle_listening = false,
     foreground_poll_ticks = 0,
@@ -288,6 +291,8 @@ function M.new(cfg, load_module)
 
   local refresh_metrics
   local suspend_audio_for_app
+  local resume_audio_for_app
+  local wake_word_invoke
 
   local function xiaozhi_is_foreground()
     if self.current_app_id == "xiaozhi" then return true end
@@ -607,29 +612,43 @@ function M.new(cfg, load_module)
 
   local function dismiss_from_home()
     local state = self.state.state
-    if state ~= State.CONNECTING and state ~= State.LISTENING and state ~= State.SPEAKING then
-      return false
+    local active = state == State.CONNECTING or state == State.LISTENING or state == State.SPEAKING
+
+    self.ui_text = ""
+    self.ui_notice = ""
+    if self.ui then pcall(function() self.ui:clear_chat_messages() end) end
+
+    if active then
+      cancel_external_return()
+      cancel_tts_audio_timer()
+      self.pending_wake_word = nil
+      self.pending_goodbye = false
+      self.tts_text_ready = false
+      self.tts_audio_queue = {}
+      if self.protocol then
+        if state == State.SPEAKING then
+          pcall(function() self.protocol:send_abort_speaking("none") end)
+        end
+        pcall(function() self.protocol:close_audio_channel(false) end)
+      end
+      if self.audio then pcall(function() self.audio:set_mode("off") end) end
+      set_state(State.IDLE)
     end
 
-    cancel_external_return()
-    cancel_tts_audio_timer()
-    self.pending_wake_word = nil
-    self.pending_goodbye = false
-    self.tts_text_ready = false
-    self.tts_audio_queue = {}
-    if self.protocol then
-      if state == State.SPEAKING then
-        pcall(function() self.protocol:send_abort_speaking("none") end)
-      end
-      pcall(function() self.protocol:close_audio_channel(false) end)
-    end
-    if self.audio then pcall(function() self.audio:set_mode("off") end) end
-    set_state(State.IDLE)
-    print("[xiaozhi] HOME dismissed active session")
+    print(active and "[xiaozhi] HOME dismissed active session"
+      or "[xiaozhi] HOME dismissed popup")
     return true
   end
 
-  local function launch_xiaozhi_ui(reason)
+  local function cancel_foreground_launch_timer()
+    if not self.foreground_launch_timer then return false end
+    pcall(function() self.foreground_launch_timer:stop() end)
+    pcall(function() self.foreground_launch_timer:unregister() end)
+    self.foreground_launch_timer = nil
+    return true
+  end
+
+  local function launch_xiaozhi_ui(reason, fallback_wake_word)
     if cfg.UI_MODE ~= "app" then return false end
     if not xiaozhi_app_installed() then
       use_floating_ui_fallback("xiaozhi app not installed")
@@ -643,25 +662,70 @@ function M.new(cfg, load_module)
     if foreground == "xiaozhi" then
       self.current_app_id = "xiaozhi"
       apply_service_ui_suppression()
+      if suspend_audio_for_app then suspend_audio_for_app("xiaozhi") end
       return true
     end
     local origin_app_id = returnable_app_id(foreground)
-    local ok, launched, err = pcall(function() return app.launch("xiaozhi") end)
-    if not ok or not launched then
-      print("[xiaozhi] xiaozhi UI launch failed", tostring(reason or ""), tostring(err or launched or ""))
-      use_floating_ui_fallback(err or launched or "launch failed")
-      return false
+
+    -- Fully quiesce the service before the foreground runtime is switched.
+    -- app.launch only queues the switch, so cleanup must happen before that call.
+    if suspend_audio_for_app then suspend_audio_for_app("xiaozhi") end
+
+    local function launch_now()
+      if self.stopped or cfg.UI_MODE ~= "app" then
+        clear_foreground_handoff()
+        if not self.stopped and resume_audio_for_app then
+          resume_audio_for_app(origin_app_id or "launcher")
+          if fallback_wake_word and wake_word_invoke then wake_word_invoke(fallback_wake_word) end
+        end
+        return false
+      end
+      if foreground_app_id() == "xiaozhi" then
+        self.current_app_id = "xiaozhi"
+        apply_service_ui_suppression()
+        return true
+      end
+
+      local ok, launched, err = pcall(function() return app.launch("xiaozhi") end)
+      if not ok or not launched then
+        print("[xiaozhi] xiaozhi UI launch failed", tostring(reason or ""), tostring(err or launched or ""))
+        clear_foreground_handoff()
+        use_floating_ui_fallback(err or launched or "launch failed")
+        if resume_audio_for_app then resume_audio_for_app(origin_app_id or "launcher") end
+        if fallback_wake_word and wake_word_invoke and not self.stopped then
+          wake_word_invoke(fallback_wake_word)
+        elseif self.audio and service_wake_enabled() then
+          pcall(function() self.audio:set_mode("wake") end)
+        end
+        return false
+      end
+      if origin_app_id then
+        self.return_app_id = origin_app_id
+        self.external_wake_active = true
+        print("[xiaozhi] xiaozhi UI return target", origin_app_id)
+      end
+      print("[xiaozhi] xiaozhi UI launch", tostring(reason or ""))
+      return true
     end
-    if origin_app_id then
-      self.return_app_id = origin_app_id
-      self.external_wake_active = true
-      print("[xiaozhi] xiaozhi UI return target", origin_app_id)
+
+    cancel_foreground_launch_timer()
+    if tmr and tmr.create then
+      local timer = tmr.create()
+      self.foreground_launch_timer = timer
+      timer:alarm(FOREGROUND_LAUNCH_DELAY_MS, tmr.ALARM_SINGLE, function(instance)
+        pcall(function() instance:unregister() end)
+        if self.foreground_launch_timer ~= timer then return end
+        self.foreground_launch_timer = nil
+        launch_now()
+      end)
+      print("[xiaozhi] xiaozhi UI launch scheduled", tostring(FOREGROUND_LAUNCH_DELAY_MS) .. "ms")
+      return true
     end
-    print("[xiaozhi] xiaozhi UI launch", tostring(reason or ""))
-    return true
+
+    return launch_now()
   end
 
-  local function wake_word_invoke(wake_word)
+  wake_word_invoke = function(wake_word)
     if cfg.SERVICE_MODE and not service_wake_enabled() then
       print("[xiaozhi] wake ignored; background wake disabled")
       return false
@@ -692,10 +756,7 @@ function M.new(cfg, load_module)
         if handoff_raw then write_text(FOREGROUND_HANDOFF_PATH, handoff_raw) end
         -- The foreground app owns I2S. Release native wake capture before launch.
         if self.audio then pcall(function() self.audio:stop_i2s() end) end
-        if launch_xiaozhi_ui("wake") then
-          if suspend_audio_for_app then suspend_audio_for_app("xiaozhi") end
-          return true
-        end
+        if launch_xiaozhi_ui("wake", handoff_word) then return true end
         clear_foreground_handoff()
       else
         launch_xiaozhi_ui("wake")
@@ -928,8 +989,6 @@ function M.new(cfg, load_module)
     end
   end
 
-  local resume_audio_for_app
-
   local function restore_after_temporary_wake_backoff(source)
     clear_temporary_wake_backoff_timer()
     if not temporary_wake_backoff_active() then return true end
@@ -1005,6 +1064,8 @@ function M.new(cfg, load_module)
       pcall(function() self.wake_open_timer:unregister() end)
       self.wake_open_timer = nil
     end
+    local launch_canceled = cancel_foreground_launch_timer()
+    if launch_canceled and app_id ~= "xiaozhi" then clear_foreground_handoff() end
     clear_temporary_wake_backoff_timer()
     self.temporary_wake_backoff = false
     self.temporary_wake_backoff_source = nil
@@ -1633,6 +1694,8 @@ function M.new(cfg, load_module)
       pcall(function() self.wake_open_timer:unregister() end)
       self.wake_open_timer = nil
     end
+    cancel_foreground_launch_timer()
+    clear_foreground_handoff()
     clear_temporary_wake_backoff_timer()
     self.temporary_wake_backoff = false
     self.temporary_wake_backoff_source = nil
@@ -1921,7 +1984,7 @@ function M.new(cfg, load_module)
       ota_url = cfg.ota and cfg.ota.url or "",
       app_ui_type = cfg.APP_UI_TYPE or (cfg.app_ui and cfg.app_ui.type) or "subtitle",
       app_ui_installed = path_exists((cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info"),
-      service_ui_mode = cfg.UI_MODE or "app",
+      service_ui_mode = cfg.UI_MODE or "floating",
       service_ui_type = cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "window",
       service_ui_character = cfg.UI_CHARACTER or (cfg.UI and cfg.UI.character) or "xiaozhi_chibi",
       deny_apps = deny_apps,
@@ -2152,7 +2215,7 @@ function M.new(cfg, load_module)
     enabled = enabled == true
     local saved, save_err = update_saved_service_config(function(doc)
       doc.enabled = enabled
-      doc.ui_mode = doc.ui_mode or (cfg.UI_MODE or "app")
+      doc.ui_mode = doc.ui_mode or (cfg.UI_MODE or "floating")
       doc.ui_type = doc.ui_type or (cfg.UI_TYPE or "window")
       doc.ui_character = doc.ui_character or (cfg.UI_CHARACTER or "xiaozhi_chibi")
       doc.deny_apps = type(doc.deny_apps) == "table" and doc.deny_apps or default_deny_apps()
@@ -2167,6 +2230,8 @@ function M.new(cfg, load_module)
         pcall(function() self.wake_open_timer:unregister() end)
         self.wake_open_timer = nil
       end
+      cancel_foreground_launch_timer()
+      clear_foreground_handoff()
       cancel_external_return()
       cancel_tts_audio_timer()
       self.pending_wake_word = nil

@@ -1,5 +1,10 @@
 local M = {}
 
+local BUILTIN_PLUGIN_FILES = {
+  "device.lua",
+  "memo.lua",
+}
+
 local function encode(value)
   if not sjson or not sjson.encode then
     return nil, "json encoder unavailable"
@@ -70,12 +75,12 @@ end
 
 local function list_lua_files(dir)
   local out = {}
-  if not file or not file.list then
-    return out, "file.list unavailable"
+  if not file or not file.listdir then
+    return out, "file.listdir unavailable"
   end
-  local ok, list = pcall(file.list, dir)
+  local ok, list = pcall(file.listdir, dir)
   if (not ok or type(list) ~= "table") and not dir:match("/$") then
-    ok, list = pcall(file.list, dir .. "/")
+    ok, list = pcall(file.listdir, dir .. "/")
   end
   if not ok or type(list) ~= "table" then
     return out, tostring(list or "list failed")
@@ -100,6 +105,21 @@ local function list_lua_files(dir)
   end
   table.sort(out)
   return out
+end
+
+local function with_builtin_plugins(names)
+  names = type(names) == "table" and names or {}
+  local seen = {}
+  for i = 1, #names do seen[names[i]] = true end
+  for i = 1, #BUILTIN_PLUGIN_FILES do
+    local name = BUILTIN_PLUGIN_FILES[i]
+    if not seen[name] then
+      names[#names + 1] = name
+      seen[name] = true
+    end
+  end
+  table.sort(names)
+  return names
 end
 
 local function add_tool(registry, tool, handler, source)
@@ -192,10 +212,8 @@ function M.new(cfg, send_payload, before_app_exit)
     local names, err = list_lua_files(dir)
     if err then
       print("[xiaozhi] mcp plugin scan skipped", tostring(err))
-      names = { "device.lua" }
-    elseif #names == 0 then
-      names = { "device.lua" }
     end
+    names = with_builtin_plugins(names)
     local ctx = tool_context()
     for i = 1, #names do
       local path = dir .. "/" .. names[i]
@@ -225,11 +243,13 @@ function M.new(cfg, send_payload, before_app_exit)
   end
 
   load_plugins()
+  print("[xiaozhi] mcp tools ready", tostring(#registry.tools))
 
   local function call_tool(name, arguments)
     arguments = type(arguments) == "table" and arguments or {}
     local handler = registry.handlers[name]
     if handler then
+      print("[xiaozhi] mcp tool call", tostring(name), tostring(registry.sources[name] or "plugin"))
       local ok, result, err = pcall(handler, arguments, tool_context({
         name = name,
         source = registry.sources[name],
@@ -239,6 +259,7 @@ function M.new(cfg, send_payload, before_app_exit)
       end
       return result_from_plugin(result, err)
     end
+    print("[xiaozhi] mcp unknown tool", tostring(name))
     return error_result("unknown tool: " .. tostring(name))
   end
 

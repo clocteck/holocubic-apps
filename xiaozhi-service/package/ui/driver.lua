@@ -34,9 +34,9 @@ local function configured_mode(cfg)
   local ui = type(cfg and cfg.UI) == "table" and cfg.UI or {}
   local mode = safe_name(ui.type or cfg.UI_TYPE)
   if cfg and cfg.SERVICE_MODE then
-    local service_mode = tostring(cfg.UI_MODE or "app")
+    local service_mode = tostring(cfg.UI_MODE or "floating")
     if service_mode == "floating" or service_mode == "service_ui" then
-      return "float", mode or "subtitle"
+      return "float", mode or "window"
     end
     return "root", "headless"
   end
