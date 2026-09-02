@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.26：应用状态改为局部更新，启动、退出或等待 WebUI 时不再重载全部图标。</p><p class="summary en">Launcher 1.26 updates app state in place, so launching, exiting, or waiting for WebUI no longer reloads every icon.</p>
+<p class="summary zh">Launcher 1.30：改进 Wi-Fi 配网断连状态判断，并保留应用状态局部刷新。</p><p class="summary en">Launcher 1.30 improves Wi-Fi provisioning disconnect handling while preserving in-place app state updates.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -82,9 +82,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.26</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.30</span></div>
         </div>
-<p class="note zh">1.26 更新内容：保留应用卡片和图标 DOM，只局部更新运行状态、应用页面和退出按钮；仅当安装列表、语言或元数据变化时重建列表。1.25 的卸载与缺失版本兼容逻辑保持不变。</p><p class="note en">Version 1.26 preserves app cards and icon DOM nodes while updating only runtime state and action buttons. The list is rebuilt only when installed apps, language, or metadata changes. Version 1.25 uninstall and missing-version compatibility remains unchanged.</p>
+<p class="note zh">1.30 更新内容：识别常见 Wi-Fi 认证断连原因，忽略连接过程中的暂态或旧错误，并在超时时显示多语言提示及断连原因；保留 1.26 的应用状态局部刷新。</p><p class="note en">Version 1.30 recognizes common Wi-Fi authentication disconnect reasons, ignores transient or stale errors while connecting, and shows a localized timeout with the disconnect reason. The in-place app state updates from 1.26 remain intact.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>
