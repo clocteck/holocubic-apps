@@ -1,75 +1,105 @@
-# Ticker
+# Ticker 3.0.0 / 行情看板
 
-Ticker 是面向 HoloCubic 的多市场行情应用，支持自定义货币汇率、加密货币、美股、A 股、台股、指数和金银铜行情，并提供折线图、K 线及 MA10/MA20 均线。
+Ticker 是运行在 HoloCubic ESP32 设备上的多市场行情应用，支持币价、A 股、港股、美股、台股、指数、金银铜和货币汇率。使用设备菜单、手柄、重力操作或浏览器控制；当前标的与显示设置保存在 SD 卡，重新进入应用后恢复。
 
-## 信息来源
+Ticker is a multi-market quote app for HoloCubic ESP32 devices, covering crypto, A-shares, Hong Kong, US and Taiwan stocks, indexes, metals, and FX. Control it through the device menu, a controller, tilt input, or a browser. The selected instrument and display settings are saved on the SD card and restored when the app starts.
 
-- 加密货币：Binance 公共行情接口。
-- A 股、内置美股、指数和金银铜的实时行情及各市场历史 K 线：Eastmoney 公共行情接口。
-- 台股实时价、昨收和当日开高低：台湾证券交易所 TWSE MIS 公共行情接口。
-- 任意 ISO 4217 三字母货币对及每日历史折线：Frankfurter；USD/CNY、USD/TWD 行情换算汇率：open.er-api.com。
-- 兼容/备用证券来源：后端保留 Yahoo Finance 解析能力，用于兼容旧版自定义配置。该接口可能受地区访问策略限制，台股和内置美股不会依赖它。
-- 离线汇率兜底：实时汇率接口不可用时，应用使用内置参考汇率维持币种换算显示。参考值不代表实时汇率。
+## 3.0.0 更新说明 / Release notes
 
-所有在线请求均使用公开 HTTPS 原始域名，不依赖局域网代理地址。公开接口可能调整、限流或暂时不可用，行情仅用于展示，不构成投资建议。
+| 更新 | Change |
+| --- | --- |
+| 新增港股分类、目录下载与名称/代码搜索，保留五位代码并支持 HKD 显示。 | Adds Hong Kong instruments, directory downloads, name/symbol search, five-digit symbols, and HKD display. |
+| A 股、美股、台股、港股及货币目录按需下载至 SD 卡，不随应用预装。 | Downloads A-share, US, Taiwan, Hong Kong, and currency directories to SD on demand; no directory cache is bundled. |
+| 重设计 Web 控制页，将行情图表、市场搜索、自定义标的及目录管理分开；浏览和搜索不会切换设备，点击结果才切换。 | Redesigns the Web console around charts, market search, custom instruments, and directory management. Browsing/searching does not switch the device until a result is selected. |
+| 支持保存多个自定义标的，并迁移旧配置；持久保存当前标的、5m/1h/1d/1w 周期、图表、均线、币种和重力开关。 | Saves multiple custom instruments and migrates legacy settings. Persists the selected instrument, 5m/1h/1d/1w interval, chart mode, MA, currency, and tilt setting. |
+| 保留用户输入草稿，避免后台状态轮询覆盖正在编辑的内容。 | Preserves input drafts while background status polling continues. |
+| 修正 A 股目录的退市过滤与北交所范围；无有效行情时显示明确提示。 | Corrects delisting and Beijing-market filters for A-share directories and explains unavailable quotes. |
+| 修复 Binance 毫秒时间戳在设备上的精度损失，5 分钟 K 线点距恢复为 300 秒。 | Preserves Binance timestamp precision on the device, restoring 300-second spacing for 5-minute candles. |
+| 为请求传入底层超时参数，增加失败退避，并避免旧请求未返回时重复启动同一后端的 TLS 请求。 | Passes native timeout options, adds retry backoff, and prevents the same backend from starting overlapping TLS requests while an earlier request remains pending. |
 
-## 2.1.1 更新说明 / Release Notes
+[完整更新记录 / Full changelog](CHANGELOG.md) · [应用介绍页 / App information page](package/info.html)
 
-- 中文：手柄 SELECT/View 或 HOME 键现在可随时退出 BTC 并返回 Launcher，行为与 Weather 应用一致。
-  English: SELECT/View or HOME now exits BTC and returns to Launcher from any screen, matching the Weather app.
-- 中文：确认行情刷新定时器只更新数据和 UI，不会自动切换当前分类或标的；页面仅由重力、手柄或 Web 操作切换。
-  English: Confirms that refresh timers only update data and UI; categories and symbols change only through tilt, controller, or Web input.
-- 中文：修复应用启动时菜单面板短暂闪现的问题，菜单遮罩在创建后立即隐藏。
-  English: Fixes the controller menu briefly flashing during startup by hiding its overlay immediately upon creation.
+## 安装与升级 / Install and upgrade
 
-## 2.1.0 更新说明 / Release Notes
+1. 将 `package/` 内的文件复制到设备 `/sd/apps/BTC/`，然后在 Launcher 扫描应用并进入 Ticker。升级时仅覆盖应用文件，保留 `settings.json`、`settings.json.bak` 和 `catalog/`。
+   Copy the contents of `package/` to `/sd/apps/BTC/`, rescan apps in Launcher, and open Ticker. During upgrades, replace app files while preserving `settings.json`, `settings.json.bak`, and `catalog/`.
+2. 在应用运行时，从设备主页打开 Web 控制页，或访问 `http://<device-ip>/BTC`。升级后刷新网页，加载新版脚本。
+   While the app is running, open its Web console from the device home page or visit `http://<device-ip>/BTC`. Refresh the browser after upgrading to load the new scripts.
+3. 展开“股票与货币目录”，按市场下载或更新。之后可在本地目录搜索名称和代码；不需要运行电脑端服务。
+   Open **Stock and currency directories** and download/update the required markets. Search names and symbols from the local directory afterward; no PC companion service is required.
 
-- 中文：重力切换改用与 Launcher 相同的阈值触发事件和长持重复节奏，到达倾斜阈值时立即在当前分类内翻页；Web 控制页可随时关闭并持久保存重力切换设置。
-  English: Tilt navigation now follows Launcher’s threshold-trigger and hold-repeat behavior, switching immediately within the current category; the Web console can disable it persistently.
-- 中文：新增 40 ms 上升沿轮询的蓝牙手柄控制。行情页左右切标的、上下切周期、A 键刷新，MENU 键打开设备端控制菜单。
-  English: Adds Bluetooth controller input with Launcher-style 40 ms rising-edge polling. Left/right switch symbols, up/down change intervals, A refreshes, and MENU opens the on-device control menu.
-- 中文：新增简洁的设备端菜单，可控制分类、标的、汇率原/目标货币、周期、图表、均线、显示币种、重力开关和立即刷新，无需保持 Web 页面连接。
-  English: Adds a compact on-device menu for category, symbol, FX base/quote, interval, chart, moving average, display currency, tilt, and refresh—without keeping the Web page open.
+> 安装包不包含个人配置或已下载目录。固件是否在开机时自动启动 Ticker，由固件的启动设置决定。
+>
+> The package contains neither personal settings nor downloaded directories. Whether Ticker launches automatically at boot depends on the firmware's startup settings.
 
-## 2.0.1 更新说明 / Release Notes
+## 使用 / Usage
 
-- 中文：汇率的原货币和目标货币下拉框新增印尼盾（IDR），常用货币数量增加到 19 种。
-  English: Adds Indonesian Rupiah (IDR) to both FX dropdowns, increasing the common-currency list to 19 entries.
+- **搜索与自选 / Search and saved instruments**：选择市场，输入名称或代码，再点击结果显示行情。目录结果保存为自定义标的，支持删除管理。
+  Choose a market, search by name or symbol, and select a result to display it. Directory selections are saved as custom instruments and can be removed later.
+- **港股 / Hong Kong**：例如 `00700` 腾讯控股、`01810` 小米集团。自定义 Eastmoney 市场编号为 `116`；`700`、`00700`、`00700.HK` 均可归一化。普通港股使用 HKD，人民币和美元柜台按港交所代码范围识别。
+  Examples include Tencent `00700` and Xiaomi `01810`. The custom Eastmoney market is `116`; `700`, `00700`, and `00700.HK` are normalized. Ordinary HK stocks use HKD; RMB/USD counters follow HKEX code ranges.
+- **周期与图表 / Intervals and charts**：支持 5m、1h、1d、1w，折线、K 线、MA10/MA20；兼容旧配置中的 `1day` 与 `7day`。
+  Supports 5m, 1h, 1d, and 1w; line/candlestick charts and MA10/MA20. Legacy `1day` and `7day` settings remain supported.
+- **汇率 / FX**：选择原货币和目标货币，点击“保存并显示汇率”。使用每日参考汇率；股票图表偏好在切换至汇率后仍会保留。
+  Choose base and quote currencies, then select **Save and display rate**. FX uses daily reference rates; stock chart preferences are preserved when switching to FX.
+- **自定义接口 / Custom sources**：保留 Binance、Eastmoney、Yahoo Finance、TWSE MIS 和 Frankfurter 的来源/代码配置。保存多个自定义标的，无需手动修改 SD 配置文件。
+  Retains source/symbol configuration for Binance, Eastmoney, Yahoo Finance, TWSE MIS, and Frankfurter. Save multiple custom instruments without editing SD configuration files manually.
+- **设置保存 / Saved settings**：每次改变设置时写入 SD，先校验临时文件再替换配置并保留备份；保存失败会显示错误。
+  Changes are written to SD after verifying a temporary file, with a backup retained. Save failures are reported.
 
-## 2.0.0 更新说明 / Release Notes
+## 目录与空间 / Directories and storage
 
-- 中文：汇率控制区改为“原货币”和“目标货币”两个下拉框，内置 18 种常用货币，选择后立即刷新。
-  English: The FX controls now use separate Base Currency and Quote Currency dropdowns with 18 common currencies and refresh immediately after selection.
-- 中文：汇率模式不再显示“标的”行，并隐藏不适用的显示币种、K 线和均线设置。
-  English: FX mode removes the Asset row and hides display-currency, candlestick, and moving-average controls that do not apply to currency pairs.
-- 中文：新增 7 天、30 天、90 天和 1 年每日历史汇率，并修复单点数据与 32 位设备时间戳溢出导致折线不显示的问题。
-  English: Adds 7-day, 30-day, 90-day, and 1-year daily FX history, and fixes missing line charts caused by single-point data and 32-bit timestamp overflow.
-- 中文：当前汇率与折线图统一使用同一组 Frankfurter 历史数据，避免不同数据源混用造成末点偏差。
-  English: The current FX rate and chart now share the same Frankfurter history dataset, preventing endpoint mismatches at the latest chart point.
+目录分页下载、分批搜索，不会一次把完整股票列表读入设备内存。仅在完整下载校验成功后启用新目录。更新失败保留上一份完整目录；旧版 A 股筛选目录需重新下载。
 
-## 1.3.0 更新说明
+Directories are downloaded in pages and searched in bounded batches without loading the full stock list into RAM. A new directory becomes active only after the complete download passes validation. Failed updates preserve the previous complete directory; A-share caches made with the old filters must be downloaded again.
 
-- 新增独立的“汇率”分类，内置 USD/CNY、EUR/CNY、USD/JPY、EUR/USD。
-- Web 控制页可输入任意两个 ISO 4217 三字母货币代码，例如 `GBP` 与 `HKD`，保存并显示对应兑换汇率。
-- 汇率按“1 单位源货币可兑换多少目标货币”显示，小数汇率自适应保留精度，并保存自定义货币对。
-- 汇率数据每 30 分钟刷新。
+以下为开发期间的实际缓存示例，目录内容和大小会随数据源变化；不包含 SD 文件系统开销及更新备用槽。
 
-## 1.2.1 更新说明
+The following are measured cache examples from development. Contents and sizes vary by provider and exclude SD filesystem overhead and update backup slots.
 
-- 修复币价盘中涨跌错误使用图表区间首价的问题，改用 Binance 官方 24 小时行情基准。
-- 修复美股、指数、A 股和金属错误使用历史请求区间前值作为昨收的问题。
-- 台股实时价与涨跌改用 TWSE MIS，并修复周线重复追加当天日线的问题。
-- 实时价同步合并到最新图表点；历史 K 线暂时不可用时仍可显示实时行情。
-- 折线图改用收盘价范围缩放，并按真实时间间隔绘制，避免走势被压成直线或休市间距失真。
+| 目录 / Directory | 条目 / Entries | 数据大小 / Data size |
+| --- | ---: | ---: |
+| A 股 / A-shares | 5,570 | 153,288 bytes |
+| 港股 / Hong Kong | 3,361 | 104,298 bytes |
+| 台股 / Taiwan | 2,322 | 55,419 bytes |
+| 货币 / Currencies | 165 | 4,386 bytes |
 
-## 1.2.0 更新说明
+美股目录支持下载，但本次没有完成全量实机下载验证。更新采用双槽保留当前有效数据，建议为目录预留额外空间。
 
-- 新增台湾加权指数及台积电、鸿海、联发科、台达电、富邦金、环球晶等台股预设。
-- 新增 TWD 显示和 USD/TWD 汇率换算。
-- 新增繁体中文界面与台股名称翻译。
-- 修复 Eastmoney 台股零成交量占位数据导致折线接近直线的问题。
-- 修复台股涨跌额错误使用区间起始价格的问题。
-- 修复简体中文资产名称表缺失导致 Web 控制页空白的问题。
-- 修复旧版 Yahoo 台股自定义配置迁移后回退到 BTC 的问题。
-- 清理旧的代理和 TWSE MIS 路径，台股改用 Eastmoney 公共 HTTPS 地址。
-- Web HTTP handler 上限调整为 128。
+US-directory downloads are supported, but a complete US-directory download was not verified on hardware for this release. Updates use two slots to retain the active data, so allow additional space.
+
+## 信息来源 / Data sources
+
+| 用途 / Purpose | 来源 / Provider |
+| --- | --- |
+| 币价和 K 线 / Crypto quotes and candles | Binance public market data |
+| 股票目录、股票/指数/金属行情及历史图表 / Stock directories, stock/index/metal quotes and history | Eastmoney |
+| 台股实时行情 / Taiwan live quotes | TWSE MIS |
+| 货币目录和每日历史汇率 / Currency directory and daily FX history | Frankfurter |
+| USD/CNY、USD/TWD、USD/HKD 换算 / Currency conversion | Open ER-API |
+| 兼容自定义证券来源 / Compatible custom securities source | Yahoo Finance |
+
+公开接口可能限流、调整或延迟。离线换算使用内置参考汇率，不代表实时汇率。行情用于展示，不构成投资建议。
+
+Public APIs may change, rate-limit requests, or return delayed data. Offline conversion uses built-in reference rates rather than live rates. Quotes are for display, not financial advice.
+
+## 验证与边界 / Validation and limits
+
+20 项 Lua 回归测试及 Web DOM 测试通过，覆盖配置恢复、写入失败回滚、目录搜索、港股代码/币种、时间精度和请求占用。实机验证了港股目录搜索与报价、BTC 5m 点距，以及退出再进入应用后的设置恢复；未进行整机断电或网页视觉验收测试。
+
+20 Lua regression tests and Web DOM tests passed, covering settings recovery, failed-write rollback, directory search, HK symbols/currencies, timestamp precision, and request ownership. Hardware checks verified HK directory search/quotes, BTC 5m spacing, and settings restoration after restarting the app. Full power-loss and browser visual tests were not performed.
+
+连接错误 `http -1` 并非服务器 HTTP 状态码。本版改善应用层超时与重试，但没有宣称修复所有 DNS/TCP/TLS 或固件重启问题。`http.get` 没有暴露取消句柄；连接释放仍依赖固件回调，若固件一直不回调，应用保持等待以避免继续堆积连接。Binance 仍使用原官方域名。
+
+Connection error `http -1` is not a server HTTP status. This release improves application-level timeouts/retries without claiming to fix every DNS/TCP/TLS or firmware-reset issue. `http.get` exposes no cancellation handle; connection release still depends on the firmware callback. If that callback never arrives, the app waits rather than piling up connections. Binance continues to use its original official domain.
+
+## 交互参考 / Interaction references
+
+- [TradingView symbol search](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Symbol-Search/)
+- [TradingView watchlists](https://www.tradingview.com/support/solutions/43000745825-mastering-the-tradingview-watchlists/)
+- [ESP32 CYD Stock Ticker](https://github.com/Zaitronics/esp32-cyd-stock-ticker)
+- [HKEX stock-code allocation](https://www.hkex.com.hk/Products/Securities/Stock-Code-Allocation-Plan?sc_lang=en)
+
+参考市场分类、搜索、自选列表与设备控制的交互方式；Web 控制页使用本地 HTML/CSS/JavaScript，无外部前端运行库依赖。
+
+These references informed market categories, search, watchlists, and device controls. The Web console uses local HTML/CSS/JavaScript without external frontend runtime dependencies.

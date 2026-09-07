@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ticker 信息</title>
+  <title>Ticker 3.0.0 信息</title>
   <style>
     :root {
       color-scheme: light;
@@ -308,77 +308,79 @@
       <div>
         <p class="kicker" data-i18n="kicker">多市场行情工具</p>
         <h1 id="title">Ticker</h1>
-        <p class="summary" data-i18n="summary">查看自定义货币汇率、加密货币、美股/A 股、台股、指数和金银铜走势。</p>
+        <p class="summary" data-i18n="summary">搜索 A 股、港股、美股和台股，查看币价、指数、金银铜及货币汇率；目录与个人设置保存在 SD 卡。</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
 
     <div class="grid">
       <section class="panel" aria-labelledby="support-title">
-        <h2 id="support-title" data-i18n="supportTitle">支持标的</h2>
-        <div class="chips" id="supported-assets" aria-label="内置标的"></div>
-        <p class="note" data-i18n="customNote">Web 控制页可输入任意 ISO 4217 三字母货币对，也可添加自定义 Binance 交易对或 Eastmoney 行情代码。</p>
+        <h2 id="support-title" data-i18n="supportTitle">支持市场</h2>
+        <div class="chips" id="supported-assets" aria-label="支持市场 / Supported markets"></div>
+        <p class="note" data-i18n="customNote">在 Web 控制页按需下载股票与货币目录，再按名称或代码搜索。保留自定义来源与代码设置，点击结果后才切换设备显示。</p>
       </section>
 
       <section class="panel" aria-labelledby="source-title">
         <h2 id="source-title" data-i18n="sourceTitle">信息来源</h2>
         <div class="source-grid">
           <div class="source">
-            <span data-i18n="binanceLabel">币价</span>
+            <span data-i18n="binanceLabel">币价与 K 线</span>
             <strong>Binance public market data</strong>
           </div>
           <div class="source">
-            <span data-i18n="eastmoneyLabel">股票、指数、金银铜与历史 K 线</span>
+            <span data-i18n="eastmoneyLabel">股票目录、股票/指数/金属行情与历史图表</span>
             <strong>Eastmoney public market data</strong>
           </div>
           <div class="source">
-            <span data-i18n="fxLabel">自定义货币对汇率</span>
+            <span data-i18n="fxLabel">货币目录与每日参考汇率</span>
             <strong>Frankfurter history + Open ER-API</strong>
           </div>
           <div class="source">
-            <span data-i18n="backupMarketLabel">兼容/备用证券来源</span>
+            <span data-i18n="backupMarketLabel">兼容自定义证券来源</span>
             <strong>Yahoo Finance</strong>
           </div>
           <div class="source">
-            <span data-i18n="backupFxLabel">离线汇率兜底</span>
-            <strong data-i18n="backupFxValue">内置 USD/CNY 与 USD/TWD 参考值</strong>
+            <span data-i18n="backupFxLabel">离线换算参考值</span>
+            <strong data-i18n="backupFxValue">USD/CNY、USD/TWD 与 USD/HKD</strong>
           </div>
         </div>
-        <p class="note" data-i18n="sourceNote">汇率当前值与折线图统一使用 Frankfurter 每日历史数据；行情币种换算仍由 Open ER-API 提供。其他市场来源保持不变。</p>
-        <p class="note" data-i18n="riskNote">行情仅用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。</p>
+        <p class="note" data-i18n="sourceNote">台股实时报价来自 TWSE MIS。Frankfurter 提供货币目录与每日历史汇率；Open ER-API 提供行情币种换算。离线参考值不代表实时汇率。</p>
+        <p class="note" data-i18n="riskNote">行情用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。</p>
       </section>
 
       <section class="panel" aria-labelledby="feature-title">
-        <h2 id="feature-title" data-i18n="featureTitle">功能说明</h2>
+        <h2 id="feature-title" data-i18n="featureTitle">3.0.0 更新说明</h2>
         <ul class="list">
           <li>
             <span class="badge">1</span>
-            <span><strong data-i18n="featureOneTitle">多周期走势</strong><span data-i18n="featureOneText">支持 5m、1h、1day、7day。</span></span>
+            <span><strong data-i18n="featureOneTitle">港股与多市场搜索</strong><span data-i18n="featureOneText">新增港股、五位证券代码及 HKD 显示；按名称或代码搜索，选择结果后显示行情。</span></span>
           </li>
           <li>
             <span class="badge">2</span>
-            <span><strong data-i18n="featureTwoTitle">图表切换</strong><span data-i18n="featureTwoText">支持折线、K 线，以及 MA10 / MA20 均线。</span></span>
+            <span><strong data-i18n="featureTwoTitle">目录按需下载</strong><span data-i18n="featureTwoText">A 股、美股、台股、港股及货币目录下载至 SD 卡，不随应用预装；支持手动更新，下载失败保留上次完整目录。</span></span>
           </li>
           <li>
             <span class="badge">3</span>
-            <span><strong data-i18n="featureThreeTitle">币种显示</strong><span data-i18n="featureThreeText">支持 USD、CNY 与 TWD 显示，金银铜按每克换算。</span></span>
+            <span><strong data-i18n="featureThreeTitle">全新 Web 控制页</strong><span data-i18n="featureThreeText">行情图表、市场搜索、自定义标的和目录管理清晰分区；浏览市场和编辑输入不会自动切换设备。</span></span>
           </li>
           <li>
             <span class="badge">4</span>
-            <span><strong data-i18n="featureFourTitle">2.1.1 更新说明</strong><span data-i18n="featureFourText">手柄 SELECT/View 或 HOME 键可随时退出；行情刷新不会自动切页，并修复启动时菜单闪现。</span></span>
+            <span><strong data-i18n="featureFourTitle">恢复上次选择</strong><span data-i18n="featureFourText">持久保存当前标的、5m/1h/1d/1w 周期、图表、均线、币种、重力开关及多个自定义标的。</span></span>
           </li>
+          <li><span class="badge">5</span><span><strong data-i18n="featureFiveTitle">图表与请求改进</strong><span data-i18n="featureFiveText">修正 Binance 时间戳精度；支持折线、K 线、MA10/MA20 和 USD/CNY/TWD/HKD。补充底层超时参数、失败退避和请求占用保护。</span></span></li>
+          <li><span class="badge">6</span><span><strong data-i18n="featureSixTitle">升级保留数据</strong><span data-i18n="featureSixText">升级时保留 settings.json、settings.json.bak 与 catalog 目录，并刷新 Web 页面。开机自动启动应用由固件设置决定。</span></span></li>
         </ul>
       </section>
       <section class="panel" aria-labelledby="app-info-title">
         <h2 id="app-info-title" data-i18n="appInfoTitle">应用信息</h2>
         <div class="meta">
           <div class="meta-item">
-            <span class="label" data-i18n="sizeLabel">安装包大小</span>
-            <span class="value" data-i18n="sizeValue">约 912 KB</span>
+            <span class="label" data-i18n="sizeLabel">应用文件大小</span>
+            <span class="value" data-i18n="sizeValue">约 957 KiB，不含目录缓存</span>
           </div>
           <div class="meta-item">
             <span class="label" data-i18n="versionLabel">版本号</span>
-            <span class="value">2.1.1</span>
+            <span class="value">3.0.0</span>
           </div>
         </div>
       </section>    </div>
@@ -386,82 +388,90 @@
     <footer class="opensource">
       <span data-i18n="licenseText">开源协议：GPL-3.0</span>
       <span> · </span>
-      <span data-i18n="repoLabel">Git 地址：</span><a href="https://github.com/clocteck" target="_blank" rel="noopener">github.com/clocteck</a>
+      <span data-i18n="repoLabel">项目：</span><a href="https://github.com/clocteck/holocubic-apps/tree/main/BTC" target="_blank" rel="noopener">clocteck/holocubic-apps · BTC</a>
     </footer>
   </main>
 
   <script>
     (function () {
       var messages = {
-        zh: {
-          title: "Ticker 信息",
-          toggleLabel: "Switch to English",
-          toggleText: "EN",
-          iconAlt: "Ticker 应用图标",
-          kicker: "多市场行情工具",
-          summary: "查看自定义货币汇率、加密货币、美股/A 股、台股、指数和金银铜走势。",
-          supportTitle: "支持标的",
-          customNote: "Web 控制页可输入任意 ISO 4217 三字母货币对，也可添加自定义 Binance 交易对或 Eastmoney 行情代码。",
-          sourceTitle: "信息来源",
-          binanceLabel: "币价",
-          eastmoneyLabel: "股票、指数、金银铜与历史 K 线",
-          fxLabel: "自定义货币对汇率",
-          backupMarketLabel: "兼容/备用证券来源",
-          backupFxLabel: "离线汇率兜底",
-          backupFxValue: "内置 USD/CNY 与 USD/TWD 参考值",
-          sourceNote: "汇率当前值与折线图统一使用 Frankfurter 每日历史数据；行情币种换算仍由 Open ER-API 提供。其他市场来源保持不变。",
-          riskNote: "行情仅用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。",
-          featureTitle: "功能说明",
-          featureOneTitle: "多周期走势",
-          featureOneText: "支持 5m、1h、1day、7day。",
-          featureTwoTitle: "图表切换",
-          featureTwoText: "支持折线、K 线，以及 MA10 / MA20 均线。",
-          featureThreeTitle: "币种显示",
-          featureThreeText: "支持 USD、CNY 与 TWD 显示，金银铜按每克换算。",
-          featureFourTitle: "2.1.1 更新说明",
-          featureFourText: "手柄 SELECT/View 或 HOME 键可随时退出；行情刷新不会自动切页，并修复启动时菜单闪现。",
-          appInfoTitle: "应用信息",
-          sizeLabel: "安装包大小",
-          sizeValue: "约 912 KB",
-          versionLabel: "版本号",
-          licenseText: "开源协议：GPL-3.0",
-          repoLabel: "Git 地址："
-        },
-        en: {
-          title: "Ticker Info",
-          toggleLabel: "切换到中文",
-          toggleText: "中文",
-          iconAlt: "Ticker app icon",
-          kicker: "Multi-market quote tool",
-          summary: "Track custom FX pairs, crypto, US and A-share stocks, Taiwan stocks, indexes, and metal futures.",
-          supportTitle: "Supported Symbols",
-          customNote: "The Web console accepts any ISO 4217 three-letter FX pair, custom Binance pairs, and Eastmoney market symbols.",
-          sourceTitle: "Data Sources",
-          binanceLabel: "Crypto quotes",
-          eastmoneyLabel: "Stocks, indexes, metals, and historical charts",
-          fxLabel: "Custom currency-pair rates",
-          backupMarketLabel: "Compatible / backup market source",
-          backupFxLabel: "Offline FX fallback",
-          backupFxValue: "Built-in USD/CNY and USD/TWD reference rates",
-          sourceNote: "FX values and charts use the same Frankfurter daily history. Open ER-API remains the conversion source for other market quotes.",
-          riskNote: "Quotes are for display and observation only, not financial advice. Data may be delayed when the network or public APIs fail.",
-          featureTitle: "Features",
-          featureOneTitle: "Multiple intervals",
-          featureOneText: "Supports 5m, 1h, 1day, and 7day.",
-          featureTwoTitle: "Chart modes",
-          featureTwoText: "Supports line charts, candlesticks, and MA10 / MA20 moving averages.",
-          featureThreeTitle: "Display currency",
-          featureThreeText: "Supports USD, CNY, and TWD display. Gold, silver, and copper are converted to price per gram.",
-          featureFourTitle: "Version 2.1.1",
-          featureFourText: "SELECT/View or HOME exits from any screen; refresh never changes pages automatically, and the startup menu flash is fixed.",
-          appInfoTitle: "App Info",
-          sizeLabel: "Package size",
-          sizeValue: "About 912 KB",
-          versionLabel: "Version",
-          licenseText: "Open source license: GPL-3.0",
-          repoLabel: "Git: "
-        }
-      };
+  "zh": {
+    "title": "Ticker 3.0.0 信息",
+    "toggleLabel": "Switch to English",
+    "toggleText": "EN",
+    "iconAlt": "Ticker 应用图标",
+    "kicker": "多市场行情工具",
+    "summary": "搜索 A 股、港股、美股和台股，查看币价、指数、金银铜及货币汇率；目录与个人设置保存在 SD 卡。",
+    "supportTitle": "支持市场",
+    "customNote": "在 Web 控制页按需下载股票与货币目录，再按名称或代码搜索。保留自定义来源与代码设置，点击结果后才切换设备显示。",
+    "sourceTitle": "信息来源",
+    "binanceLabel": "币价与 K 线",
+    "eastmoneyLabel": "股票目录、股票/指数/金属行情与历史图表",
+    "fxLabel": "货币目录与每日参考汇率",
+    "backupMarketLabel": "兼容自定义证券来源",
+    "backupFxLabel": "离线换算参考值",
+    "backupFxValue": "USD/CNY、USD/TWD 与 USD/HKD",
+    "sourceNote": "台股实时报价来自 TWSE MIS。Frankfurter 提供货币目录与每日历史汇率；Open ER-API 提供行情币种换算。离线参考值不代表实时汇率。",
+    "riskNote": "行情用于显示和观察，不构成投资建议；网络或公开接口异常时数据可能延迟。",
+    "featureTitle": "3.0.0 更新说明",
+    "featureOneTitle": "港股与多市场搜索",
+    "featureOneText": "新增港股、五位证券代码及 HKD 显示；按名称或代码搜索，选择结果后显示行情。",
+    "featureTwoTitle": "目录按需下载",
+    "featureTwoText": "A 股、美股、台股、港股及货币目录下载至 SD 卡，不随应用预装；支持手动更新，下载失败保留上次完整目录。",
+    "featureThreeTitle": "全新 Web 控制页",
+    "featureThreeText": "行情图表、市场搜索、自定义标的和目录管理清晰分区；浏览市场和编辑输入不会自动切换设备。",
+    "featureFourTitle": "恢复上次选择",
+    "featureFourText": "持久保存当前标的、5m/1h/1d/1w 周期、图表、均线、币种、重力开关及多个自定义标的。",
+    "featureFiveTitle": "图表与请求改进",
+    "featureFiveText": "修正 Binance 时间戳精度；支持折线、K 线、MA10/MA20 和 USD/CNY/TWD/HKD。补充底层超时参数、失败退避和请求占用保护。",
+    "featureSixTitle": "升级保留数据",
+    "featureSixText": "升级时保留 settings.json、settings.json.bak 与 catalog 目录，并刷新 Web 页面。开机自动启动应用由固件设置决定。",
+    "appInfoTitle": "应用信息",
+    "sizeLabel": "应用文件大小",
+    "sizeValue": "约 957 KiB，不含目录缓存",
+    "versionLabel": "版本号",
+    "licenseText": "开源协议：GPL-3.0",
+    "repoLabel": "项目："
+  },
+  "en": {
+    "title": "Ticker 3.0.0 Info",
+    "toggleLabel": "切换到中文",
+    "toggleText": "中文",
+    "iconAlt": "Ticker app icon",
+    "kicker": "Multi-market quote tool",
+    "summary": "Search A-shares, Hong Kong, US and Taiwan stocks, and track crypto, indexes, metals and FX. Directories and personal settings stay on the SD card.",
+    "supportTitle": "Supported markets",
+    "customNote": "Download stock and currency directories on demand, then search by name or symbol. Custom sources and symbols remain available. Only selecting a result changes the device display.",
+    "sourceTitle": "Data sources",
+    "binanceLabel": "Crypto quotes and candles",
+    "eastmoneyLabel": "Stock directories, stock/index/metal quotes and history",
+    "fxLabel": "Currency directory and daily reference rates",
+    "backupMarketLabel": "Compatible custom securities source",
+    "backupFxLabel": "Offline conversion reference rates",
+    "backupFxValue": "USD/CNY, USD/TWD and USD/HKD",
+    "sourceNote": "TWSE MIS supplies Taiwan live quotes. Frankfurter supplies currencies and daily FX history; Open ER-API supplies quote-currency conversion. Offline reference rates are not live rates.",
+    "riskNote": "Quotes are for display and observation, not financial advice. Data may be delayed when networks or public APIs fail.",
+    "featureTitle": "What is new in 3.0.0",
+    "featureOneTitle": "Hong Kong and multi-market search",
+    "featureOneText": "Adds Hong Kong stocks, five-digit symbols and HKD display. Search by name or symbol, then select a result to show its quote.",
+    "featureTwoTitle": "Directories on demand",
+    "featureTwoText": "Download A-share, US, Taiwan, Hong Kong and currency directories to SD. Caches are not bundled. Update manually; failed downloads preserve the previous complete directory.",
+    "featureThreeTitle": "Redesigned Web console",
+    "featureThreeText": "Dedicated areas for charts, market search, custom instruments and directories. Browsing markets or editing inputs does not switch the device automatically.",
+    "featureFourTitle": "Restore your last selection",
+    "featureFourText": "Persists the selected instrument, 5m/1h/1d/1w interval, chart mode, moving average, currency, tilt setting and multiple custom instruments.",
+    "featureFiveTitle": "Chart and request improvements",
+    "featureFiveText": "Fixes Binance timestamp precision. Supports line/candlestick charts, MA10/MA20 and USD/CNY/TWD/HKD. Adds native timeout options, retry backoff and request ownership protection.",
+    "featureSixTitle": "Keep your data when upgrading",
+    "featureSixText": "Preserve settings.json, settings.json.bak and the catalog directory, then refresh the Web page. Automatic app launch at boot depends on firmware settings.",
+    "appInfoTitle": "App information",
+    "sizeLabel": "App files size",
+    "sizeValue": "About 957 KiB, excluding directory caches",
+    "versionLabel": "Version",
+    "licenseText": "Open source license: GPL-3.0",
+    "repoLabel": "Project: "
+  }
+};
 
       function createLogoImage(text) {
         var canvas = document.createElement("canvas");
@@ -492,44 +502,8 @@
         }
       }
 
-      var supportedAssets = [
-        { logo: createLogoImage("FX"), label: "USD/CNY" },
-        { logo: createLogoImage("FX"), label: "EUR/CNY" },
-        { logo: createLogoImage("FX"), label: "USD/JPY" },
-        { logo: createLogoImage("FX"), label: "Custom FX" },
-        { logo: createLogoImage("B"), label: "BTC" },
-        { logo: createLogoImage("E"), label: "ETH" },
-        { logo: createLogoImage("S"), label: "SOL" },
-        { logo: createLogoImage("B"), label: "BNB" },
-        { logo: createLogoImage("X"), label: "XRP" },
-        { logo: createLogoImage("D"), label: "DOGE" },
-        { logo: createLogoImage("A"), label: "ADA" },
-        { logo: createLogoImage("A"), label: "AVAX" },
-        { logo: createLogoImage("N"), label: "NDX" },
-        { logo: createLogoImage("N"), label: "NDX100" },
-        { logo: createLogoImage("A"), label: "AAPL" },
-        { logo: createLogoImage("M"), label: "MSFT" },
-        { logo: createLogoImage("N"), label: "NVDA" },
-        { logo: createLogoImage("Au"), label: "Gold" },
-        { logo: createLogoImage("Ag"), label: "Silver" },
-        { logo: createLogoImage("Cu"), label: "Copper" },
-        { logo: createLogoImage("沪"), label: "上证" },
-        { logo: createLogoImage("沪"), label: "沪深300" },
-        { logo: createLogoImage("中"), label: "中证500" },
-        { logo: createLogoImage("中"), label: "中证1000" },
-        { logo: createLogoImage("深"), label: "深成指" },
-        { logo: createLogoImage("创"), label: "创业板" },
-        { logo: createLogoImage("茅"), label: "贵州茅台" },
-        { logo: createLogoImage("平"), label: "平安银行" },
-        { logo: createLogoImage("宁"), label: "宁德时代" },
-        { logo: createLogoImage("台"), label: "加权指数" },
-        { logo: createLogoImage("台"), label: "台积电" },
-        { logo: createLogoImage("鸿"), label: "鸿海" },
-        { logo: createLogoImage("联"), label: "联发科" },
-        { logo: createLogoImage("台"), label: "台达电" },
-        { logo: createLogoImage("富"), label: "富邦金" },
-        { logo: createLogoImage("环"), label: "环球晶" }
-      ];
+      var supportedAssets = [{"logoText": "FX", "zh": "货币汇率", "en": "FX"}, {"logoText": "BTC", "zh": "加密货币", "en": "Crypto"}, {"logoText": "CN", "zh": "A 股", "en": "A-shares"}, {"logoText": "HK", "zh": "港股", "en": "Hong Kong"}, {"logoText": "US", "zh": "美股", "en": "US stocks"}, {"logoText": "TW", "zh": "台股", "en": "Taiwan"}, {"logoText": "IDX", "zh": "指数", "en": "Indexes"}, {"logoText": "Au", "zh": "金银铜", "en": "Metals"}];
+      supportedAssets.forEach(function(item) { item.logo = createLogoImage(item.logoText); });
 
       var toggle = document.querySelector("[data-lang-toggle]");
       var lang = "zh";
@@ -549,6 +523,7 @@
         if (!wrap) {
           return;
         }
+        wrap.textContent = "";
 
         supportedAssets.forEach(function (item) {
           var chip = document.createElement("span");
@@ -563,7 +538,7 @@
           logo.alt = "";
           logo.setAttribute("aria-hidden", "true");
           label.className = "chip-label";
-          label.textContent = item.label;
+          label.textContent = item[lang] || item.en;
 
           chip.appendChild(logo);
           chip.appendChild(label);
@@ -593,6 +568,7 @@
         toggle.textContent = dict.toggleText;
         toggle.setAttribute("aria-label", dict.toggleLabel);
         lang = nextLang;
+        renderSupportedAssets();
 
         try {
           localStorage.setItem("ticker.info.lang", lang);
@@ -603,7 +579,6 @@
         applyLang(lang === "zh" ? "en" : "zh");
       });
 
-      renderSupportedAssets();
       applyLang(lang);
     }());
   </script>

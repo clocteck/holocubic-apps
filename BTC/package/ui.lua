@@ -749,6 +749,7 @@ function Ui.new(backend, i18n)
       .. tostring(snap.settings.currency) .. "|"
       .. tostring(snap.fx_rate) .. "|"
       .. tostring(snap.fx_twd_rate) .. "|"
+      .. tostring(snap.fx_hkd_rate) .. "|"
       .. tostring(snap.updated_text) .. "|" .. tostring(#(snap.points or {})) .. "|" .. tostring(snap.error)
     if force or snap.chart_dirty or chart_key ~= self.last_chart_key then
       local ok, drawn = xpcall(function() return self:draw_chart(snap) end, chart_error_handler)

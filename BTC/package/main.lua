@@ -6,9 +6,11 @@ end
 local APP_DIR = "/sd/apps/btc"
 local function load_module(name) return dofile(APP_DIR .. "/" .. name .. ".lua") end
 
+local Storage = load_module("storage")
+local Catalog = load_module("catalog")
 local Backend = load_module("backend")
 local app_obj = {
-  VERSION = "2.1.1",
+  VERSION = "3.0.0",
   APP_ID = "btc",
   APP_DIR = APP_DIR,
   route_base = (app and app.route_base and app.route_base()) or "/btc",
@@ -16,10 +18,12 @@ local app_obj = {
 }
 
 app_obj.backend = Backend.new({
+  store = Storage,
   version = app_obj.VERSION,
   app_id = app_obj.APP_ID,
   config_path = APP_DIR .. "/settings.json",
 })
+app_obj.catalog = Catalog.new({dir=APP_DIR .. "/catalog", store=Storage})
 app_obj.backend:queue_refresh()
 app_obj.backend:tick()
 
@@ -28,10 +32,10 @@ local Ui = load_module("ui")
 local Web = load_module("web")
 app_obj.i18n = I18n
 app_obj.ui = Ui.new(app_obj.backend, I18n)
-app_obj.web = Web.new(app_obj.backend, { route_base = app_obj.route_base, language = I18n.language })
+app_obj.web = Web.new(app_obj.backend, { route_base = app_obj.route_base, language = I18n.language, app_dir = APP_DIR, catalog = app_obj.catalog })
 
-local GROUPS = { "fx", "crypto", "nasdaq", "metal", "ashare", "taiwan" }
-local DISPLAY_CURRENCIES = { "USD", "CNY", "TWD" }
+local GROUPS = { "fx", "crypto", "nasdaq", "metal", "ashare", "taiwan", "hongkong" }
+local DISPLAY_CURRENCIES = { "USD", "CNY", "TWD", "HKD" }
 local MA_VALUES = { 0, 10, 20 }
 local MODES = { "line", "candle" }
 
@@ -77,6 +81,7 @@ local function local_currency_name(code)
   if code == "USD" then return I18n:t("usd") end
   if code == "CNY" then return I18n:t("cny") end
   if code == "TWD" then return I18n:t("twd") end
+  if code == "HKD" then return I18n:t("hkd") end
   return code
 end
 
@@ -302,6 +307,7 @@ function app_obj.stop(reason)
       pcall(function() KEYMOD.on(code, nil) end)
     end
   end
+  if app_obj.catalog then app_obj.catalog:cancel() end
   if app_obj.web then pcall(function() app_obj.web:stop(reason) end) end
   if app_obj.ui then pcall(function() app_obj.ui:stop(reason) end) end
   if app_obj.backend then pcall(function() app_obj.backend:stop(reason) end) end
@@ -312,7 +318,10 @@ local function start_timers()
   app_obj.tick_timer = tmr.create()
   app_obj.tick_timer:alarm(500, tmr.ALARM_AUTO, function()
     if app and app.exiting and app.exiting() then app_obj.stop("exit"); return end
+    app_obj.backend.catalog_busy = app_obj.catalog.busy
     app_obj.backend:tick()
+    app_obj.catalog:tick(app_obj.backend.state.http_busy)
+    app_obj.backend.catalog_busy = app_obj.catalog.busy
     app_obj.ui:render()
   end)
   app_obj.controller_timer = tmr.create()

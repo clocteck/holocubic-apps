@@ -10,6 +10,7 @@ local FX_HTTP_TIMEOUT_MS = 25000
 local FX_REFRESH_MS = 30 * 60 * 1000
 local FX_FALLBACK_USD_CNY = 7.20
 local FX_FALLBACK_USD_TWD = 32.50
+local FX_FALLBACK_USD_HKD = 7.80
 local FX_URL = "https://open.er-api.com/v6/latest/USD"
 local FX_HISTORY_URL = "https://api.frankfurter.dev/v2/rates"
 local TROY_OUNCE_GRAMS = 31.1034768
@@ -19,6 +20,7 @@ local CURRENCIES = {
   { value = "USD", text = "美金" },
   { value = "CNY", text = "人民币" },
   { value = "TWD", text = "新台币" },
+  { value = "HKD", text = "港币" },
 }
 
 local INTERVALS = {
@@ -64,6 +66,9 @@ local PRESET_ASSETS = {
   { id = "ashare:1.600519", group = "ashare", source = "eastmoney", symbol = "600519", secid = "1.600519", text = "贵州茅台", quote = "CNY" },
   { id = "ashare:0.000001", group = "ashare", source = "eastmoney", symbol = "000001", secid = "0.000001", text = "平安银行", quote = "CNY" },
   { id = "ashare:0.300750", group = "ashare", source = "eastmoney", symbol = "300750", secid = "0.300750", text = "宁德时代", quote = "CNY" },
+  { id = "hongkong:116.00700", group = "hongkong", source = "eastmoney", symbol = "00700", secid = "116.00700", text = "腾讯控股", quote = "HKD" },
+  { id = "hongkong:116.09988", group = "hongkong", source = "eastmoney", symbol = "09988", secid = "116.09988", text = "阿里巴巴-W", quote = "HKD" },
+  { id = "hongkong:116.01810", group = "hongkong", source = "eastmoney", symbol = "01810", secid = "116.01810", text = "小米集团-W", quote = "HKD" },
   { id = "taiwan:^TWII", group = "taiwan", source = "eastmoney", symbol = "^TWII", secid = "100.TWII", text = "台湾加权指数", quote = "TWD" },
   { id = "taiwan:2330.TW", group = "taiwan", source = "eastmoney", symbol = "2330.TW", secid = "178.2330", text = "台积电", quote = "TWD" },
   { id = "taiwan:2317.TW", group = "taiwan", source = "eastmoney", symbol = "2317.TW", secid = "178.2317", text = "鸿海", quote = "TWD" },
@@ -269,6 +274,8 @@ end
 
 -- 找到周期配置。
 local function find_interval(label)
+  label = tostring(label or ""):lower()
+  label = ({["1d"]="1day", ["1w"]="7day", ["1wk"]="7day"})[label] or label
   for i = 1, #INTERVALS do
     if INTERVALS[i].label == label then
       return INTERVALS[i], i
@@ -316,6 +323,8 @@ local function normalize_currency(value)
     return "CNY"
   elseif text == "TWD" or text == "NTD" or text == "NT$" or tostring(value or "") == "新台币" then
     return "TWD"
+  elseif text == "HKD" or text == "HK$" or tostring(value or "") == "港币" then
+    return "HKD"
   end
   return "USD"
 end
@@ -387,7 +396,7 @@ local function unit_text(asset)
   return ""
 end
 
-local function convert_currency(value, from_currency, to_currency, usd_cny, usd_twd)
+local function convert_currency(value, from_currency, to_currency, usd_cny, usd_twd, usd_hkd)
   value = tonumber(value)
   if not value then
     return nil
@@ -396,6 +405,7 @@ local function convert_currency(value, from_currency, to_currency, usd_cny, usd_
   to_currency = normalize_currency(to_currency)
   usd_cny = tonumber(usd_cny) or FX_FALLBACK_USD_CNY
   usd_twd = tonumber(usd_twd) or FX_FALLBACK_USD_TWD
+  usd_hkd = tonumber(usd_hkd) or FX_FALLBACK_USD_HKD
   if from_currency == to_currency then
     return value
   end
@@ -405,18 +415,22 @@ local function convert_currency(value, from_currency, to_currency, usd_cny, usd_
     usd_value = value / usd_cny
   elseif from_currency == "TWD" and usd_twd ~= 0 then
     usd_value = value / usd_twd
+  elseif from_currency == "HKD" and usd_hkd ~= 0 then
+    usd_value = value / usd_hkd
   end
 
   if to_currency == "CNY" then
     return usd_value * usd_cny
   elseif to_currency == "TWD" then
     return usd_value * usd_twd
+  elseif to_currency == "HKD" then
+    return usd_value * usd_hkd
   end
   return usd_value
 end
 
 -- 把源价格转换为屏幕/Web 当前显示价格。
-local function display_price(asset, value, target_currency, usd_cny, usd_twd)
+local function display_price(asset, value, target_currency, usd_cny, usd_twd, usd_hkd)
   local v = tonumber(value)
   if not v then
     return nil
@@ -436,7 +450,7 @@ local function display_price(asset, value, target_currency, usd_cny, usd_twd)
     base_currency = "USD"
   end
 
-  return convert_currency(v, base_currency, target_currency, usd_cny, usd_twd)
+  return convert_currency(v, base_currency, target_currency, usd_cny, usd_twd, usd_hkd)
 end
 
 -- 复制资产字段，避免 Web 修改快照时污染运行状态。
@@ -537,7 +551,7 @@ local function restore_custom_asset(value)
   end
 
   local group = tostring(value.group or "")
-  if group ~= "crypto" and group ~= "nasdaq" and group ~= "metal" and group ~= "ashare" and group ~= "taiwan" and group ~= "fx" then
+  if group ~= "crypto" and group ~= "nasdaq" and group ~= "metal" and group ~= "ashare" and group ~= "taiwan" and group ~= "hongkong" and group ~= "fx" then
     group = "crypto"
   end
 
@@ -569,7 +583,7 @@ local function restore_custom_asset(value)
     source = source,
     symbol = symbol,
     text = tostring(value.text or symbol),
-    quote = quote or normalize_currency(value.quote or (group == "ashare" and "CNY" or (group == "taiwan" and "TWD" or "USD"))),
+    quote = quote or normalize_currency(value.quote or (group == "ashare" and "CNY" or (group == "taiwan" and "TWD" or (group == "hongkong" and "HKD" or "USD")))),
     base = base,
   }
   if migrated_secid or value.secid then
@@ -587,8 +601,9 @@ local function parse_fx_rates(doc)
   local rates = type(doc) == "table" and doc.rates
   local cny = rates and tonumber(rates.CNY)
   local twd = rates and tonumber(rates.TWD)
+  local hkd = rates and tonumber(rates.HKD)
   if cny and cny > 0 and cny < 20 and twd and twd > 10 and twd < 100 then
-    return cny, twd, nil
+    return cny, twd, nil, hkd and hkd>0 and hkd<20 and hkd or nil
   end
   return nil, nil, "fx CNY/TWD missing"
 end
@@ -665,7 +680,7 @@ local function split_csv(line)
   return out
 end
 
--- 将不同来源的时间统一为毫秒数，图表据此保留休市和缺口的真实间距。
+-- 将不同来源的时间统一为秒，避免设备 32 位数值丢失毫秒时间戳精度。
 local function chart_time_value(value)
   local numeric = tonumber(value)
   if numeric then
@@ -738,7 +753,10 @@ local function parse_binance(doc, asset)
       local close_p = tonumber(row[5])
       if open_p and high_p and low_p and close_p then
         candles[#candles + 1] = {
-          time = tonumber(row[1]) or 0,
+          -- request_json preserves the 13-digit opening timestamp as a string.
+          -- Drop milliseconds before tonumber so the epoch fits a signed int32.
+          time = type(row[1])=="string" and #row[1]==13 and tonumber(row[1]:sub(1,10))
+            or (tonumber(row[1]) and (tonumber(row[1])>100000000000 and math.floor(tonumber(row[1])/1000) or tonumber(row[1]))) or 0,
           open = open_p,
           high = high_p,
           low = low_p,
@@ -915,6 +933,9 @@ local function twse_channel(asset)
   if code == "" then
     return nil
   end
+  if not symbol:match("%.TW$") and not symbol:match("%.TWO$") then
+    return "tse_" .. code .. ".tw|otc_" .. code .. ".tw"
+  end
   return (symbol:match("%.TWO$") and "otc_" or "tse_") .. code .. ".tw"
 end
 
@@ -939,7 +960,10 @@ end
 -- 解析 TWSE MIS 即时快照。z 是最新成交价，y 是昨收，o/h/l 是当日开高低。
 local function parse_twse_quote(doc)
   local rows = type(doc) == "table" and doc.msgArray
-  local row = type(rows) == "table" and rows[1]
+  local row = nil
+  for _, candidate in ipairs(type(rows) == "table" and rows or {}) do
+    if positive_number(candidate.y) and (positive_number(candidate.z) or positive_number(candidate.pz) or positive_number(candidate.y)) then row=candidate;break end
+  end
   if type(row) ~= "table" then
     return nil, "twse quote empty"
   end
@@ -1078,7 +1102,7 @@ end
 -- Eastmoney 的 market 前缀同时覆盖 A 股、海外指数/股票和国际期货。
 local function normalize_eastmoney_market(market, symbol)
   market = trim(market)
-  if market == "0" or market == "1" or market == "100" or market == "101" or market == "105" or market == "178" then
+  if market == "0" or market == "1" or market == "100" or market == "101" or market == "105" or market == "106" or market == "107" or market == "178" or market == "116" then
     return market
   end
   return infer_eastmoney_market(symbol)
@@ -1086,15 +1110,23 @@ end
 
 -- 根据 Eastmoney market 前缀决定 Web 分类和显示币种。
 local function eastmoney_meta(market)
+  if market == "116" then return "hongkong", "HKD" end
   if market == "178" then
     return "taiwan", "TWD"
   end
-  if market == "100" or market == "105" then
+  if market == "100" or market == "105" or market == "106" or market == "107" then
     return "nasdaq", "USD"
   elseif market == "101" then
     return "metal", "USD"
   end
   return "ashare", "CNY"
+end
+
+local function hk_currency(symbol)
+  local n=tonumber(symbol) or 0
+  if n>=80000 and n<=89999 then return "CNY" end
+  if (n>=9000 and n<=9599) or (n>=9700 and n<=9849) or (n>=41500 and n<=41599) then return "USD" end
+  return "HKD"
 end
 
 -- 创建 Web 输入的自定义资产。
@@ -1151,7 +1183,13 @@ local function make_custom_asset(params)
       or symbol:match("%.TW$") ~= nil
       or symbol:match("%.TWO$") ~= nil
       or symbol == "^TWII"
-    local group = is_taiwan and "taiwan" or (params.group == "metal" and "metal" or "nasdaq")
+    local is_hk=not is_taiwan and (params.group=="hongkong" or symbol:match("%.HK$")~=nil)
+    if is_hk then
+      local code=symbol:gsub("%.HK$", "")
+      if not code:match("^%d+$") or #code>5 or tonumber(code)<1 then return nil,"Hong Kong symbol must be 1-5 digits" end
+      symbol=string.format("%04d",tonumber(code))..".HK"
+    end
+    local group = is_taiwan and "taiwan" or (is_hk and "hongkong" or (params.group == "metal" and "metal" or "nasdaq"))
     local taiwan_code = symbol:gsub("%.TWO$", ""):gsub("%.TW$", "")
     local taiwan_secid = symbol == "^TWII" and "100.TWII" or ("178." .. taiwan_code)
     return {
@@ -1160,7 +1198,7 @@ local function make_custom_asset(params)
       source = is_taiwan and "eastmoney" or "yahoo",
       symbol = symbol,
       text = text,
-      quote = is_taiwan and "TWD" or "USD",
+      quote = is_taiwan and "TWD" or (is_hk and hk_currency(symbol:gsub("%.HK$", "")) or "USD"),
       secid = is_taiwan and taiwan_secid or nil,
       metal_unit = group == "metal" and infer_metal_unit(symbol) or nil,
     }
@@ -1183,8 +1221,15 @@ local function make_custom_asset(params)
         quote = "TWD",
       }
     end
-    local market = normalize_eastmoney_market(params.market, symbol)
+    local is_hk=params.group=="hongkong" or tostring(params.market)=="116" or symbol:match("%.HK$")~=nil
+    if is_hk then
+      symbol=symbol:gsub("%.HK$", "")
+      if not symbol:match("^%d+$") or #symbol>5 or tonumber(symbol)<1 then return nil,"Hong Kong symbol must be 1-5 digits" end
+      symbol=string.format("%05d",tonumber(symbol))
+    end
+    local market = is_hk and "116" or normalize_eastmoney_market(params.market, symbol)
     local group, quote = eastmoney_meta(market)
+    if group=="hongkong" then quote=hk_currency(symbol) end
     local secid = market .. "." .. symbol
     return {
       id = "custom:eastmoney:" .. secid,
@@ -1219,6 +1264,9 @@ function Backend.new(opts)
       tilt_enabled = true,
     },
     custom_asset = nil,
+    custom_assets = {},
+    save_error = "",
+    store = opts.store,
     intraday = {},
     state = {
       valid = false,
@@ -1243,6 +1291,7 @@ function Backend.new(opts)
       live_source = "",
       fx_rate = FX_FALLBACK_USD_CNY,
       fx_twd_rate = FX_FALLBACK_USD_TWD,
+      fx_hkd_rate = FX_FALLBACK_USD_HKD,
       fx_updated_text = "--",
       fx_last_error = "",
       fx_next_fetch_at = 0,
@@ -1256,8 +1305,8 @@ function Backend.new(opts)
 
   -- 查找预设或自定义资产。
   function self:find_asset(id)
-    if self.custom_asset and self.custom_asset.id == id then
-      return self.custom_asset
+    for _, asset in ipairs(self.custom_assets) do
+      if asset.id == id then return asset end
     end
     for i = 1, #self.assets do
       if self.assets[i].id == id then
@@ -1281,32 +1330,37 @@ function Backend.new(opts)
       currency = self.settings.currency,
       ma_period = self.settings.ma_period,
       tilt_enabled = self.settings.tilt_enabled,
-      custom_asset = public_asset(self.custom_asset),
+      schema_version = 2,
+      custom_assets = self.custom_assets,
+      stock_mode = self.settings.stock_mode,
+      stock_ma_period = self.settings.stock_ma_period,
     }
   end
 
   -- 从 app 自己目录读取上次设置；失败时安静回到默认配置。
   function self:load_settings()
-    if not self.config_path or self.config_path == "" or not file or not file.getcontents then
-      return false
-    end
-    local ok, raw = pcall(function()
-      return file.getcontents(self.config_path)
+    local cfg, recovered = self.store.read(self.config_path, function(v)
+      return type(v.asset_id or v.asset) == "string"
     end)
-    if not ok or type(raw) ~= "string" or raw == "" then
-      return false
+    if not cfg then return false end
+    self.recovered_settings = recovered or false
+    local custom = nil
+    self.custom_assets = {}
+    local saved = type(cfg.custom_assets) == "table" and cfg.custom_assets or {}
+    if cfg.custom_asset then saved[#saved+1] = cfg.custom_asset end
+    local migrated = {}
+    for _, value in ipairs(saved) do
+      local asset = restore_custom_asset(value)
+      if asset and not self:find_asset(asset.id) and #self.custom_assets < 200 then
+        self.custom_assets[#self.custom_assets+1] = asset
+        migrated[tostring(value.id)] = asset.id
+        custom = asset
+      end
     end
-
-    local cfg, err = decode_json(raw)
-    if type(cfg) ~= "table" then
-      print("[btc_backend] load settings failed: " .. tostring(err or "bad config"))
-      return false
-    end
-
-    local custom = restore_custom_asset(cfg.custom_asset)
-    if custom then
-      self.custom_asset = custom
-    end
+    self.custom_asset = custom
+    cfg.asset_id = migrated[tostring(cfg.asset_id or cfg.asset)] or cfg.asset_id or cfg.asset
+    self.settings.stock_mode = normalize_mode(cfg.stock_mode) or "line"
+    self.settings.stock_ma_period = normalize_ma_period(cfg.stock_ma_period) or 0
 
     local asset_id = cfg.asset_id or cfg.asset
     if asset_id and self:find_asset(asset_id) then
@@ -1345,21 +1399,22 @@ function Backend.new(opts)
 
   -- 保存 Web 或实体按键改动后的配置。
   function self:save_settings()
-    if not self.config_path or self.config_path == "" or not file or not file.putcontents then
-      return false
+    local ok, err = self.store.write(self.config_path, self:config_payload())
+    self.save_error = ok and "" or tostring(err or "SD settings save failed")
+    return ok
+  end
+
+  function self:remove_custom(id)
+    local found = nil
+    for i, asset in ipairs(self.custom_assets) do if asset.id == id then found=i;break end end
+    if not found then return false end
+    local before = self.settings.asset_id
+    local removed = table.remove(self.custom_assets, found)
+    if before == id then self.settings.asset_id = self.assets[1].id end
+    if not self:save_settings() then
+      table.insert(self.custom_assets, found, removed);self.settings.asset_id=before;return false
     end
-    local raw, err = encode_json(self:config_payload())
-    if not raw then
-      print("[btc_backend] save settings encode failed: " .. tostring(err))
-      return false
-    end
-    local ok, ret = pcall(function()
-      return file.putcontents(self.config_path, raw)
-    end)
-    if not ok or not ret then
-      print("[btc_backend] save settings failed: " .. tostring(ok and ret or ret))
-      return false
-    end
+    if before == id then self:clear_data("switching");self:queue_refresh() end
     return true
   end
 
@@ -1368,9 +1423,8 @@ function Backend.new(opts)
     local s = self.state
     -- 快速翻页时让旧请求回调失效，避免上一标的的数据覆盖当前页面。
     s.http_req_id = (s.http_req_id or 0) + 1
-    s.http_busy = false
-    s.http_job = ""
-    s.http_started_ms = 0
+    -- Keep the physical request occupied until its callback releases it.
+    -- Switching instruments must not start another TLS request over this one.
     s.valid = false
     s.status = status or "loading"
     s.tone = "warn"
@@ -1404,6 +1458,7 @@ function Backend.new(opts)
     local base = tonumber(parsed.prev_close) or tonumber(parsed.first_price) or current
 
     s.valid = true
+    s.failure_count = 0
     s.loading = false
     s.status = "ready"
     s.tone = current and base and current < base and "down" or "up"
@@ -1593,7 +1648,8 @@ function Backend.new(opts)
     s.tone = "error"
     s.last_error = short_text(message or "request failed", 120)
     s.last_http_code = tonumber(code) or -1
-    s.next_fetch_at = now_ms() + ERROR_RETRY_MS
+    s.failure_count = math.min((s.failure_count or 0) + 1, 5)
+    s.next_fetch_at = now_ms() + math.min(120000, ERROR_RETRY_MS * (2 ^ s.failure_count))
     s.chart_dirty = true
   end
 
@@ -1606,10 +1662,11 @@ function Backend.new(opts)
   end
 
   -- 应用 USD/CNY、USD/TWD 汇率，切换显示币种时自动重绘图表。
-  function self:apply_fx(cny_rate, twd_rate)
+  function self:apply_fx(cny_rate, twd_rate, hkd_rate)
     local s = self.state
     s.fx_rate = tonumber(cny_rate) or s.fx_rate or FX_FALLBACK_USD_CNY
     s.fx_twd_rate = tonumber(twd_rate) or s.fx_twd_rate or FX_FALLBACK_USD_TWD
+    s.fx_hkd_rate = tonumber(hkd_rate) or s.fx_hkd_rate or FX_FALLBACK_USD_HKD
     s.fx_updated_text = clock_text()
     s.fx_last_error = ""
     s.fx_next_fetch_at = now_ms() + FX_REFRESH_MS
@@ -1633,6 +1690,9 @@ function Backend.new(opts)
     self.request_seq = (self.request_seq or 0) + 1
     local req_id = self.request_seq
     s.http_req_id = req_id
+    s.transport_id = req_id
+    s.http_timed_out = false
+    s.http_timeout_ms = job == "fx_pair" and FX_HTTP_TIMEOUT_MS or HTTP_TIMEOUT_MS
     s.http_started_ms = now_ms()
     if job == "fx" then
       s.fx_loading = true
@@ -1644,25 +1704,21 @@ function Backend.new(opts)
 
     -- 某些固件不会把响应 Content-Encoding 头完整传回 Lua；固定请求明文，
     -- 避免 Yahoo 返回 gzip 后被误当作 JSON/文本解析。
-    local accept_encoding = "identity"
-    local headers =
-      "Accept: application/json\r\n"
-      .. "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8\r\n"
-      .. "Accept-Encoding: " .. accept_encoding .. "\r\n"
-      .. "Cache-Control: no-cache\r\n"
-      .. "Pragma: no-cache\r\n"
-      .. "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36\r\n"
-
-    http.get(url, headers, function(code, body, resp_headers)
-      if s.http_req_id ~= req_id then
-        return
+    local options={timeout=s.http_timeout_ms,headers={
+      Accept="application/json",["Accept-Language"]="zh-CN,zh;q=0.9,en;q=0.8",
+      ["Accept-Encoding"]="identity",["Cache-Control"]="no-cache",Pragma="no-cache",
+      ["User-Agent"]="Mozilla/5.0",Connection="close",
+    }}
+    http.get(url, options, function(code, body, resp_headers)
+      if s.transport_id == req_id then
+        s.http_busy = false
+        s.http_job = ""
+        s.http_started_ms = 0
+        s.transport_id = nil
+        s.http_timed_out = false
+        if job == "fx" then s.fx_loading = false end
       end
-      s.http_busy = false
-      s.http_job = ""
-      s.http_started_ms = 0
-      if job == "fx" then
-        s.fx_loading = false
-      end
+      if s.http_req_id ~= req_id then return end
 
       if code ~= 200 then
         callback(false, nil, "http " .. tostring(code), code)
@@ -1684,6 +1740,11 @@ function Backend.new(opts)
         return
       end
 
+      if job == "binance" then
+        -- Quote only the first (opening time) number in each kline before JSON
+        -- decode; decoding 13-digit numbers first already loses precision.
+        plain=plain:gsub("(%[%s*)(%d%d%d%d%d%d%d%d%d%d%d%d%d)(%s*,)", '%1"%2"%3')
+      end
       local doc, jerr = decode_json(plain)
       if not doc then
         callback(false, nil, "json " .. tostring(jerr), code)
@@ -1790,7 +1851,11 @@ function Backend.new(opts)
               self.state.last_error = short_text("live " .. tostring(quote_parse_err), 120)
               self.state.tone = "warn"
             else
-              self:fail("history " .. tostring(history_error) .. "; live " .. tostring(quote_parse_err), -1)
+              if asset.source == "eastmoney" and quote_parse_err == "eastmoney quote price missing" then
+                self:fail("quote unavailable; check symbol, market and listing status", -1)
+              else
+                self:fail("history " .. tostring(history_error) .. "; live " .. tostring(quote_parse_err), -1)
+              end
             end
             return
           end
@@ -1894,12 +1959,12 @@ function Backend.new(opts)
         self:fail_fx(err or ("fx http " .. tostring(code)))
         return
       end
-      local cny_rate, twd_rate, perr = parse_fx_rates(doc)
+      local cny_rate, twd_rate, perr, hkd_rate = parse_fx_rates(doc)
       if not cny_rate or not twd_rate then
         self:fail_fx(perr or "fx parse")
         return
       end
-      self:apply_fx(cny_rate, twd_rate)
+      self:apply_fx(cny_rate, twd_rate, hkd_rate)
     end)
   end
 
@@ -1907,13 +1972,13 @@ function Backend.new(opts)
   function self:tick()
     local s = self.state
     if s.http_busy then
-      local timeout_ms = s.http_job == "fx_pair" and FX_HTTP_TIMEOUT_MS or HTTP_TIMEOUT_MS
-      if s.http_started_ms > 0 and (now_ms() - s.http_started_ms) > timeout_ms then
-        s.http_busy = false
+      local timeout_ms = (s.http_timeout_ms or HTTP_TIMEOUT_MS) + 5000
+      if not s.http_timed_out and s.http_started_ms > 0 and (now_ms() - s.http_started_ms) > timeout_ms then
+        -- A Lua deadline cannot close http.get's native TLS handle. Do not
+        -- release the busy slot and pile up retries while it is still running.
+        s.http_timed_out = true
         local timeout_job = s.http_job
-        s.http_job = ""
         s.http_req_id = (s.http_req_id or 0) + 1
-        s.http_started_ms = 0
         if timeout_job == "fx" then
           self:fail_fx("http timeout")
         else
@@ -1922,6 +1987,7 @@ function Backend.new(opts)
       end
       return
     end
+    if self.catalog_busy then return end
     if now_ms() >= (s.next_fetch_at or 0) then
       if self:fetch_current() then
         return
@@ -1957,8 +2023,8 @@ function Backend.new(opts)
         choices[#choices + 1] = self.assets[i]
       end
     end
-    if self.custom_asset and self.custom_asset.group == group then
-      choices[#choices + 1] = self.custom_asset
+    for _, custom in ipairs(self.custom_assets) do
+      if custom.group == group then choices[#choices+1] = custom end
     end
     if #choices == 0 then return end
     local idx = 1
@@ -1986,11 +2052,7 @@ function Backend.new(opts)
     if self:current_asset().group == "fx" then
       normalized = "line"
     end
-    if normalized and normalized ~= self.settings.mode then
-      self.settings.mode = normalized
-      self.state.chart_dirty = true
-      self:save_settings()
-    end
+    if normalized then return self:apply_settings({mode=normalized}, false) end
   end
 
   -- 折线/K 线互切。
@@ -2005,6 +2067,11 @@ function Backend.new(opts)
   -- 应用 Web 或按键传入的设置。
   function self:apply_settings(params, refresh)
     params = params or {}
+    local previous_settings = {}
+    for k,v in pairs(self.settings) do previous_settings[k]=v end
+    local previous_customs = {}
+    for i,v in ipairs(self.custom_assets) do previous_customs[i]=v end
+    local previous_group = self:current_asset().group
     local data_changed = false
     local chart_changed = false
     local settings_changed = false
@@ -2014,6 +2081,15 @@ function Backend.new(opts)
     if custom_requested then
       local custom, err = make_custom_asset(params)
       if custom then
+        if #custom.symbol > 40 or #custom.text > 180 then
+          self.save_error = "Symbol or name too long"; return false
+        end
+        local existing = nil
+        for i,v in ipairs(self.custom_assets) do if v.id == custom.id then existing=i;break end end
+        if existing then self.custom_assets[existing] = custom
+        elseif #self.custom_assets >= 200 then
+          self.save_error = "Saved asset limit (200); remove an unused asset"; return false
+        else self.custom_assets[#self.custom_assets+1] = custom end
         self.custom_asset = custom
         params.asset = custom.id
         settings_changed = true
@@ -2082,6 +2158,13 @@ function Backend.new(opts)
       end
     end
 
+    if previous_group ~= "fx" and self:current_asset().group == "fx" then
+      self.settings.stock_mode = previous_settings.mode
+      self.settings.stock_ma_period = previous_settings.ma_period
+    elseif previous_group == "fx" and self:current_asset().group ~= "fx" then
+      if not params.mode then self.settings.mode = self.settings.stock_mode or "line" end
+      if not params.ma and not params.ma_period then self.settings.ma_period = self.settings.stock_ma_period or 0 end
+    end
     if self:current_asset().group == "fx" then
       if self.settings.mode ~= "line" then
         self.settings.mode = "line"
@@ -2103,8 +2186,11 @@ function Backend.new(opts)
     if data_changed or (refresh and not chart_changed) then
       self:queue_refresh()
     end
-    if settings_changed then
-      self:save_settings()
+    if settings_changed and not self:save_settings() then
+      self.settings = previous_settings
+      self.custom_assets = previous_customs
+      self:clear_data("save failed"); self:queue_refresh()
+      return false
     end
     return true
   end
@@ -2118,8 +2204,9 @@ function Backend.new(opts)
     for i = 1, #self.assets do
       assets[#assets + 1] = public_asset(self.assets[i])
     end
-    if self.custom_asset then
-      assets[#assets + 1] = public_asset(self.custom_asset)
+    for _, custom in ipairs(self.custom_assets) do
+      local value = public_asset(custom); value.custom = true
+      assets[#assets+1] = value
     end
 
     local intervals = {}
@@ -2135,6 +2222,7 @@ function Backend.new(opts)
       or normalize_currency(self.settings.currency)
     local fx_rate = tonumber(s.fx_rate) or FX_FALLBACK_USD_CNY
     local fx_twd_rate = tonumber(s.fx_twd_rate) or FX_FALLBACK_USD_TWD
+    local fx_hkd_rate = tonumber(s.fx_hkd_rate) or FX_FALLBACK_USD_HKD
     local points = {}
     local display_min = nil
     local display_max = nil
@@ -2144,11 +2232,11 @@ function Backend.new(opts)
     end
     for i = start_i, #s.candles do
       local c = s.candles[i]
-      local close_p = display_price(asset, c.close, target_currency, fx_rate, fx_twd_rate)
+      local close_p = display_price(asset, c.close, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate)
       if close_p then
-        local open_p = display_price(asset, c.open, target_currency, fx_rate, fx_twd_rate) or close_p
-        local high_p = display_price(asset, c.high, target_currency, fx_rate, fx_twd_rate) or math.max(open_p, close_p)
-        local low_p = display_price(asset, c.low, target_currency, fx_rate, fx_twd_rate) or math.min(open_p, close_p)
+        local open_p = display_price(asset, c.open, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate) or close_p
+        local high_p = display_price(asset, c.high, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate) or math.max(open_p, close_p)
+        local low_p = display_price(asset, c.low, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate) or math.min(open_p, close_p)
         local range_low = self.settings.mode == "line" and close_p or low_p
         local range_high = self.settings.mode == "line" and close_p or high_p
         if range_low and (not display_min or range_low < display_min) then
@@ -2168,22 +2256,24 @@ function Backend.new(opts)
       end
     end
 
-    local display_current = display_price(asset, s.current_price, target_currency, fx_rate, fx_twd_rate)
+    local display_current = display_price(asset, s.current_price, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate)
     if not display_current and #points > 0 then
       display_current = points[#points].close
     end
-    local display_prev = display_price(asset, s.prev_close, target_currency, fx_rate, fx_twd_rate)
+    local display_prev = display_price(asset, s.prev_close, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate)
     local display_change = display_current and display_prev and (display_current - display_prev) or nil
     local display_pct = s.change_pct
     if not display_pct and display_current and display_prev and display_prev ~= 0 then
       display_pct = (display_current - display_prev) * 100 / display_prev
     end
-    display_min = display_min or display_price(asset, s.min_price, target_currency, fx_rate, fx_twd_rate)
-    display_max = display_max or display_price(asset, s.max_price, target_currency, fx_rate, fx_twd_rate)
+    display_min = display_min or display_price(asset, s.min_price, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate)
+    display_max = display_max or display_price(asset, s.max_price, target_currency, fx_rate, fx_twd_rate, fx_hkd_rate)
 
     return {
       ok = true,
       version = self.version,
+      save_error = self.save_error,
+      recovered_settings = self.recovered_settings or false,
       app_id = self.app_id,
       assets = assets,
       intervals = intervals,
@@ -2226,6 +2316,7 @@ function Backend.new(opts)
       now_text = clock_text(),
       fx_rate = fx_rate,
       fx_twd_rate = fx_twd_rate,
+      fx_hkd_rate = fx_hkd_rate,
       fx_updated_text = s.fx_updated_text,
       fx_loading = s.fx_loading,
       fx_error = s.fx_last_error,
@@ -2245,6 +2336,7 @@ function Backend.new(opts)
     self.state.fx_loading = false
   end
 
+  self.store = self.store or dofile(self.config_path:match("^(.*)/") .. "/storage.lua")
   self:load_settings()
   return self
 end
