@@ -1,0 +1,22 @@
+src/build/
+tools/__pycache__/
+tests/output/
+diagnostics/
+
+# Device/user state is not distributable App content.
+package/settings.json
+package/config.json*
+package/stations.json*
+package/boot-error.txt
+*.log
+__pycache__/
+
+# Local migration helper contains a device address and uninstall actions.
+tools/deploy_branding_remove_guard.py
+# Removed service kept locally for recovery, never published or installed.
+src/archive/
+
+# Build targets ESP32-S3 only. Retain upstream sources and licenses.
+src/vendor/esp_audio_codec/lib/*/
+!src/vendor/esp_audio_codec/lib/esp32s3/
+src/vendor/esp_audio_codec/test_apps/

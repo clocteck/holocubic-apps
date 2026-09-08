@@ -1,0 +1,15 @@
+name = Radio
+name_zh = 网络收音机
+name_zh_cn = 网络收音机
+name_zh_tw = 網路收音機
+name_en = Radio
+name_ja = ネットラジオ
+kind = app
+category = media
+catalog_scope = official
+entry = main.lua
+icon = main.png
+version = 0.1.4
+description = Network radio with MP3, AAC, FLAC and HLS-TS audio
+description_zh = 网络电台、两段EQ、多语言网页控制及电台管理
+description_en = Internet stations, two-band EQ, multilingual control and station management
