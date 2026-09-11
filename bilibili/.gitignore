@@ -1,0 +1,8 @@
+package/settings.json
+package/observations.json
+package/screen.png
+package/cover*.jpg
+package/feed[0-9]*.jpg
+package/recent[0-9]*.jpg
+package/*error*.txt
+package/*probe*

@@ -1,0 +1,11 @@
+name = BiliBili
+name_zh_cn = BiliBili
+name_en = BiliBili
+entry = main.lua
+icon = main.png
+description = Bilibili fans, creator stats, posts, live, messages and feed
+description_zh_cn = 粉丝、创作数据、图文动态与最近观看
+version = 0.1.0
+kind = app
+category = tool
+catalog_scope = community
