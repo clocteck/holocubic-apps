@@ -1,0 +1,119 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>网易云 · 320×240 设备设计稿</title>
+<style>
+*{box-sizing:border-box}body{margin:32px;background:#151515;color:white;font:13px "Microsoft YaHei",sans-serif}
+h1{font-size:18px}p{color:#999}.screens{display:flex;gap:24px;flex-wrap:wrap}.device{width:320px;height:240px;background:#000;position:relative;overflow:hidden;flex:none}
+.at{position:absolute;overflow:hidden}.brand{left:12px;top:8px;color:#ec4141;font-size:12px}.badge{right:12px;top:8px;font-size:12px;color:#999}
+.album{left:12px;top:34px;width:136px;height:136px;background:linear-gradient(155deg,#30335c,#a36276 49%,#edbe98);border-radius:5px}
+.album:before{content:"";position:absolute;width:122px;height:122px;left:35px;top:61px;transform:rotate(30deg);background:linear-gradient(125deg,#655971,#211d33)}
+.album:after{content:"";position:absolute;left:26px;top:22px;width:28px;height:28px;border-radius:50%;background:#f7d8a9}
+.playlist{left:166px;top:34px;width:68px;height:68px;background:linear-gradient(140deg,#244637,#698976 65%,#e3c4a5);border-radius:4px}
+.playlist:after{content:"夜";font-size:35px;position:absolute;left:17px;top:12px;color:#e2eedb}
+.from{left:244px;top:37px;width:64px;color:#92929a;font-size:12px;line-height:20px}.song{left:166px;top:112px;width:142px;height:44px;font-size:18px;line-height:22px}.artist{left:166px;top:158px;width:142px;color:#92929a}
+.bar{left:12px;top:211px;width:296px;height:3px;background:#28282e}.bar:before{content:"";display:block;height:3px;width:36%;background:#ec4141}
+.time{left:12px;top:220px;color:#999;font-size:12px}.hint{right:12px;top:220px;color:#aaa;font-size:12px}
+.list-title{left:166px;top:45px;width:142px;font-size:22px}.list-desc{left:166px;top:83px;width:142px;line-height:22px;color:#999}
+.rows{left:160px;top:34px;width:148px}.row{height:43px;padding:9px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#999}.row.selected{color:#fff;background:#221112;border-left:3px solid #ec4141}
+.caption{left:12px;top:184px;width:296px;color:#999}
+.player .album{width:92px;height:92px;top:36px}
+.player .album:before{width:86px;height:86px;left:23px;top:43px}
+.player .album:after{width:20px;height:20px;left:17px;top:15px}
+.player .song{left:12px;top:139px;width:92px;height:36px;font-size:13px;line-height:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.player .artist{left:12px;top:179px;width:92px;height:17px;font-size:13px;white-space:nowrap;text-overflow:ellipsis}
+.lyrics-window{left:116px;top:36px;width:192px;height:150px;display:grid;grid-template-rows:repeat(5,30px);align-items:center}
+.lyrics-window .line{margin:0;height:30px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:center;color:#85858f;font-size:13px;line-height:30px}
+.lyrics-window .line:first-child,.lyrics-window .line:last-child{color:#505058}
+.lyrics-window .line.active{font-size:16px;line-height:30px;color:#fff;font-weight:600}
+.controls{display:flex;gap:12px;align-items:center;margin:16px 0;color:#aaa;font-size:12px;flex-wrap:wrap}
+button{background:#282828;border:1px solid #444;border-radius:6px;padding:7px 12px;color:#eee;cursor:pointer}
+button:focus-visible{outline:2px solid #ec4141}
+figure{margin:0}figcaption{margin-bottom:10px;color:#aaa;font-size:12px}
+.about .avatar{left:12px;top:32px;width:32px;height:32px;border:1px solid #483030;border-radius:50%;background:#1c1010;color:#e97777;display:grid;place-items:center;font-size:15px}
+.about .account-label{left:54px;top:31px;font-size:10px;line-height:14px;color:#787880}
+.about .account{left:54px;top:47px;width:184px;height:20px;font-size:15px;line-height:20px;white-space:nowrap;text-overflow:ellipsis}
+.about .account-state{right:12px;top:39px;height:20px;padding:0 7px;border:1px solid #25372b;border-radius:10px;color:#9ab8a4;font-size:10px;line-height:18px}
+.about .rule{left:12px;top:73px;width:296px;height:1px;background:#202024}
+.about .usage{left:12px;top:82px;width:296px;height:65px;display:grid;grid-template-columns:146px 150px;grid-template-rows:19px 19px 19px;gap:4px 0}
+.about .shortcut{display:flex;align-items:center;gap:7px;color:#c2c2c9;font-size:11px;white-space:nowrap}
+.about .keycap{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:42px;height:18px;border:1px solid #34343a;border-radius:4px;background:#101012;color:#eee;font:10px "Microsoft YaHei",sans-serif}
+.about .shortcut.long .keycap{border-color:#513131;color:#f29b9b}
+.about .source{left:12px;top:156px;width:296px;height:20px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #202024;padding-top:5px}
+.about .source-label{color:#787880;font-size:10px}
+.about .git{font-size:12px;line-height:15px;color:#ddd;text-decoration:none}
+.about .git:hover{color:#ec4141}.about .git:focus-visible{outline:1px solid #ec4141;outline-offset:1px}
+.about .privacy{left:12px;top:184px;width:296px;height:28px;color:#888891;font-size:11px;line-height:14px}
+.about .privacy .dot{display:inline-block;width:3px;height:3px;background:#9b4949;vertical-align:middle;margin:0 6px 2px 0}
+.about .bar:before{display:none}
+@media(max-width:420px){body{margin:16px}.screens{gap:24px}}
+</style>
+<h1>网易云音乐 · 原生像素设计稿</h1><p>每个画布严格为 320 × 240，无缩放。播放页：92 × 92 封面 + 5 行歌词；当前歌词 16px，其余 13px。封面为 CSS 示意图。</p>
+<div class="controls"><button id="demo" type="button">演示歌词滚动</button><span id="preview-note">设计稿，不控制真实播放。通过本地预览服务打开时，保存 HTML 后自动刷新。</span></div>
+<div class="screens">
+<figure><figcaption>播放页 · 无歌单图片</figcaption><section class="device player" aria-label="播放页">
+ <div class="at brand">网易云音乐</div><div class="at badge">15:30 · 44.1k</div>
+ <div class="at album" role="img" aria-label="歌曲专辑封面示意"></div>
+ <div class="at song">在晚风里<br>等一场日落</div><div class="at artist">歌手 / 专辑名称</div>
+ <div class="at lyrics-window" aria-label="五行同步歌词">
+  <p class="line">沿着安静的街走过</p><p class="line">晚风轻轻靠近你我</p>
+  <p class="line active" aria-current="true">等一场温柔的日落</p>
+  <p class="line">把今天的心事放过</p><p class="line">让星光慢慢地闪烁</p>
+ </div>
+ <div class="at bar"></div><div class="at time">01:26 / 04:02</div><div class="at hint">播放中 · Home 暂停</div>
+</section></figure>
+<figure><figcaption>音乐库 · 保留封面</figcaption><section class="device" aria-label="音乐库">
+ <div class="at brand">音乐库</div><div class="at badge">01 / 03</div><div class="at album"></div>
+ <div class="at list-title">我的歌单</div><div class="at list-desc">我的收藏与创建<br>把喜欢的音乐<br>留在方寸之间</div>
+ <div class="at caption">左右切换：我的歌单 / 收藏 / 每日推荐</div><div class="at bar" style="height:1px"></div><div class="at time">上下回播放页</div><div class="at hint">Home 进入</div>
+</section></figure>
+<figure><figcaption>歌单列表 · 保留封面</figcaption><section class="device" aria-label="歌单列表">
+ <div class="at brand">我的歌单</div><div class="at badge">02 / 12</div><div class="at album"></div>
+ <div class="at rows"><div class="row">我喜欢的音乐</div><div class="row selected">夜间散步</div><div class="row">沿途的风景</div></div>
+<div class="at caption">当前选择 · 夜间散步</div><div class="at bar" style="height:1px"></div><div class="at time">左右选择 · 上下返回</div><div class="at hint">Home 确认</div>
+</section></figure>
+<figure><figcaption>说明页 · 账户为示例</figcaption>
+<section class="device about" aria-label="说明、账户与隐私">
+ <div class="at brand">使用说明</div><div class="at badge">非官方客户端</div>
+ <div class="at avatar" aria-hidden="true">云</div><div class="at account-label">当前账户</div>
+ <div class="at account">示例昵称</div><div class="at account-state">已登录</div>
+ <div class="at rule"></div>
+ <div class="at usage" aria-label="设备与手柄按键">
+  <div class="shortcut"><span class="keycap">左右</span><span>换歌 / 选择</span></div>
+  <div class="shortcut"><span class="keycap">上下</span><span>切换页面</span></div>
+  <div class="shortcut"><span class="keycap">Home</span><span>确认 / 暂停</span></div>
+  <div class="shortcut long"><span class="keycap">长按 Home</span><span>退出应用</span></div>
+  <div class="shortcut"><span class="keycap">A / B</span><span>确认 / 返回</span></div>
+  <div class="shortcut"><span class="keycap">Start</span><span>播放 / 暂停</span></div>
+ </div>
+ <div class="at source"><span class="source-label">开源主页</span><a class="git" href="https://github.com/clocteck" target="_blank" rel="noopener noreferrer">github.com/clocteck</a></div>
+ <div class="at privacy"><span class="dot"></span>直连网易云，无第三方中转<br><span class="dot"></span>登录凭据保存在 SD 卡</div>
+ <div class="at bar" style="height:1px;top:216px"></div><div class="at time">上下切页</div><div class="at hint">Home 回到播放</div>
+</section></figure>
+</div>
+<script>
+// Sample lines are original design copy, not downloaded song lyrics.
+const sample=['沿着安静的街走过','晚风轻轻靠近你我','等一场温柔的日落','把今天的心事放过','让星光慢慢地闪烁','听时间在耳边轻说','明天还有新的颜色'];
+const lines=Array.from(document.querySelectorAll('.lyrics-window .line'));
+let current=2,playing=false,timer=null;
+document.getElementById('demo').addEventListener('click',function(){
+ playing=!playing;this.textContent=playing?'暂停歌词演示':'演示歌词滚动';
+ clearInterval(timer);
+ if(playing)timer=setInterval(()=>{
+   current=(current+1)%sample.length;
+   lines.forEach((line,i)=>{line.textContent=sample[(current+i-2+sample.length)%sample.length];});
+ },2200);
+});
+let revision=null;
+async function watch(){
+ if(location.protocol!=='http:'&&location.protocol!=='https:')return;
+ try{
+  const response=await fetch('/__revision',{cache:'no-store'});
+  if(response.ok){
+   const next=(await response.json()).revision;
+   if(revision!==null&&next!==revision){location.reload();return;}
+   revision=next;document.getElementById('preview-note').textContent='实时预览已连接 · 保存 HTML 自动刷新 · 歌词为示意内容';
+  }
+ }catch(error){/* A stopped local preview server must not hide the design. */}
+ setTimeout(watch,1000);
+}
+watch();
+</script>

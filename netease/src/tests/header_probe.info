@@ -1,0 +1,4 @@
+name = NetEase HTTP Test
+entry = header_probe.lua
+kind = app
+version = 0.1.0

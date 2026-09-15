@@ -1,0 +1,10 @@
+name = QQ Music
+name_zh_cn = QQ音乐
+name_zh_tw = QQ音樂
+entry = main.lua
+kind = app
+category = media
+catalog_scope = community
+description = Unofficial QQ Music client for Cubic: QQ QR login, charts, MP3 and EQ
+description_zh_cn = 非官方 QQ 音乐客户端：QQ 扫码、榜单歌单、MP3 与均衡器
+version = 0.1.1

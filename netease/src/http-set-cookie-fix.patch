@@ -1,0 +1,31 @@
+diff --git a/src/nodemcu/http/lua_http.cpp b/src/nodemcu/http/lua_http.cpp
+--- a/src/nodemcu/http/lua_http.cpp
++++ b/src/nodemcu/http/lua_http.cpp
+@@ -3177,7 +3177,26 @@
+         for (size_t i = 0; i < headers.size(); ++i)
+         {
+             const HttpHeaderPair &pair = headers[i];
+-            lua_pushlstring(L, pair.value.c_str(), pair.value.length());
++            // Preserve all Set-Cookie values without changing Lua's string
++            // header API. A newline is an unambiguous separator (unlike comma,
++            // which is legal inside the Expires attribute).
++            if (pair.key.equalsIgnoreCase("set-cookie"))
++            {
++                lua_getfield(L, -1, pair.key.c_str());
++                if (lua_type(L, -1) == LUA_TSTRING)
++                {
++                    lua_pushliteral(L, "\n");
++                    lua_pushlstring(L, pair.value.c_str(), pair.value.length());
++                    lua_concat(L, 3);
++                }
++                else
++                {
++                    lua_pop(L, 1);
++                    lua_pushlstring(L, pair.value.c_str(), pair.value.length());
++                }
++            }
++            else
++                lua_pushlstring(L, pair.value.c_str(), pair.value.length());
+             lua_setfield(L, -2, pair.key.c_str());
+         }
+     }

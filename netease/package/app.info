@@ -1,0 +1,10 @@
+name = NetEase Music
+name_zh_cn = 网易云音乐
+name_zh_tw = 網易雲音樂
+entry = main.lua
+kind = app
+category = media
+catalog_scope = community
+description = QR login, PSRAM MP3 streaming, 5-band EQ and virtual bass
+description_zh_cn = 扫码登录、在线歌单、MP3 流播、五段均衡与虚拟低音
+version = 0.1.1

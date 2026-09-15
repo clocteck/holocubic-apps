@@ -1,0 +1,9 @@
+src/build/
+src/tests/build/
+**/__pycache__/
+*.pyc
+/package/boot-error.txt
+/package/qa-screen.png
+/package/session*.json
+/package/session*.bak
+/package/settings.json
