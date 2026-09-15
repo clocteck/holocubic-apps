@@ -1,7 +1,7 @@
 local SCREEN_W = 320
 local SCREEN_H = 240
 local SETTINGS_PATH = "/sd/apps/settings.json"
-local SETUP_SSID = "clocteck-cubic"
+local SETUP_SSID = "--"
 local SETUP_PORTAL = "192.168.18.1"
 local DEVICE_HOST = "clocteck-cubic.local"
 local FONT_DIR = "/sd/apps/wifi_guide/font"
@@ -74,20 +74,20 @@ local TEXT = {
   en = {
     waiting_eyebrow = "WAITING FOR NETWORK",
     waiting_title = "WiFi setup",
-    waiting_desc = "Connect to the device hotspot, then open the setup page",
-    hotspot = "HOTSPOT",
-    portal = "SETUP ADDRESS",
-    step1 = "Connect your phone or PC\nto the device hotspot",
-    step2 = "Wait for the page, or scan\nthe QR code to open it",
-    scan_setup = "SCAN TO SET UP",
+    waiting_desc = "Connect to the device AP, then scan to set up WiFi.",
+    hotspot = "AP",
+    portal = "SETUP IP",
+    step1 = "Join the AP shown above.",
+    step2 = "Scan the QR code or open\nthe setup IP.",
+    scan_setup = "Scan to set up",
     ready_eyebrow = "NETWORK READY",
     ready_title = "Setup complete",
-    ready_desc = "Use the IP or domain below to open the control page",
+    ready_desc = "Open device controls using the address or QR code.",
     wifi = "WIFI",
     signal = "SIGNAL",
     ip = "IP",
     domain = "DOMAIN",
-    scan_control = "SCAN CONTROL PAGE",
+    scan_control = "Open controls",
     qr_fallback = "Open the address below",
     unknown_wifi = "Connected WiFi",
     unknown_signal = "-- dBm",
@@ -104,20 +104,20 @@ local TEXT = {
   zh = {
     waiting_eyebrow = "等待网络连接",
     waiting_title = "等待配网",
-    waiting_desc = "连接设备热点，然后打开配网页面完成 WiFi 设置",
-    hotspot = "设备热点",
+    waiting_desc = "连接设备热点，扫码完成 WiFi 设置。",
+    hotspot = "AP",
     portal = "配网地址",
-    step1 = "手机或电脑连接上方\n设备热点",
-    step2 = "等待自动弹出页面，或\n扫码打开配网地址",
-    scan_setup = "扫码打开配网页",
+    step1 = "连接上方设备热点",
+    step2 = "扫描二维码，或打开\n配网地址",
+    scan_setup = "扫码配网",
     ready_eyebrow = "网络已连接",
     ready_title = "配网成功",
-    ready_desc = "可以使用以下 IP / 域名进入设备控制网页",
+    ready_desc = "使用下方地址或二维码打开控制页面。",
     wifi = "WiFi",
     signal = "信号",
     ip = "IP",
     domain = "域名",
-    scan_control = "扫码进入控制网页",
+    scan_control = "打开控制页面",
     qr_fallback = "请打开下方地址",
     unknown_wifi = "已连接 WiFi",
     unknown_signal = "-- dBm",
@@ -192,7 +192,7 @@ end
 local function uart_send(payload)
   if not uart or not uart.write then return false end
   local raw = json_encode(payload)
-  local ok = pcall(function() uart.write(0, UART_PREFIX, raw, "\n") end)
+  local ok = pcall(function() uart.write(0, UART_PREFIX .. raw .. "\n") end)
   return ok
 end
 
@@ -624,13 +624,33 @@ local function update_success_signal(db)
   update_signal_bars(db)
 end
 
+local function update_ap_identity(wifi_state)
+  local ssid = wifi_state and wifi_state.ap_ssid or nil
+  if (type(ssid) ~= "string" or ssid == "") and wifi and wifi.sta and wifi.sta.getmac then
+    -- Firmware uses the base/STA MAC suffix, not the AP MAC (which is +1).
+    local mac = safe_call(function() return wifi.sta.getmac() end)
+    local hex = type(mac) == "string" and mac:gsub("[^%x]", ""):upper() or ""
+    if #hex == 12 then ssid = "clocteck-cubic-" .. hex:sub(-4) end
+  end
+  if type(ssid) == "string" and ssid ~= "" then
+    SETUP_SSID = ssid
+    safe_set_text(UI.setup.hotspot, ssid)
+    if UI.setup.hotspot then
+      local font = ssid:find("[\128-\255]") and FONT_BODY or (LV_FONT_MONTSERRAT_12)
+      pcall(function() lv_obj_set_style_text_font(UI.setup.hotspot, font, LV_PART_MAIN or 0) end)
+    end
+  end
+end
+
 local function request_system_rssi(force)
-  if not STATE.connected or STATE.rssi_requesting or not http or not http.get then return end
+  if STATE.rssi_requesting or not http or not http.get then return end
   STATE.rssi_poll_tick = (STATE.rssi_poll_tick or 0) + 1
   if not force and STATE.rssi_poll_tick < 3 then return end
   STATE.rssi_poll_tick = 0
 
   local ip = wifi_ip()
+  if not looks_like_ip(ip) then ip = wifi_ap_ip() end
+  if not looks_like_ip(ip) then ip = SETUP_PORTAL end
   if not looks_like_ip(ip) then return end
   STATE.rssi_requesting = true
   local url = "http://" .. ip .. "/api/system/state"
@@ -642,6 +662,7 @@ local function request_system_rssi(force)
       if not codec or not codec.decode then return end
       local doc = safe_call(function() return codec.decode(body) end)
       local wifi_state = doc and doc.wifi or nil
+      update_ap_identity(wifi_state)
       local db = wifi_state and tonumber(wifi_state.sta_rssi) or nil
 
       -- Match the Web control page: prefer the first scan record with the
@@ -837,6 +858,24 @@ local function finish_uart_scan(id, networks)
   if STATE.uart_scan_timer then
     pcall(function() STATE.uart_scan_timer:unregister() end)
     STATE.uart_scan_timer = nil
+  end
+  if STATE.uart_scan_format == "items" then
+    uart_send({ id = id, status = "scan_begin", count = #networks })
+    local index = 0
+    STATE.uart_scan_timer = tmr.create()
+    STATE.uart_scan_timer:alarm(60, tmr.ALARM_AUTO, function(self)
+      index = index + 1
+      if index <= #networks then
+        uart_send({ id = id, status = "scan_item", index = index, network = networks[index] })
+      else
+        self:unregister()
+        STATE.uart_scan_timer = nil
+        STATE.uart_busy = false
+        uart_send({ id = id, status = "scan_result", chunked = true, count = #networks })
+        set_serial_status((STATE.language == "zh" and "已扫描到 " or "WiFi found: ") .. tostring(#networks), 0x34D399)
+      end
+    end)
+    return
   end
   STATE.uart_busy = false
   set_serial_status((STATE.language == "zh" and "已扫描到 " or "WiFi found: ") .. tostring(#networks), 0x34D399)
@@ -1088,6 +1127,7 @@ local function handle_uart_line(data)
   elseif command.cmd == "scan" then
     STATE.uart_session_active = true
     if show_serial then show_serial() end
+    STATE.uart_scan_format = command.scan_format
     uart_scan(id)
   elseif command.cmd == "provision" then
     STATE.uart_session_active = true
@@ -1120,61 +1160,62 @@ local function make_caption(parent, x, y, w, h, value)
   return label
 end
 
+-- Shared 320x240 layout from the approved four HTML previews.
+-- Chinese uses the bundled 13px font; give it explicit two-line areas.
+local function build_network_header(group, t, success)
+  local accent = success and 0x8CF2C5 or 0x67E8F9
+  local small = STATE.language == "en" and LV_FONT_MONTSERRAT_10 or FONT_SMALL
+  group.dot = make_panel(root, 12, 15, 6, 6, accent, 255, 3, 0, 0, 0)
+  group.eyebrow = make_label(root, 24, 10, 282, 17, success and t.ready_eyebrow or t.waiting_eyebrow, accent, small)
+  group.title = make_label(root, 12, 29, 296, 26, success and t.ready_title or t.waiting_title, 0xF7FBFF, FONT_TITLE)
+  group.description = make_label(root, 12, 58, 296, 24, success and t.ready_desc or t.waiting_desc, 0xA3B4C2, small)
+  group.network = make_panel(root, 12, 86, 296, 30, 0x000000, 255, 0, 0, 0, 0)
+  group.network_line = make_panel(root, 12, 115, 296, 1, 0x263A46, 255, 0, 0, 0, 0)
+  group.card = make_panel(root, 12, 124, 180, 110, 0x000000, 255, 0, 0, 0, 0)
+  group.qr_card = make_panel(root, 202, 118, 106, 112, 0x000000, 255, 0, 0, 0, 0)
+  return small
+end
+
 local function build_setup_ui()
+  update_ap_identity()
   local t = TEXT[STATE.language]
-  UI.setup.dot = make_panel(root, 14, 13, 8, 8, 0x22D3EE, 255, 4, 0, 0, 0)
-  UI.setup.eyebrow = make_label(root, 28, 10, 180, 14, t.waiting_eyebrow, 0x8CECF2, FONT_SMALL)
-  UI.setup.title = make_label(root, 14, 29, 190, 28, t.waiting_title, 0xF7FBFF, FONT_TITLE)
-  UI.setup.description = make_label(root, 14, 61, 292, 30, t.waiting_desc, 0x9FB0BE, FONT_SMALL)
-
-  UI.setup.card = make_panel(root, 14, 96, 190, 126, 0xFFFFFF, 12, 10, 1, 0x94B5C7, 46)
-  UI.setup.hotspot_label = make_label(UI.setup.card, 10, 8, 62, 16, t.hotspot, 0x718695, FONT_SMALL)
-  UI.setup.hotspot = make_label(UI.setup.card, 69, 8, 110, 16, SETUP_SSID, 0x8CECF2, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
-  UI.setup.divider1 = make_divider(UI.setup.card, 30)
-  UI.setup.portal_label = make_label(UI.setup.card, 10, 33, 62, 16, t.portal, 0x718695, FONT_SMALL)
-  UI.setup.portal = make_label(UI.setup.card, 69, 33, 110, 16, SETUP_PORTAL, 0x67E8F9, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
-  UI.setup.divider2 = make_divider(UI.setup.card, 55)
-
-  UI.setup.step1_badge = make_panel(UI.setup.card, 10, 64, 18, 18, 0x22D3EE, 25, 9, 1, 0x22D3EE, 86)
-  UI.setup.step1_number = make_label(UI.setup.step1_badge, 0, 1, 18, 16, "1", 0x67E8F9, FONT_SMALL, LV_TEXT_ALIGN_CENTER)
-  UI.setup.step1 = make_label(UI.setup.card, 35, 63, 144, 24, t.step1, 0xA9BAC6, FONT_SMALL)
-  UI.setup.step2_badge = make_panel(UI.setup.card, 10, 92, 18, 18, 0x22D3EE, 25, 9, 1, 0x22D3EE, 86)
-  UI.setup.step2_number = make_label(UI.setup.step2_badge, 0, 1, 18, 16, "2", 0x67E8F9, FONT_SMALL, LV_TEXT_ALIGN_CENTER)
-  UI.setup.step2 = make_label(UI.setup.card, 35, 91, 144, 24, t.step2, 0xA9BAC6, FONT_SMALL)
-
-  UI.setup.qr_card = make_panel(root, 206, 96, 104, 126, 0x0A1922, 224, 10, 1, 0x67E8F9, 61)
-  UI.setup.qr_frame, UI.setup.qr = make_qr(UI.setup.qr_card, 2, 2, 100, "http://" .. SETUP_PORTAL .. "/", t.qr_fallback)
-  UI.setup.qr_title = make_label(UI.setup.qr_card, 4, 102, 96, 12, t.scan_setup, 0xDFFBFF, FONT_SMALL, LV_TEXT_ALIGN_CENTER)
-  UI.setup.qr_target = make_label(UI.setup.qr_card, 4, 114, 96, 11, SETUP_PORTAL, 0x66808F, FONT_SMALL, LV_TEXT_ALIGN_CENTER)
+  local small = build_network_header(UI.setup, t, false)
+  UI.setup.hotspot_label = make_label(UI.setup.network, 0, 9, 22, 14, "AP", 0x91A8B8, LV_FONT_MONTSERRAT_10)
+  UI.setup.hotspot = make_label(UI.setup.network, 64, 7, 232, 18, SETUP_SSID, 0x67E8F9, LV_FONT_MONTSERRAT_12, LV_TEXT_ALIGN_LEFT)
+  update_ap_identity()
+  UI.setup.portal_label = make_label(UI.setup.card, 0, 0, 64, 18, t.portal, 0x879EAF, small)
+  UI.setup.portal = make_label(UI.setup.card, 64, 0, 116, 18, SETUP_PORTAL, 0xE6F3FA, LV_FONT_MONTSERRAT_12, LV_TEXT_ALIGN_LEFT)
+  UI.setup.divider1 = make_panel(UI.setup.card, 0, 22, 180, 1, 0x23323E, 255, 0, 0, 0, 0)
+  UI.setup.step1_badge = make_panel(UI.setup.card, 0, 31, 15, 15, 0x103440, 255, 7, 0, 0, 0)
+  UI.setup.step1_number = make_label(UI.setup.step1_badge, 0, 1, 15, 14, "1", 0x67E8F9, LV_FONT_MONTSERRAT_10, LV_TEXT_ALIGN_CENTER)
+  UI.setup.step1 = make_label(UI.setup.card, 22, 30, 158, 22, t.step1, 0xB6C7D3, small)
+  UI.setup.step2_badge = make_panel(UI.setup.card, 0, 58, 15, 15, 0x103440, 255, 7, 0, 0, 0)
+  UI.setup.step2_number = make_label(UI.setup.step2_badge, 0, 1, 15, 14, "2", 0x67E8F9, LV_FONT_MONTSERRAT_10, LV_TEXT_ALIGN_CENTER)
+  UI.setup.step2 = make_label(UI.setup.card, 22, 57, 158, 40, t.step2, 0xB6C7D3, small)
+  UI.setup.qr_frame, UI.setup.qr = make_qr(UI.setup.qr_card, 0, 0, 96, "http://" .. SETUP_PORTAL .. "/", t.qr_fallback)
+  UI.setup.qr_title = make_label(UI.setup.qr_card, 0, 99, 106, 16, t.scan_setup, 0xC2D6E3, small, LV_TEXT_ALIGN_LEFT)
 end
 
 local function build_success_ui()
   local t = TEXT[STATE.language]
-  UI.success.dot = make_panel(root, 14, 13, 8, 8, 0x34D399, 255, 4, 0, 0, 0)
-  UI.success.eyebrow = make_label(root, 28, 10, 180, 14, t.ready_eyebrow, 0x8CF2C5, FONT_SMALL)
-  UI.success.title = make_label(root, 14, 29, 210, 28, t.ready_title, 0xF7FBFF, FONT_TITLE)
-  UI.success.description = make_label(root, 14, 61, 292, 30, t.ready_desc, 0x9FB0BE, FONT_SMALL)
-
-  UI.success.card = make_panel(root, 14, 96, 190, 126, 0xFFFFFF, 12, 10, 1, 0x94B5C7, 46)
-  UI.success.wifi_label = make_label(UI.success.card, 10, 17, 48, 16, t.wifi, 0x718695, FONT_SMALL)
-  UI.success.wifi = make_label(UI.success.card, 58, 17, 121, 16, t.unknown_wifi, 0xEDF8FF, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
-  UI.success.divider1 = make_divider(UI.success.card, 39)
-  UI.success.signal_label = make_label(UI.success.card, 10, 42, 48, 16, t.signal, 0x718695, FONT_SMALL)
-  UI.success.signal = make_label(UI.success.card, 107, 42, 72, 16, t.unknown_signal, 0xEDF8FF, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
+  local small = build_network_header(UI.success, t, true)
+  UI.success.wifi_label = make_label(UI.success.network, 0, 7, 54, 18, t.wifi, 0x91A8B8, small)
+  UI.success.wifi = make_label(UI.success.network, 64, 7, 232, 18, t.unknown_wifi, 0x8CF2C5, FONT_SMALL, LV_TEXT_ALIGN_LEFT)
+  UI.success.signal_label = make_label(UI.success.card, 0, 0, 52, 18, t.signal, 0x879EAF, small)
+  UI.success.signal = make_label(UI.success.card, 102, 0, 78, 18, t.unknown_signal, 0x8CF2C5, LV_FONT_MONTSERRAT_12, LV_TEXT_ALIGN_LEFT)
   UI.success.signal_bars = {}
   local heights = { 4, 7, 10, 12 }
   for i = 1, 4 do
-    UI.success.signal_bars[i] = make_panel(UI.success.card, 58 + ((i - 1) * 8), 57 - heights[i], 5, heights[i], 0x48606E, 255, 2, 0, 0, 0)
+    UI.success.signal_bars[i] = make_panel(UI.success.card, 60, 0, 5, 4, 0x48606E, 255, 2, 0, 0, 0)
+    lv_obj_set_pos(UI.success.signal_bars[i], 64 + (i - 1) * 8, 14 - heights[i])
+    lv_obj_set_size(UI.success.signal_bars[i], 5, heights[i])
   end
-  UI.success.divider2 = make_divider(UI.success.card, 64)
-  UI.success.ip_label = make_label(UI.success.card, 10, 67, 48, 16, t.ip, 0x718695, FONT_SMALL)
-  UI.success.ip = make_label(UI.success.card, 58, 67, 121, 16, "--", 0x67E8F9, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
-  UI.success.divider3 = make_divider(UI.success.card, 89)
-  UI.success.domain_label = make_label(UI.success.card, 10, 92, 48, 16, t.domain, 0x718695, FONT_SMALL)
-  UI.success.domain = make_label(UI.success.card, 58, 92, 121, 16, DEVICE_HOST, 0x8CF2C5, FONT_SMALL, LV_TEXT_ALIGN_RIGHT)
-
-  UI.success.qr_card = make_panel(root, 206, 96, 104, 126, 0x0A1922, 224, 10, 1, 0x67E8F9, 61)
-  UI.success.qr_title = make_caption(UI.success.qr_card, 0, 104, 104, 18, t.scan_control)
+  UI.success.ip_label = make_label(UI.success.card, 0, 28, 32, 18, t.ip, 0x879EAF, small)
+  UI.success.ip = make_label(UI.success.card, 64, 28, 116, 18, "--", 0xE6F3FA, LV_FONT_MONTSERRAT_12, LV_TEXT_ALIGN_LEFT)
+  UI.success.divider1 = make_panel(UI.success.card, 0, 52, 180, 1, 0x23323E, 255, 0, 0, 0, 0)
+  UI.success.domain_label = make_label(UI.success.card, 0, 59, 190, 18, t.domain, 0x879EAF, small)
+  UI.success.domain = make_label(UI.success.card, 0, 80, 190, 18, DEVICE_HOST, 0x8CF2C5, LV_FONT_MONTSERRAT_12, LV_TEXT_ALIGN_LEFT)
+  UI.success.qr_title = make_label(UI.success.qr_card, 0, 99, 96, 16, t.scan_control, 0xC2D6E3, small, LV_TEXT_ALIGN_CENTER)
 end
 
 local function build_serial_ui()
@@ -1220,6 +1261,8 @@ end
 local function show_setup()
   STATE.connected = false
   STATE.screen = "setup"
+  update_ap_identity()
+  request_system_rssi(true)
   setup_uart()
   set_group_visible(UI.success, false)
   set_group_visible(UI.serial, false)
@@ -1233,7 +1276,7 @@ local function rebuild_success_qr(ip)
     UI.success.qr = nil
   end
   local target = "http://" .. ip .. "/"
-  UI.success.qr_frame, UI.success.qr = make_qr(UI.success.qr_card, 2, 2, 100, target, TEXT[STATE.language].qr_fallback)
+  UI.success.qr_frame, UI.success.qr = make_qr(UI.success.qr_card, 0, 0, 96, target, TEXT[STATE.language].qr_fallback)
 end
 
 local function show_success(ip)
@@ -1309,6 +1352,9 @@ local function check_state()
     end
   elseif STATE.connected or STATE.screen ~= "setup" then
     show_setup()
+  else
+    update_ap_identity()
+    request_system_rssi(false)
   end
 end
 
