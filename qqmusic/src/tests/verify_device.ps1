@@ -9,7 +9,7 @@ $start=State
 if (-not $start.logged_in) { throw 'Account library verification requires user login; no login was attempted.' }
 $restoreName=$start.song.name
 if ($start.page -eq 'login') { Control 'home' }
-foreach ($tab in @(4,5)) {
+foreach ($tab in @(4)) {
   Control 'library' @{tab=$tab}
   $deadline=[DateTime]::UtcNow.AddSeconds(22)
   do {

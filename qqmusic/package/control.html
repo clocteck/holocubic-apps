@@ -51,7 +51,7 @@ dialog{background:#101613;color:#eee;border:1px solid #315240;border-radius:18px
 </section>
 <section class="card">
   <div class="library-head"><h2>音乐库</h2><span id="pad" class="hint">手柄未连接</span></div>
-  <nav class="tabs" aria-label="选择音乐库"><button data-tab="1" class="active">热歌榜</button><button data-tab="2">新歌榜</button><button data-tab="3" hidden>收藏</button><button data-tab="4" hidden>每日推荐</button><button data-tab="5" hidden>最近播放</button></nav>
+  <nav class="tabs" aria-label="选择音乐库"><button data-tab="1" class="active">热歌榜</button><button data-tab="2">新歌榜</button><button data-tab="3" hidden>收藏</button><button data-tab="4" hidden>最近播放</button></nav>
   <form id="search-form" style="display:flex;gap:8px;margin-bottom:10px"><input id="query" maxlength="40" placeholder="搜索歌曲 / 歌手" aria-label="搜索关键词" style="min-width:0;flex:1;background:#171719;color:white;border:1px solid #252529;border-radius:8px;padding:8px"><button type="submit">搜索</button></form>
   <form id="playlist-form" hidden style="gap:8px;margin-bottom:10px"><input id="playlist-id" inputmode="numeric" pattern="[0-9]+" maxlength="20" placeholder="QQ 音乐歌单 ID" aria-label="歌单 ID" style="min-width:0;flex:1;background:#171719;color:white;border:1px solid #252529;border-radius:8px;padding:8px"><button type="submit">打开歌单</button></form>
   <p id="list-title" class="hint">游客可浏览榜单；播放权限由 QQ 音乐决定</p>
@@ -82,9 +82,10 @@ const fields=[
  ['vbass_out_hpf','输出高通',50,1199,1,' Hz'],['vbass_out_lpf','输出低通',51,1200,1,' Hz']];
 let state=null,dirty=false,listKey='',songId=null,lyricNodes=[],lyricLines=[],lyricActive=-2;
 let fetching=false,stopped=false,lyricsBusy=false,lastLyricsAt=0,coverUrl='',noticeTimer=0,coverAttempts=0,coverRetryAt=0;
+let lyricFetchGeneration=-1,lyricFetchStatus='';
 let qrRevision=null;
-const libraryNames=['','热歌榜','新歌榜','收藏','每日推荐','最近播放'];
-const libraryNotes=['','QQ 音乐热门歌曲','QQ 音乐新歌','我喜欢的音乐','今日私享','当前账号的本机播放记录'];
+const libraryNames=['','热歌榜','新歌榜','收藏','最近播放'];
+const libraryNotes=['','QQ 音乐热门歌曲','QQ 音乐新歌','我喜欢的音乐','当前账号的本机播放记录'];
 for(let i=0;i<bands.length;i++){
  const box=document.createElement('div');box.className='band';
  const label=document.createElement('label');label.htmlFor='eq'+i;label.textContent=bands[i]+' Hz';
@@ -151,9 +152,10 @@ async function lyrics(id){
  if(lyricsBusy)return;lyricsBusy=true;lastLyricsAt=Date.now();
  try{
   const data=await request('lyrics');
-  if(String(data.song_id)!==String(songId)||String(id)!==String(songId))return;
+  if(String(data.song_id)!==String(songId)||String(id)!==String(songId)||data.generation!==state?.lyric_generation)return;
+  lyricFetchGeneration=data.generation;lyricFetchStatus=data.status;
   lyricLines=Array.isArray(data.lines)?data.lines:[];lyricNodes=[];lyricActive=-2;$('lyrics').replaceChildren();
-  if(!lyricLines.length){const p=document.createElement('p');p.className='empty';p.textContent='暂无歌词 / 正在加载';$('lyrics').append(p);}
+  if(!lyricLines.length){const p=document.createElement('p');p.className='empty';p.textContent=data.status==='loading'?'加载中':'暂无歌词';$('lyrics').append(p);}
   else for(const line of lyricLines){const p=document.createElement('p');p.textContent=line.text;lyricNodes.push(p);$('lyrics').append(p);}
  }catch(e){/* Audio controls remain usable without lyrics. */}finally{lyricsBusy=false;}
 }
@@ -174,7 +176,7 @@ function render(s){
  renderCover(cover);
  const id=s.song?.id||0;
  if(String(id)!==String(songId)){songId=id;lyricLines=[];lyricNodes=[];lyricActive=-2;lastLyricsAt=0;$('lyrics').replaceChildren();}
- if(id&&(!lyricLines.length&&Date.now()-lastLyricsAt>4000))void lyrics(id);
+ if(id&&(lyricFetchGeneration!==s.lyric_generation||lyricFetchStatus!==s.lyric_status||(!lyricLines.length&&s.lyric_status==='loading'))&&Date.now()-lastLyricsAt>800)void lyrics(id);
  let active=-1;for(let i=0;i<lyricLines.length;i++){if(lyricLines[i].at>(s.position||0))break;active=i;}
  if(active!==lyricActive){lyricNodes.forEach((p,i)=>p.classList.toggle('active',i===active));lyricActive=active;
    if(active>=0)$('lyrics').scrollTop=lyricNodes[active].offsetTop-$('lyrics').offsetTop-$('lyrics').clientHeight/2+18;}

@@ -40,12 +40,17 @@ return function()
     lv_obj_clear_flag(o,LV_OBJ_FLAG_SCROLLABLE);return o
   end
   local bootfont=font('boot13',LV_FONT_MONTSERRAT_14)
-  local logo=lv_img_create(root);lv_img_set_src(logo,DIR..'main.png')
-  lv_img_set_pivot(logo,0,0);lv_img_set_zoom(logo,42);lv_obj_set_pos(logo,120,64)
+  local bootIcon=dofile(DIR..'boot_icon.lua').show(root,DIR)
+  U.boot_icon_loaded=bootIcon.ready;U.boot_icon_error=bootIcon.error
+  if not bootIcon.ready then
+    local logo=label(0,86,320,LV_FONT_MONTSERRAT_28,0xEC4141,40)
+    lv_obj_set_style_text_align(logo,LV_TEXT_ALIGN_CENTER,part);text(logo,'NETEASE')
+  end
   local bootlabel=label(0,165,320,bootfont,0xAAAAAA)
   lv_obj_set_style_text_align(bootlabel,LV_TEXT_ALIGN_CENTER,part);text(bootlabel,'启动中…')
   if lv_refr_now then pcall(lv_refr_now,nil)end
   local function build()
+    bootIcon.close()
     lv_obj_clean(root);U.cache={};U.hidden={};U.colors={};U.page=nil
     U.brand=label(12,9,186,U.small,0xEC4141,18)
     U.badge=label(196,9,112,U.small,0x888891,18)
@@ -210,6 +215,6 @@ return function()
     -- Reveal only after source, pivot, zoom and placement have been queued.
     hide(U.art,login or about or not U.artsource or (U.cover_error or '')~='')
   end
-  function U.close()lv_obj_clean(root);U.artdata=nil;U.artsource=nil;U.pending_qr=nil;for _,f in ipairs(U.fonts)do pcall(lv_font_free,f)end end
+  function U.close()bootIcon.close();lv_obj_clean(root);U.artdata=nil;U.artsource=nil;U.pending_qr=nil;for _,f in ipairs(U.fonts)do pcall(lv_font_free,f)end end
   return U
 end

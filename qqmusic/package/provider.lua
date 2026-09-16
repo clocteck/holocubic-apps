@@ -51,38 +51,49 @@ function M.song(s)
     ar=s.singer or {},al={name=album.name or s.albumname or '',picUrl=cover},
     dt=(tonumber(s.interval)or 0)*1000,media_mid=media.media_mid or mid,songtype=s.type or 0}
 end
-function M.new(native,net,json,storage,now)
+function M.new(native,net,json,storage,now,owner)
   local P={alive=true,busy=false,generation=0,diagnostics={},session={}}
-  local saved=storage.load('session')
+  local saved=not owner and storage.load('session')
   if type(saved)=='table'and type(saved.musicid)=='string'and saved.musicid:match('^%d+$')and
     type(saved.musickey)=='string'and #saved.musickey<8192 and not saved.musickey:find('[\r\n;]')then P.session=saved end
+  function P.fork(channel)return M.new(native,channel,json,storage,now,P)end
   function P.cancel()P.generation=P.generation+1;P.busy=false;P.finish=nil;net.cancel()end
   function P.raw(url,options,done)
     P.cancel();local g=P.generation;P.busy=true;options=options or {}
-    P.diagnostics={phase='request',operation=options.operation or 'api',started=now()}
+    P.diagnostics={phase='request',operation=options.operation or 'api',started=now(),retryable=false}
     local headers={['Accept-Encoding']='identity',['User-Agent']='Mozilla/5.0',Referer='https://y.qq.com/'}
     for k,v in pairs(options.headers or {})do headers[k]=v end
-    P.deadline=now()+(options.timeout or 12000)+8000
+    P.network_timeout=(options.timeout or 12000)+8000
     local c=net.create(url,{method=options.method or 'GET',body=options.body,async=true,timeout=options.timeout or 12000,
       bufsz=4096,max_redirects=0,headers=headers})
+    P.connection=c
     local chunks,bytes,status,response_headers={},0,0,{}
     local function finish(raw,err)
       if not P.alive or g~=P.generation then return end
       P.generation=P.generation+1;P.busy=false;P.finish=nil;P.diagnostics.phase=err and 'error'or 'complete'
+      P.diagnostics.total_ms=now()-P.diagnostics.started
       local ok=pcall(done,raw,err,status,response_headers)
       if not ok and P.on_error then P.on_error('QQ音乐响应处理失败')end
     end
     P.finish=finish
+    c:on('start',function()
+      if g~=P.generation then return end
+      P.diagnostics.phase='connecting';P.diagnostics.network_started=now()
+      P.diagnostics.queue_ms=now()-P.diagnostics.started
+    end)
     c:on('headers',function(code,h)
+      if g~=P.generation then c:close();return end
       status=code;response_headers=h or {};P.diagnostics.http=code
-      if code~=200 and not(options.redirect and (code==302 or code==303))then c:close();finish(nil,'QQ音乐 HTTP '..tostring(code))end
+      P.diagnostics.headers_ms=now()-(c.started_at or P.diagnostics.started)
+      if code~=200 and not(options.redirect and (code==302 or code==303))then P.diagnostics.retryable=code==408 or code==429 or code>=500;c:close();finish(nil,'QQ音乐 HTTP '..tostring(code))end
     end)
     c:on('data',function(_,chunk)
       if g~=P.generation then return end
+      if bytes==0 then P.diagnostics.first_byte_ms=now()-(c.started_at or P.diagnostics.started)end
       bytes=bytes+#chunk;if bytes>(options.limit or 262144)then chunks={};c:close();finish(nil,'响应超过内存上限');return end
       chunks[#chunks+1]=chunk
     end)
-    c:on('error',function()finish(nil,'QQ音乐连接失败，请重试')end)
+    c:on('error',function()P.diagnostics.retryable=true;finish(nil,'QQ音乐连接失败，请重试')end)
     c:on('complete',function()if status==0 then finish(nil,'QQ音乐未返回响应')else finish(table.concat(chunks))end end)
     c:request()
   end
@@ -93,6 +104,7 @@ function M.new(native,net,json,storage,now)
     if doc.code and doc.code~=0 then done(nil,'QQ音乐接口错误 '..tostring(doc.code));return end;done(doc)
   end
   function P.rpc(module,method,param,done,comm)
+    if owner then P.session=owner.session end
     local common={ct=24,cv=0,format='json',uin=P.session.musicid or '0',g_tk=M.hash33(P.session.musickey or '',5381)}
     if P.session.musickey then common.authst=P.session.musickey;common.tmeLoginType=P.session.login_type or 2 end
     for k,v in pairs(comm or {})do common[k]=v end
@@ -148,47 +160,22 @@ function M.new(native,net,json,storage,now)
       end)
     end)
   end
-  function P.daily(offset,done)
-    if not P.session.musicid then done(nil,'请先登录');return end
-    -- Publicly documented mac-web daily playlist entry. Do not substitute a chart.
-    P.raw('https://c.y.qq.com/node/musicmac/v6/index.html',{operation='daily',limit=262144,
-      headers={Cookie=M.cookie_header({uin=P.session.musicid,qqmusic_uin=P.session.musicid,qqmusic_key=P.session.musickey,qm_keyst=P.session.musickey})}},function(raw,e)
-        if not raw then done(nil,e);return end
-        local id
-        for block in raw:gmatch('<li[^>]*>(.-)</li>')do
-          if block:find('今日私享',1,true)or block:find('每日推荐',1,true)then
-            id=block:match('data%-rid=["\'](%d+)["\']');if id then break end
-          end
-        end
-        if not id then
-          local at=raw:find('playlist__item',1,true)
-          while at do
-            local next_at=raw:find('playlist__item',at+14,true)
-            local block=raw:sub(at,next_at and next_at-1 or #raw)
-            if block:find('今日私享',1,true)or block:find('每日推荐',1,true)then
-              id=block:match('data%-rid=["\'](%d+)["\']');if id then break end
-            end
-            at=next_at
-          end
-        end
-        P.diagnostics.daily_marker=raw:find('今日私享',1,true)~=nil or raw:find('每日推荐',1,true)~=nil
-        P.diagnostics.response_bytes=#raw
-        if not id then done(nil,'平台日推入口暂不兼容，未返回每日推荐');return end
-        P.playlist(id,offset,done)
-      end)
-  end
   function P.url(song,done)
+    if owner then P.session=owner.session end
     P.rpc('vkey.GetVkeyServer','CgiGetVkey',{guid='2796982635',songmid={song.mid},songtype={song.songtype or 0},
       uin=P.session.musicid or '0',loginflag=P.session.musickey and 1 or 0,platform='20',filename={'M500'..song.media_mid..'.mp3'}},function(d,e)
       local item=d and d.midurlinfo and d.midurlinfo[1];local purl=item and item.purl
       if type(purl)~='string'or purl==''then done(nil,e or '歌曲不可播：请登录并确认账号播放权限');return end
       if not purl:match('^M500[%w]+%.mp3%?')or purl:find('[\r\n]')then done(nil,'未返回完整标准 MP3，已拒绝试听或其他格式');return end
-      local base
+      local urls,seen={},{}
       for _,sip in ipairs(d.sip or {})do
         local h=sip:match('^https?://([^/]+)/$')
-        if h and h:match('%.stream%.qqmusic%.qq%.com$')then base=sip:gsub('^http:','https:');break end
+        if h and h:match('%.stream%.qqmusic%.qq%.com$')then
+          local url=sip:gsub('^http:','https:')..purl
+          if not seen[url]and #urls<3 then seen[url]=true;urls[#urls+1]=url end
+        end
       end
-      if not base then done(nil,'音频 CDN 不兼容');return end;done({url=base..purl})end)
+      if #urls==0 then done(nil,'音频 CDN 不兼容');return end;done({url=urls[1],urls=urls,expi=60})end)
   end
   function P.lyric(id,done)
     P.raw('https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?'..M.query({songmid=id,format='json',nobase64=1}),
@@ -243,7 +230,12 @@ function M.new(native,net,json,storage,now)
     P.cancel();P.session={};return true
   end
   function P.poll()
-    if P.busy and now()>(P.deadline or 0)then
+    local c=P.connection;local started=c and c.started_at
+    local expired=started and (now()-started>(P.network_timeout or 20000)or
+      (not P.diagnostics.first_byte_ms and now()-started>10000))or
+      (not started and now()-(P.diagnostics.started or now())>10000)
+    if P.busy and expired then
+      P.diagnostics.retryable=true
       local finish=P.finish;net.cancel();if finish then finish(nil,'QQ音乐请求超时，请重试')end end
   end
   function P.close()P.alive=false;P.cancel();P.session={}end

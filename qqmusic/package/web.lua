@@ -25,13 +25,20 @@ function M.new(A,S,player,provider,apiNet,streamNet,json,dir)
     end
     return {alive=A.alive,page=S.page,tab=S.tab,status=player.status,error=A.error,message=A.message,
       logged_in=A.uid~=nil,login_status=A.login and A.login.status or 'idle',login_mode=A.login and A.login.mode or 'qq',
-      login_revision=A.login and A.login.generation or 0,ui_ready=A.ui and A.ui.ready or false,ui_version=3,
+      login_revision=A.login and A.login.generation or 0,ui_ready=A.ui and A.ui.ready or false,ui_version=5,
       account=A.account or {name='游客'},catalog=A.catalog and A.catalog.state()or {},
       ui_cover_error=A.ui and A.ui.cover_error or '',
+      boot_icon_loaded=A.ui and A.ui.boot_icon_loaded or false,boot_icon_error=A.ui and A.ui.boot_icon_error or '',
       covers=A.covers and A.covers.state(View.cover(S,A))or {},
       device_time=A.clock_text or '--:--',clock_dst=A.clock_dst,
       ui_fonts=A.ui and #A.ui.fonts or 0,
       stats=player.stats or {},api=api_state,stream=stream_state,
+      playback_timing=player.metrics or {},url_resolution=A.resolver and A.resolver.state()or {},
+      playback_phase=A.resolver and A.resolver.foreground and 'resolving'or (player.metrics and player.metrics.phase or 'idle'),
+      url_request=A.url_provider and A.url_provider.diagnostics or {},
+      metadata_request=A.meta_provider and A.meta_provider.diagnostics or {},
+      lyric_status=A.lyric_loader and A.lyric_loader.status or 'idle',
+      lyric_generation=A.lyric_loader and A.lyric_loader.generation or 0,
       provider=provider.diagnostics,token=token,ready=A.control~=nil,revision=A.list_revision,
       config=A.config,controller=A.input and A.input.connected or false,
       list={title=A.list_title or '',items=items,cursor=S.cursor,tab_count=S.tab_count or 2},
@@ -52,7 +59,8 @@ function M.new(A,S,player,provider,apiNet,streamNet,json,dir)
       headers={['Cache-Control']='no-store',['X-Content-Type-Options']='nosniff'},body=raw or ''}
   end)
   route(httpd.GET,'/qqmusic/lyrics',function()
-    return response({song_id=A.song and A.song.id or 0,lines=A.lyrics or {}})
+    return response({song_id=A.song and A.song.id or 0,lines=A.lyrics or {},
+      status=A.lyric_loader and A.lyric_loader.status or 'idle',generation=A.lyric_loader and A.lyric_loader.generation or 0})
   end)
   route(httpd.POST,'/qqmusic/control',function(req)
     if not A.alive or not A.control then return response({ok=false,error='App 尚未就绪'},'503 Service Unavailable')end

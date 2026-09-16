@@ -29,8 +29,18 @@ function p.save_session()return true end
 function p.logout()p.cancel();p.cookie={};session=false;return true end
 function p.poll()end
 function p.close()end
+function p.fork()
+  local q={generation=0,busy=false,diagnostics={}}
+  function q.cancel()q.generation=q.generation+1;q.busy=false end
+  function q.poll()end
+  function q.close()end
+  function q.url(id,done)q.cancel();requests.url=(requests.url or 0)+1;done({url='https://example/'..id..'.mp3'})end
+  function q.lyric(id,done)q.cancel();done({lrc={lyric='[00:00]line'}})end
+  function q.details(ids,done)local songs={};for _,id in ipairs(ids)do songs[#songs+1]=song(id)end;done({songs=songs})end
+  return q
+end
 local ui={ready=true,render=function()end,load_next=function()return true end,qr=function()return true end,close=function()end}
-local covers={want=function()end,poll=function()end,close=function()end}
+local covers={want=function()end,poll=function()end,close=function()end,suspend=function()end}
 local replacements={
   ['ui.lua']=function()return ui end,
   ['transport.lua']={clock=function()return function()return clock end end,new=function()return net end},
@@ -71,6 +81,17 @@ assert(a.control({action='play_mode',mode='ordered'}))
 assert(a.control({action='select',index=3,list_revision=a.web_list.revision}))
 plays=player.plays;player.status='ended';timers[100]();assert(player.plays==plays)
 assert(a.control({action='refresh_library',tab=1}));assert(requests.likes==2)
+-- A browse transition while a URL is outstanding must not cancel playback.
+a.resolver.clear()
+local pending
+a.url_provider.url=function(id,done)pending=done end
+plays=player.plays
+assert(a.control({action='select',index=2,list_revision=a.web_list.revision}))
+local generation=a.play_generation
+assert(a.control({action='library',tab=2}))
+assert(a.play_generation==generation)
+pending({url='https://example/delayed.mp3'})
+assert(player.plays==plays+1)
 assert(a.control({action='logout'}))
 assert(not session and a.uid==nil and a.account==nil and #a.model.queue==0 and a.model.page=='login')
 assert(not a.web_list.ready and not a.library_cache.state()[1].ready and requests.qr==1)

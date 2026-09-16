@@ -55,7 +55,7 @@ function M.new(http,now)
     end
     function c:request()
       assert(not self.submitted and not self.finished,'HTTP request already submitted or closed')
-      self.submitted=true
+      self.submitted=true;self.submitted_at=now()
       if N.pending then N.pending:close() end
       if N.current then N.current:close() end
       N.pending=self
@@ -100,7 +100,12 @@ function M.new(http,now)
     c.in_callback=false
     if ok and result==http.DELAYACK and not c.cancelled then c.paused=true;return http.DELAYACK end
   end
-  function N.poll()
+  function N.poll(allow_start)
+    local pending=N.pending
+    if pending and now()-(pending.submitted_at or now())>(pending.options.queue_timeout or 10000)then
+      N.pending=nil;pending.finished=true;failure(pending,'HTTP queue timeout')
+      pending.callbacks={}
+    end
     if N.current then
       local c=N.current
       if c.cancelled and c.paused then c:close() end
@@ -110,7 +115,7 @@ function M.new(http,now)
       end
       return
     end
-    if not N.pending or now()<N.not_before then return end
+    if allow_start==false or not N.pending or now()<N.not_before then return end
     local c=N.pending;N.pending=nil
     if c.cancelled then return end
     N.current=c;c.started_at=now()
@@ -120,6 +125,7 @@ function M.new(http,now)
       for _,event in ipairs({'connect','headers','data','complete'}) do
         c.raw:on(event,function(...)return dispatch(c,event,...)end)
       end
+      if c.callbacks.start then c.callbacks.start()end
       c.raw:request()
     end)
     if not ok then

@@ -93,16 +93,16 @@ function M.new(net,provider,player,now,disk)
     local u=M.thumbnail(url);local item=u and C.cache[M.identity(u)]
     return item and item.data or nil,item
   end
-  function C.poll()
+  function C.suspend()
+    if C.active and not C.active.finished then C.active:close()end
+  end
+  function C.poll(allow_network)
     if C.active then
       if C.active.finished then C.active=nil;C.abort=nil
       elseif now()-(C.started_at or now())>12000 and C.abort then C.abort('timeout')end
-      return
     end
     if now()<(C.not_before or 0)then return end
     local st=player.stats or {}
-    if player.status=='buffering' then return end
-    if player.status=='playing' and (st.buffer_bytes or 0)<98304 then return end
     if disk and #save_queue>0 then
       local entry=table.remove(save_queue,1);disk.put(entry.url,entry.data);return
     end
@@ -116,10 +116,12 @@ function M.new(net,provider,player,now,disk)
       local data,info=disk.get(url)
       if data then info.data=data;put(url,info);C.last_error='';return end
     end
-    if provider.busy or net.current or net.pending then return end
+    if allow_network==false or player.status=='buffering'or
+      (player.status=='playing'and (st.buffer_bytes or 0)<32768)then return end
+    if C.active or provider.busy or net.current or net.pending then return end
     local attempts=((C.cache[M.identity(url)]or {}).attempts or 0)+1
     local c=net.create(url,{async=true,timeout=10000,bufsz=2048,max_redirects=0,
-      headers={['Accept-Encoding']='identity',['User-Agent']='CubicQQMusic/0.2'}})
+      headers={['Accept-Encoding']='identity',['User-Agent']='CubicQQMusic/1.0.0'}})
     C.active=c;C.requests=C.requests+1;C.started_at=now()
     local chunks,bytes,valid,status,expected={},0,true,0,nil
     local function bad(reason)

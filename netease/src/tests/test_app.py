@@ -5,6 +5,7 @@ from urllib.parse import parse_qs
 import json
 import math
 import random
+import re
 import struct
 import zlib
 from pathlib import Path
@@ -403,6 +404,24 @@ class LuaTests(unittest.TestCase):
 
     def test_player(self):
         self.lua.execute((ROOT/"src/tests/test_player.lua").read_text(encoding="utf-8"))
+    def test_playback_pipeline(self):
+        self.lua.execute((ROOT/"src/tests/test_playback_pipeline.lua").read_text(encoding="utf-8"))
+    def test_boot_icon_and_info(self):
+        self.lua.execute((ROOT/"src/tests/test_boot_icon.lua").read_text(encoding="utf-8"))
+        png=(ROOT/'package/main.png').read_bytes()
+        self.assertEqual(struct.unpack('>II',png[16:24]),(96,96))
+        bmp=(ROOT/'package/boot.bmp').read_bytes()
+        self.assertEqual(len(bmp),18498)
+        self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
+        html=(ROOT/'package/info.html').read_text(encoding='utf-8')
+        self.assertIn('href="/main"',html)
+        self.assertIn('v1.0.0',html)
+        self.assertIn('version = 1.0.0',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.0"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
+        self.assertIsNotNone(icon)
+        self.assertEqual(base64.b64decode(icon[1]),png)
+        self.assertIn('1.211',html)
 
     def test_input(self):
         self.lua.execute((ROOT/"src/tests/test_input.lua").read_text(encoding="utf-8"))

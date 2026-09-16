@@ -20,8 +20,13 @@ local function boot()
   local apiNet=Transport.new(http,now);local streamNet=Transport.new(http,now)
   local store=dofile(DIR..'/storage.lua').new(file,JSON)
   local provider=dofile(DIR..'/provider.lua').new(A.audio,apiNet,JSON,store,now);A.provider=provider
+  local urlNet,metaNet=Transport.new(http,now),Transport.new(http,now)
+  local urlProvider,metaProvider=provider.fork(urlNet),provider.fork(metaNet)
+  A.url_provider=urlProvider;A.meta_provider=metaProvider
+  local resolver=dofile(DIR..'/url_cache.lua').new(urlProvider,now,function(song,done)urlProvider.url(song.id,done)end)
+  A.resolver=resolver
   local player=dofile(DIR..'/player.lua').new(A.audio,streamNet,now);A.player=player
-  local lyricLoader=dofile(DIR..'/lyrics.lua').new(provider,now);A.lyric_loader=lyricLoader
+  local lyricLoader=dofile(DIR..'/lyrics.lua').new(metaProvider,now);A.lyric_loader=lyricLoader
   local View=dofile(DIR..'/ui_view.lua')
   local Library=dofile(DIR..'/library.lua')
   local Account=dofile(DIR..'/account.lua')
@@ -29,7 +34,7 @@ local function boot()
   local libraryCache=dofile(DIR..'/library_cache.lua').new(provider,Library,now);A.library_cache=libraryCache
   local Covers=dofile(DIR..'/covers.lua')
   local coverDisk=dofile(DIR..'/cover_disk.lua').new(file,Covers.image_size,nil,Covers.identity)
-  A.covers=Covers.new(apiNet,provider,player,now,coverDisk)
+  A.covers=Covers.new(metaNet,metaProvider,player,now,coverDisk)
   local browserList=dofile(DIR..'/web_list.lua').new();A.web_list=browserList
   A.web=dofile(DIR..'/web.lua').new(A,S,player,provider,apiNet,streamNet,JSON,DIR)
   local config=store.load('settings')or dofile(DIR..'/settings.lua')
@@ -102,7 +107,6 @@ local function boot()
     end)
   end
   open_library=function(force)
-    A.play_generation=A.play_generation+1
     local g=begin_view()
     A.list_title=Library.titles[S.tab];A.list_cover=nil
     browserList.begin(S.tab,A.list_title)
@@ -117,7 +121,8 @@ local function boot()
   play_index=function(index)
     if #S.queue==0 then A.message='请先从音乐库选择歌曲';render();return end
     A.play_generation=A.play_generation+1;local g=A.play_generation
-    A.view_generation=A.view_generation+1;provider.cancel();player.stop()
+    A.view_generation=A.view_generation+1;provider.cancel();metaProvider.cancel();resolver.cancel();A.covers.suspend();player.stop()
+    A.url_refreshed=false
     S.index=(index-1)%#S.queue+1;S.page='player'
     A.error='';A.message='获取播放地址…';A.lyric='';A.lyrics=nil;A.ended_handled=false
     local id=S.queue[S.index]
@@ -126,16 +131,16 @@ local function boot()
     local function fetch_url(song)
       if not valid()then return end
       A.song=song;A.artist=artist(song);render()
-      provider.url(id,function(item,e)
+      resolver.get(song,function(item,e)
         if not valid()then return end
         if not item then lyricLoader.cancel();failure(e);return end
-        A.message='';player.play(item.url);render()
+        A.message='';player.play(item);render()
         -- Lyrics are deliberately deferred until streaming has built a buffer.
         lyricLoader.enable()
       end)
     end
     if A.queue_cache and A.queue_cache[tostring(id)]then fetch_url(A.queue_cache[tostring(id)])
-    else provider.details({id},function(doc,e)
+    else urlProvider.details({id},function(doc,e)
       if not valid()then return end
       if not doc or not doc.songs or not doc.songs[1]then lyricLoader.cancel();failure(e or '歌曲信息不可用');return end
       fetch_url(doc.songs[1])
@@ -159,7 +164,7 @@ local function boot()
   end
   login=function()
     A.view_generation=A.view_generation+1;A.play_generation=A.play_generation+1
-    lyricLoader.cancel();player.stop();provider.cancel();S.page='login';A.qr_key=nil
+    lyricLoader.clear();resolver.clear();metaProvider.cancel();player.stop();provider.cancel();S.page='login';A.qr_key=nil
     A.error='';A.message='获取二维码…';U.qr(nil,A.audio);render()
     provider.qr_key(function(doc,e)
       if not A.alive then return end
@@ -278,13 +283,22 @@ local function boot()
   local timer=tmr.create();A.timers[#A.timers+1]=timer
   timer:alarm(100,tmr.ALARM_AUTO,function()
     if not A.alive then return end
-    apiNet.poll();provider.poll();player.poll()
+    provider.poll();metaProvider.poll();resolver.poll();player.poll()
     if A.settings_save_at and now()>=A.settings_save_at then
       A.settings_save_at=nil;local saved,e=store.save('settings',config)
       if not saved then failure(e)end
     end
     if app.exiting()then A.stop();return end
-    if player.status=='error'then A.error=player.error end
+    if player.status=='error'then
+      A.error=player.error
+      if player.error_kind=='cdn_auth'and not player.audible and not A.url_refreshed and A.song then
+        A.url_refreshed=true;local g=A.play_generation
+        resolver.get(A.song,function(item,e)
+          if not A.alive or g~=A.play_generation then return end
+          if item then A.error='';player.play(item)else failure(e)end
+        end,true)
+      end
+    end
     if player.status=='ended' and not A.ended_handled then
       A.ended_handled=true
       local next_index=PlayMode.step(config.play_mode,S.index,#S.queue,1,true)
@@ -309,18 +323,25 @@ local function boot()
       end
     end
     lyricLoader.poll(player.status~='buffering'and
-      ((player.stats and (player.stats.buffer_bytes or 0)>=65536)or player.status=='paused'))
+      not resolver.foreground and ((player.stats and (player.stats.buffer_bytes or 0)>=32768)or player.status=='paused'))
     A.lyrics=lyricLoader.lines;A.lyric_status=lyricLoader.status
     if A.lyrics then
       local text='';for _,line in ipairs(A.lyrics)do if line.at>(player.position or 0)then break end;text=line.text end
       A.lyric=text
     end
-    A.covers.poll()
-    local background=A.uid and not provider.busy and not apiNet.current and not apiNet.pending and
+    A.covers.poll(not resolver.foreground and lyricLoader.status~='loading')
+    local background=A.uid and not resolver.busy and not metaProvider.busy and not metaNet.current and not metaNet.pending and
+      not provider.busy and not apiNet.current and not apiNet.pending and
       lyricLoader.status~='loading'and player.status~='buffering'and
       (player.status~='playing'or (player.stats.buffer_bytes or 0)>=196608)and
       ((player.stats.psram_free or 0)==0 or player.stats.psram_free>=524288)
-    libraryCache.poll(A.uid,background,S.tab)
+    if background and player.status=='playing'and config.play_mode=='ordered'and S.index<#S.queue then
+      resolver.prefetch({id=S.queue[S.index+1]})
+    end
+    libraryCache.poll(A.uid,background and not resolver.busy,S.tab)
+    urlNet.poll()
+    metaNet.poll(not resolver.busy and not urlNet.current)
+    apiNet.poll(not resolver.busy and not metaNet.current and not metaNet.pending and player.status~='buffering')
     A.tab_covers=A.tab_covers or {}
     for tab=1,3 do local cover=libraryCache.cover(tab);if cover then A.tab_covers[tab]=cover end end
     render()
@@ -348,6 +369,9 @@ function A.stop()
   if A.library_cache then A.library_cache.clear()end
   if A.covers then pcall(A.covers.close)end
   if A.provider then pcall(A.provider.close)end
+  if A.resolver then A.resolver.clear()end
+  if A.url_provider then pcall(A.url_provider.close)end
+  if A.meta_provider then pcall(A.meta_provider.close)end
   if A.player then pcall(A.player.close)elseif A.audio then pcall(A.audio.close)end
   if A.ui then pcall(A.ui.close)end
   if A.version_cleanup then pcall(A.version_cleanup);A.version_cleanup=nil end

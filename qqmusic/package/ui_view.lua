@@ -18,7 +18,7 @@ function M.rate(stats)
   local rate=stats and (stats.output_rate or stats.source_rate)or 0
   return type(rate)=='number'and rate>0 and string.format('%gk',rate/1000)or '--k'
 end
-function M.lyrics(lines,position)
+function M.lyrics(lines,position,status)
   local current=0
   for i,line in ipairs(type(lines)=='table'and lines or {})do
     if line.at>position then break end
@@ -29,7 +29,7 @@ function M.lyrics(lines,position)
     local index=current+row-3
     result[row]=(lines and lines[index]and lines[index].text)or ''
   end
-  if not lines or #lines==0 then result[3]='暂无歌词' end
+  if not lines or #lines==0 then result[3]=status=='loading'and '加载中'or '暂无歌词' end
   return result,current
 end
 function M.cover(S,A)

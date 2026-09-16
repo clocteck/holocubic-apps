@@ -28,9 +28,9 @@ function M.protect_ids(raw)
   if last==1 then return raw end
   parts[#parts+1]=raw:sub(last);return table.concat(parts)
 end
-function M.new(native,net,json,storage,now)
+function M.new(native,net,json,storage,now,owner)
   local P={cookie={},generation=0,busy=false,alive=true,diagnostics={}}
-  local saved=storage.load('session')
+  local saved=not owner and storage.load('session')
   if saved and type(saved.cookie)=='table' then
     for k,v in pairs(saved.cookie)do
       if type(k)=='string' and type(v)=='string' and #v<16384 and not v:find('[\r\n;]')then P.cookie[k]=v end
@@ -58,13 +58,15 @@ function M.new(native,net,json,storage,now)
     end
     return table.concat(parts,'; ')
   end
+  function P.fork(channel)return M.new(native,channel,json,storage,now,P)end
   function P.cancel()
     P.generation=P.generation+1;P.busy=false;P.timeout=nil;net.cancel()
   end
   function P.request(path,data,done,limit)
     if not P.alive then return end
+    if owner then P.cookie=owner.cookie end
     P.cancel();local generation=P.generation;P.busy=true
-    P.diagnostics={path=path,phase='encrypt',started=now()}
+    P.diagnostics={path=path,phase='encrypt',started=now(),retryable=false}
     data.e_r=false
     data.header={os='pc',appver='3.1.17.204416',osver='Microsoft-Windows-10',
       deviceId='CubicESP32S3',channel='netease',resolution='320x240',
@@ -88,11 +90,13 @@ function M.new(native,net,json,storage,now)
       headers={['Content-Type']='application/x-www-form-urlencoded',
         ['Accept-Encoding']='identity',Cookie=cookie_header(),
         ['User-Agent']='NeteaseMusicDesktop/3.1.17.204416',Referer='https://music.163.com/'}})
+    P.connection=c
     local chunks,bytes,status={},0,0
     local function finish(doc,error)
       if not P.alive or generation~=P.generation then return end
       P.generation=P.generation+1;P.busy=false;P.timeout=nil
       P.diagnostics.phase=error and 'error' or 'complete'
+      P.diagnostics.total_ms=now()-P.diagnostics.started
       local good=pcall(done,doc,error)
       if not good then
         P.diagnostics.phase='callback_error'
@@ -100,26 +104,34 @@ function M.new(native,net,json,storage,now)
       end
     end
     P.timeout=function()
+      P.diagnostics.retryable=true
       net.cancel();finish(nil,'网易云请求超时')
     end
+    c:on('start',function()
+      if generation~=P.generation then return end
+      P.diagnostics.phase='connecting';P.diagnostics.network_started=now()
+      P.diagnostics.queue_ms=now()-P.diagnostics.started
+    end)
     c:on('headers',function(code,h)
       if generation~=P.generation then c:close();return end
       status=code;cookies(h)
       P.diagnostics.http=code;P.diagnostics.phase='headers'
+      P.diagnostics.headers_ms=now()-(c.started_at or P.diagnostics.started)
       P.diagnostics.has_music_u=P.cookie.MUSIC_U~=nil
       P.diagnostics.has_csrf=P.cookie.__csrf~=nil
-      if code~=200 then c:close();finish(nil,'网易云 HTTP '..tostring(code))end
+      if code~=200 then P.diagnostics.retryable=code==408 or code==429 or code>=500;c:close();finish(nil,'网易云 HTTP '..tostring(code))end
     end)
     c:on('data',function(code,chunk)
       if generation~=P.generation then c:close();return end
       if code~=200 then return end
+      if bytes==0 then P.diagnostics.first_byte_ms=now()-(c.started_at or P.diagnostics.started)end
       bytes=bytes+#chunk
       if bytes>(limit or 262144) then
         c:close();chunks={};finish(nil,'响应超过内存上限，请缩小歌单');return
       end
       chunks[#chunks+1]=chunk
     end)
-    c:on('error',function()finish(nil,'网易云连接失败，请重试')end)
+    c:on('error',function()P.diagnostics.retryable=true;finish(nil,'网易云连接失败，请重试')end)
     c:on('complete',function()
       if generation~=P.generation then return end
       if status~=200 then finish(nil,'网易云未返回有效响应');return end
@@ -143,7 +155,12 @@ function M.new(native,net,json,storage,now)
     return storage.save('session',{version=1,cookie=P.cookie})
   end
   function P.poll()
-    if P.busy and now()-(P.diagnostics.started or now())>20000 then
+    local c=P.connection
+    local started=c and c.started_at
+    local expired=started and (now()-started>20000 or
+      (not P.diagnostics.first_byte_ms and now()-started>10000))or
+      (not started and now()-(P.diagnostics.started or now())>10000)
+    if P.busy and expired then
       if P.timeout then P.timeout()
       else P.cancel();if P.on_error then P.on_error('网易云请求超时，Home 重试')end end
     end

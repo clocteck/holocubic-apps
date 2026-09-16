@@ -1,4 +1,7 @@
 import json
+import struct
+import base64
+import re
 import unittest
 from pathlib import Path
 from lupa import LuaRuntime, lua_type
@@ -50,6 +53,28 @@ class Host:
 
 class AppTests(unittest.TestCase):
     def setUp(self): self.h=Host()
+    def test_playback_pipeline(self):
+        self.h.lua.globals().ROOT=str(ROOT).replace('\\','/')
+        self.h.run((ROOT/'src/tests/test_playback_pipeline.lua').read_text(encoding='utf-8'))
+    def test_main_pipeline(self):
+        self.h.run((ROOT/'src/tests/test_main_pipeline.lua').read_text(encoding='utf-8'))
+    def test_boot_icon_and_info(self):
+        self.h.lua.globals().ROOT=str(ROOT).replace('\\','/')
+        self.h.run((ROOT/'src/tests/test_boot_icon.lua').read_text(encoding='utf-8'))
+        png=(ROOT/'package/main.png').read_bytes()
+        self.assertEqual(struct.unpack('>II',png[16:24]),(96,96))
+        bmp=(ROOT/'package/boot.bmp').read_bytes()
+        self.assertEqual(len(bmp),18498)
+        self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
+        html=(ROOT/'package/info.html').read_text(encoding='utf-8')
+        self.assertIn('href="/main"',html)
+        self.assertIn('v1.0.0',html)
+        self.assertIn('version = 1.0.0',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.0"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        self.assertNotIn('每日推荐',html)
+        icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
+        self.assertIsNotNone(icon)
+        self.assertEqual(base64.b64decode(icon[1]),png)
     def test_firmware_gate_and_home_link(self):
         self.h.run((ROOT/'src/tests/test_firmware_gate.lua').read_text(encoding='utf-8'))
         self.assertRegex((ROOT/'package/control.html').read_text(encoding='utf-8'),r'<a href="/main"[^>]*>回到主页</a>')
@@ -95,7 +120,13 @@ class AppTests(unittest.TestCase):
     def test_navigation(self):
         self.h.run("local S=dofile('model.lua').new(); S.page='library'; S.direction('horizontal',1); assert(S.tab==2); assert(S.home()=='library')")
     def test_guest_navigation_wrap(self):
-        self.h.run("local S=dofile('model.lua').new(); S.page='library'; S.tab=2; S.direction('horizontal',1); assert(S.tab==1); S.tab_count=5; S.tab=5; S.direction('horizontal',1); assert(S.tab==1)")
+        self.h.run("local S=dofile('model.lua').new(); S.page='library'; S.tab=2; S.direction('horizontal',1); assert(S.tab==1); S.tab_count=#dofile('library.lua').titles; assert(S.tab_count==4); S.tab=4; S.direction('horizontal',1); assert(S.tab==1); S.direction('horizontal',-1); assert(S.tab==4)")
+    def test_daily_removed(self):
+        self.h.run("assert(P.daily==nil); assert(table.concat(dofile('library.lua').titles,',')=='热歌榜,新歌榜,收藏,最近播放')")
+        for name in ('main.lua','provider.lua','control.html','library.lua'):
+            source=(ROOT/'package'/name).read_text(encoding='utf-8')
+            self.assertNotIn('daily',source)
+            self.assertNotIn('每日推荐',source)
     def test_playback_modes_and_blank_lyrics(self):
         self.h.run(r'''local B=dofile('playback.lua')
           assert(B.next_index(3,3,'sequence',true)==1)

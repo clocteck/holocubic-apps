@@ -9,7 +9,10 @@ class Element{
 }
 const html=fs.readFileSync(path.join(__dirname,'../../package/control.html'),'utf8');const elements={};
 for(const m of html.matchAll(/\bid="([^"]+)"/g))elements[m[1]]=new Element();
-const tabs=Array.from({length:5},(_,i)=>{const e=new Element('button');e.dataset.tab=String(i+1);return e;});
+const tabs=Array.from(html.matchAll(/data-tab="(\d+)"/g),m=>{const e=new Element('button');e.dataset.tab=m[1];return e;});
+assert.deepStrictEqual(tabs.map(e=>e.dataset.tab),['1','2','3','4']);
+assert(!html.includes('每日推荐'));
+assert.strictEqual(new URL(html.match(/href="([^"]+)"[^>]*>回到主页/)[1],'http://192.168.0.226/qqmusic/').href,'http://192.168.0.226/main');
 const modes=['sequence','random','single'].map(mode=>{const e=new Element('button');e.dataset.mode=mode;return e;});
 const login=['qq','wx'].map(mode=>{const e=new Element('button');e.dataset.login=mode;return e;});
 const document={getElementById:id=>elements[id],createElement:t=>new Element(t),createTextNode:t=>({textContent:t}),hidden:false,
@@ -25,6 +28,9 @@ assert.strictEqual(elements.list.children,rows,'playing must retain DOM rows');a
 sandbox.fixture={...base,logged_in:true,account:{name:'测试账户',login_type:1,membership:{name:'超级会员',active:true}},page:'player'};vm.runInContext('render(fixture)',sandbox);
 assert(tabs.every(x=>!x.hidden),'login automatically reveals account columns');assert(elements.connection.textContent.includes('测试账户'));
 assert(elements['account-membership'].textContent.includes('超级会员'));
+sandbox.fixture={...base,logged_in:true,tab:4};vm.runInContext('render(fixture)',sandbox);
+assert(elements['list-title'].textContent.includes('最近播放'));
+assert(elements['list-title'].textContent.includes('本机'));
 sandbox.fixture={...base,page:'login',login_mode:'wx',login_status:'waiting',login_revision:4};vm.runInContext('render(fixture)',sandbox);
 assert(elements['qr-instruction'].textContent.includes('微信'));assert(elements.confirm.textContent.includes('跳过'));
 assert.strictEqual(elements['qr-panel'].hidden,false);

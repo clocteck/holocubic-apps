@@ -13,18 +13,24 @@ local function boot()
   local apiNet,streamNet=T.new(http,now),T.new(http,now)
   local store=dofile(DIR..'/storage.lua').new(file,JSON)
   local provider=dofile(DIR..'/provider.lua').new(A.audio,apiNet,JSON,store,now);A.provider=provider
+  local urlNet,metaNet=T.new(http,now),T.new(http,now)
+  local urlProvider,metaProvider=provider.fork(urlNet),provider.fork(metaNet)
+  A.url_provider=urlProvider;A.meta_provider=metaProvider
+  local resolver=dofile(DIR..'/url_cache.lua').new(urlProvider,now,function(song,done)urlProvider.url(song,done)end)
+  A.resolver=resolver
   local login=dofile(DIR..'/login.lua').new(provider,now);A.login=login
   local player=dofile(DIR..'/player.lua').new(A.audio,streamNet,now);A.player=player
+  local lyricLoader=dofile(DIR..'/lyrics.lua').new(metaProvider,now);A.lyric_loader=lyricLoader
   local View=dofile(DIR..'/ui_view.lua');local Library=dofile(DIR..'/library.lua')
   local Playback=dofile(DIR..'/playback.lua')
   local Covers=dofile(DIR..'/covers.lua')
-  A.covers=Covers.new(apiNet,provider,player,now,dofile(DIR..'/cover_disk.lua').new(file,Covers.image_size,nil,Covers.identity))
+  A.covers=Covers.new(metaNet,metaProvider,player,now,dofile(DIR..'/cover_disk.lua').new(file,Covers.image_size,nil,Covers.identity))
   local Effects=dofile(DIR..'/effects.lua');local defaults=dofile(DIR..'/settings.lua')
   local config=store.load('settings')or defaults
   local valid=Effects.validate(defaults,config);config=valid or defaults;A.config=config
   local ok,err=Effects.apply(A.audio,config);assert(ok,err)
   A.uid=provider.session.musicid;A.nickname=provider.session.nickname or '游客'
-  S.tab_count=A.uid and 5 or 2
+  S.tab_count=A.uid and #Library.titles or 2
   local Catalog=dofile(DIR..'/catalog.lua')
   local catalog=Catalog.new(provider,now,store,function()local ok,t=pcall(time.get);return ok and tonumber(t)or 0 end)
   A.catalog=catalog;catalog.reset(A.uid~=nil)
@@ -35,6 +41,7 @@ local function boot()
   recent.songs=type(recent.songs)=='table'and recent.songs or {}
   local function render()
     if not A.alive then return end
+    A.lyrics=lyricLoader.lines;A.lyric_status=lyricLoader.status
     if not A.clock_at or now()>=A.clock_at then A.clock_at=now()+1000;A.clock_text,A.clock_dst=View.clock(time)end
     local cover=View.cover(S,A);A.covers.want(cover and {cover}or {});U.render(S,A)
   end
@@ -49,8 +56,8 @@ local function boot()
   end
   load_page=function(offset)
     A.list_revision=A.list_revision+1
-    leave_login();A.view_generation=A.view_generation+1;A.play_generation=A.play_generation+1
-    local g=A.view_generation;provider.cancel();A.pending_lyric=nil
+    leave_login();A.view_generation=A.view_generation+1
+    local g=A.view_generation;provider.cancel()
     browsing.offset=offset;S.page='songs';S.items={};S.cursor=1;A.error='';A.message='加载中…';render()
     local function accept(d,e)
       if not A.alive or g~=A.view_generation then return end
@@ -71,7 +78,6 @@ local function boot()
     if browsing.kind=='search'then provider.search(browsing.query,offset//20+1,accept)
     elseif browsing.kind=='playlist'then provider.playlist(browsing.id,offset,accept)
     elseif browsing.kind=='favorites'then provider.favorites(offset,accept)
-    elseif browsing.kind=='daily'then provider.daily(offset,accept)
     elseif browsing.kind=='recent'then
       local songs={};for i=offset+1,math.min(offset+20,#recent.songs)do songs[#songs+1]=recent.songs[i]end
       accept({songs=songs,total=#recent.songs})
@@ -81,27 +87,28 @@ local function boot()
     A.list_title=Library.titles[S.tab]
     if S.tab>2 and not A.uid then S.tab=1;failure('请先登录');return end
     if S.tab==3 then browsing={kind='favorites'}
-    elseif S.tab==4 then browsing={kind='daily'}
-    elseif S.tab==5 then browsing={kind='recent'};A.list_title='最近播放 · 本机'
+    elseif S.tab==4 then browsing={kind='recent'};A.list_title='最近播放 · 本机'
     else browsing={kind='top',id=Library.topids[S.tab]}end
     load_page(0)
   end
   play_index=function(index)
     if #S.queue==0 then A.message='请先从音乐库选择歌曲';render();return end
     leave_login();A.play_generation=A.play_generation+1;A.view_generation=A.view_generation+1
-    local g=A.play_generation;provider.cancel();player.stop();A.pending_lyric=nil
+    local g=A.play_generation;provider.cancel();metaProvider.cancel();resolver.cancel();A.covers.suspend();player.stop()
+    A.url_refreshed=false
     S.index=(index-1)%#S.queue+1;S.page='player';A.song=S.queue[S.index]
     local names={};for _,ar in ipairs(A.song.ar or {})do names[#names+1]=ar.name or ''end;A.artist=table.concat(names,' / ')
+    lyricLoader.start(A.song.id)
     A.lyrics=nil;A.lyric='';A.error='';A.message='获取播放地址…';A.ended_handled=false;A.recorded=false;render()
-    provider.url(A.song,function(item,e)
+    resolver.get(A.song,function(item,e)
       if not A.alive or g~=A.play_generation then return end
-      if not item then failure(e);return end
-      A.message='';player.play(item.url);A.pending_lyric={id=A.song.id,generation=g};render()
+      if not item then lyricLoader.cancel();failure(e);return end
+      A.message='';player.play(item);lyricLoader.enable();render()
     end)
   end
   start_login=function(mode)
     A.view_generation=A.view_generation+1;A.play_generation=A.play_generation+1
-    A.pending_lyric=nil;player.stop();A.error='';A.message='正在获取登录二维码';S.page='login';U.qr(nil,A.audio);render()
+    lyricLoader.clear();resolver.clear();metaProvider.cancel();player.stop();A.error='';A.message='正在获取登录二维码';S.page='login';U.qr(nil,A.audio);render()
     login.start(function(status,e)
       if not A.alive or S.page~='login'then return end
       local appname=login.mode=='wx'and '微信'or '手机 QQ'
@@ -111,7 +118,7 @@ local function boot()
         local good,why=U.qr(login.image,A.audio);if not good then failure(why);login.cancel();return end
       elseif status=='expired'or status=='error'then U.qr(nil,A.audio)
       elseif status=='done'then
-        U.qr(nil,A.audio);A.uid=provider.session.musicid;A.nickname=provider.session.nickname;S.tab_count=5;S.page='library'
+        U.qr(nil,A.audio);A.uid=provider.session.musicid;A.nickname=provider.session.nickname;S.tab_count=#Library.titles;S.page='library'
         if recent.owner~=A.uid then recent={owner=A.uid,songs={}}end
         catalog.reset(true);A.account={name=A.nickname,login_type=provider.session.login_type or 2,membership={name='未知',known=false},loading=true}
         account_stage='profile';S.tab=3;open_library()
@@ -119,8 +126,8 @@ local function boot()
     end,mode)
   end
   local function back()
-    leave_login();A.view_generation=A.view_generation+1;A.play_generation=A.play_generation+1
-    provider.cancel();A.pending_lyric=nil;S.page='library';A.message='';A.error='';render()
+    leave_login();A.view_generation=A.view_generation+1
+    provider.cancel();S.page='library';A.message='';A.error='';render()
   end
   local function action(cmd)
     if cmd=='previous'then play_index(S.index-1)
@@ -212,10 +219,19 @@ local function boot()
   timer(100,function()
     if not A.alive then return end
     if app.exiting()then A.stop();return end
-    apiNet.poll();provider.poll();player.poll();if S.page=='login'then login.poll()end
+    provider.poll();metaProvider.poll();resolver.poll();player.poll();if S.page=='login'then login.poll()end
     if A.settings_save_at and now()>=A.settings_save_at then
       A.settings_save_at=nil;local saved,e=store.save('settings',config);if not saved then failure(e)end end
-    if player.status=='error'then A.error=player.error end
+    if player.status=='error'then
+      A.error=player.error
+      if player.error_kind=='cdn_auth'and not player.audible and not A.url_refreshed and A.song then
+        A.url_refreshed=true;local g=A.play_generation
+        resolver.get(A.song,function(item,e)
+          if not A.alive or g~=A.play_generation then return end
+          if item then A.error='';player.play(item)else failure(e)end
+        end,true)
+      end
+    end
     if A.uid and A.song and player.status=='playing'and not A.recorded then
       A.recorded=true
       for i=#recent.songs,1,-1 do if recent.songs[i].id==A.song.id then table.remove(recent.songs,i)end end
@@ -227,18 +243,18 @@ local function boot()
     end
     if player.status=='ended'and not A.ended_handled then
       A.ended_handled=true;play_index(Playback.next_index(S.index,#S.queue,config.play_mode,true))end
-    if A.pending_lyric and not provider.busy and player.stats and player.stats.buffer_bytes>=65536 then
-      local pending=A.pending_lyric;A.pending_lyric=nil
-      provider.lyric(pending.id,function(doc)
-        if not A.alive or pending.generation~=A.play_generation then return end
-        local raw=doc and doc.lrc and doc.lrc.lyric;if type(raw)~='string'then return end
-        A.lyrics=Playback.lyrics(raw)
-      end)
-    end
+    lyricLoader.poll(not resolver.foreground and player.status~='buffering'and
+      ((player.stats.buffer_bytes or 0)>=32768 or player.status=='paused'))
+    A.lyrics=lyricLoader.lines
     if A.lyrics then A.lyric='';for _,line in ipairs(A.lyrics)do if line.at>(player.position or 0)then break end;A.lyric=line.text end end
-    local available=S.page~='login'and U.ready and not provider.busy and not apiNet.current and not apiNet.pending
-      and not A.pending_lyric and player.status~='buffering'
+    A.covers.poll(not resolver.foreground and lyricLoader.status~='loading'and S.page~='login')
+    local available=S.page~='login'and U.ready and not resolver.busy and not metaProvider.busy and not metaNet.current and not metaNet.pending
+      and not provider.busy and not apiNet.current and not apiNet.pending
+      and lyricLoader.status~='loading'and player.status~='buffering'
       and (player.status~='playing'or (player.stats.buffer_bytes or 0)>=196608)
+    if available and player.status=='playing'and config.play_mode=='sequence'and #S.queue>0 then
+      resolver.prefetch(S.queue[S.index%#S.queue+1]);available=not resolver.busy
+    end
     if available and account_active then account_stage=account_active;account_active=nil end
     if available and account_stage and A.uid then
       local stage=account_stage;local owner=A.uid;account_stage=nil
@@ -255,7 +271,10 @@ local function boot()
         if d then A.account.membership=d end;A.account.loading=false;A.account.error=e or A.account.error
       end)end
     elseif available then catalog.poll()end
-    if S.page~='login'then A.covers.poll()end;render()
+    urlNet.poll()
+    metaNet.poll(not resolver.busy and not urlNet.current)
+    apiNet.poll(not resolver.busy and not metaNet.current and not metaNet.pending and player.status~='buffering')
+    render()
   end)
   A.message=A.uid and '已恢复保存的会话'or '游客浏览 · 说明页 Home 扫码登录'
   if not A.uid then start_login('qq')else S.tab=3;open_library()end
@@ -272,6 +291,10 @@ function A.stop()
   if A.login then pcall(A.login.cancel)end
   if A.covers then pcall(A.covers.close)end
   if A.provider then pcall(A.provider.close)end
+  if A.lyric_loader then A.lyric_loader.clear()end
+  if A.resolver then A.resolver.clear()end
+  if A.url_provider then pcall(A.url_provider.close)end
+  if A.meta_provider then pcall(A.meta_provider.close)end
   if A.player then pcall(A.player.close)elseif A.audio then pcall(A.audio.close)end
   if A.ui then pcall(A.ui.close)end
   if A.version_cleanup then pcall(A.version_cleanup);A.version_cleanup=nil end

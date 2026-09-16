@@ -30,6 +30,7 @@ typedef struct {
   esp_audio_simple_dec_handle_t decoder;
   void *task, *i2s;
   uint8_t *ring, *input, *output;
+  void *lua_result; /* Owned until Lua string copy succeeds; survives Lua OOM. */
   uint32_t read_pos,write_pos;
   int16_t *pcm;
   volatile uint32_t wr, rd;
@@ -60,7 +61,7 @@ static const module_manifest_t manifest = {MODULE_MANIFEST_MAGIC,
                                            MODULE_SDK_VERSION,
                                            sizeof(module_manifest_t),
                                            "ncm_music",
-                                           "0.1.0",
+                                           "1.0.0",
                                            "Independent PSRAM ncm_music decoder",
                                            0,
                                            MODULE_BOOTSTRAP_ABI_VERSION};
@@ -404,8 +405,15 @@ static bool stop(Music *r) {
   r->task = NULL;
   return true;
 }
+static void clear_lua_result(Music *r) {
+  if (r->lua_result) {
+    r->host.heap.free(r->lua_result);
+    r->lua_result = NULL;
+  }
+}
 static int close_l(lua_State *L) {
   Music *r = self(L);
+  clear_lua_result(r);
   if (!stop(r))
     return fail(L, "worker still stopping");
   r->status = 0;
@@ -553,20 +561,25 @@ static int effects_l(lua_State *L) {
   H->lua.pushboolean(L,1);return 1;
 }
 static int eapi_l(lua_State *L) {
+  Music *r=self(L);clear_lua_result(r);
   size_t n; const char *path=H->lua.checkstring(L,1);
   const char *json=H->lua.checklstring(L,2,&n);
   if (strlen(path)>256 || n>32768) return fail(L,"request too large");
   char *body=ncm_eapi(path,json,n);
   if (!body) return fail(L,"EAPI allocation/encryption failed");
-  H->lua.pushstring(L,body); free(body); return 1;
+  r->lua_result=body;
+  H->lua.pushstring(L,body);clear_lua_result(r);return 1;
 }
 static int weapi_l(lua_State *L) {
+  Music *r=self(L);clear_lua_result(r);
   size_t n;const char *json=H->lua.checklstring(L,1,&n);
   char *body=ncm_weapi(json,n);
   if(!body)return fail(L,"WEAPI encoding failed");
-  H->lua.pushstring(L,body);free(body);return 1;
+  r->lua_result=body;
+  H->lua.pushstring(L,body);clear_lua_result(r);return 1;
 }
 static int qr_l(lua_State *L) {
+  Music *r=self(L);clear_lua_result(r);
   const char *text=H->lua.checkstring(L,1);
   if(strlen(text)>512) return fail(L,"QR payload too long");
   size_t cap=qrcodegen_BUFFER_LEN_FOR_VERSION(10);
@@ -577,8 +590,10 @@ static int qr_l(lua_State *L) {
   int size=qrcodegen_getSize(qr); char *pixels=malloc((size_t)size*size);
   if(!pixels){free(tmp);free(qr);return fail(L,"PSRAM required");}
   for(int y=0;y<size;y++) for(int x=0;x<size;x++) pixels[y*size+x]=qrcodegen_getModule(qr,x,y)?1:0;
+  free(tmp);free(qr);
+  r->lua_result=pixels;
   H->lua.pushinteger(L,size);H->lua.pushlstring(L,pixels,(size_t)size*size);
-  free(pixels);free(tmp);free(qr);return 2;
+  clear_lua_result(r);return 2;
 }
 static int png_image_l(lua_State *L) {
   _Static_assert(sizeof(ncm_image_dsc)==12,"LVGL 8 image ABI requires 32-bit pointers");
@@ -662,6 +677,7 @@ EXPORT int32_t module_luaopen_v1(void *p, lua_State *L) {
 EXPORT void module_destroy_v1(void *p) {
   Music *r = p;
   while (!stop(r)) r->host.task.delay(10);
+  clear_lua_result(r);
   esp_audio_dec_unregister(ESP_AUDIO_TYPE_MP3);
   free(r->ring);
   free(r->input);
