@@ -25,6 +25,7 @@ function M.new(A,S,player,provider,apiNet,streamNet,json,dir)
     end
     return {alive=A.alive,page=S.page,tab=S.tab,status=player.status,error=A.error,message=A.message,
       logged_in=A.uid~=nil,login_status=A.login and A.login.status or 'idle',login_mode=A.login and A.login.mode or 'qq',
+      login_diagnostics=A.login and A.login.diagnostics or {},
       login_revision=A.login and A.login.generation or 0,ui_ready=A.ui and A.ui.ready or false,ui_version=5,
       account=A.account or {name='游客'},catalog=A.catalog and A.catalog.state()or {},
       ui_cover_error=A.ui and A.ui.cover_error or '',

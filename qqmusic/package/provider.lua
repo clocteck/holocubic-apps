@@ -9,13 +9,29 @@ function M.hash33(s,seed)
   local n=seed or 0;for i=1,#s do n=((n<<5)+n+s:byte(i))&0x7fffffff end;return n
 end
 function M.header(h,name)for k,v in pairs(h or {})do if tostring(k):lower()==name then return v end end end
-function M.cookies(headers)
-  local jar={};local h=M.header(headers,'set-cookie');if type(h)=='string'then h={h}end
-  for _,line in ipairs(type(h)=='table'and h or {})do
-    for name,value in tostring(line):gmatch('([%w_%-]+)=([^;,\r\n]*)')do
-      if name=='qrsig'or name=='p_skey'or name=='p_uin'or name=='pt4_token'or name=='pt_oauth_token'or name=='skey'or name=='uin'then jar[name]=value end
+function M.cookies(headers,target)
+  local jar,ranks={},{};local h=M.header(headers,'set-cookie');if type(h)=='string'then h={h}end
+  local info={cookie_lines=0,p_skey_candidates=0,p_skey_empty=0,p_skey_usable=false}
+  for _,entry in ipairs(type(h)=='table'and h or {})do
+    -- Firmware preserves repeated Set-Cookie fields as newline-separated text.
+    for line in tostring(entry):gmatch('[^\r\n]+')do
+      info.cookie_lines=info.cookie_lines+1
+      local name,value=line:match('^%s*([%w_%-]+)=([^;]*)')
+      local domain=line:lower():match(';%s*domain%s*=%s*%.?([^;%s]+)')
+      local matches=not target or not domain or target==domain or target:sub(-#domain-1)=='.'..domain
+      if name=='p_skey'then
+        info.p_skey_candidates=info.p_skey_candidates+1
+        if value==''then info.p_skey_empty=info.p_skey_empty+1 end
+      end
+      if matches and (name=='qrsig'or name=='p_skey'or name=='p_uin'or name=='pt4_token'or name=='pt_oauth_token'or name=='skey'or name=='uin')then
+        local rank=target and domain and #domain or 0
+        -- A root-domain deletion must not overwrite a more specific graph.qq.com cookie.
+        if not ranks[name]or rank>=ranks[name]then jar[name]=value;ranks[name]=rank end
+      end
     end
-  end;return jar
+  end
+  info.p_skey_usable=type(jar.p_skey)=='string'and #jar.p_skey>0
+  return jar,info
 end
 function M.cookie_header(jar)
   local keys,out={},{};for k in pairs(jar or {})do keys[#keys+1]=k end;table.sort(keys)
@@ -103,14 +119,16 @@ function M.new(native,net,json,storage,now,owner)
     if not ok or type(doc)~='table'then done(nil,'QQ音乐响应格式不兼容');return end
     if doc.code and doc.code~=0 then done(nil,'QQ音乐接口错误 '..tostring(doc.code));return end;done(doc)
   end
-  function P.rpc(module,method,param,done,comm)
+  function P.rpc(module,method,param,done,comm,options)
     if owner then P.session=owner.session end
-    local common={ct=24,cv=0,format='json',uin=P.session.musicid or '0',g_tk=M.hash33(P.session.musickey or '',5381)}
-    if P.session.musickey then common.authst=P.session.musickey;common.tmeLoginType=P.session.login_type or 2 end
+    -- A login code must not be exchanged under a previously saved account.
+    local session=options and options.anonymous and {}or P.session
+    local common={ct=24,cv=0,format='json',uin=session.musicid or '0',g_tk=M.hash33(session.musickey or '',5381)}
+    if session.musickey then common.authst=session.musickey;common.tmeLoginType=session.login_type or 2 end
     for k,v in pairs(comm or {})do common[k]=v end
     local body=json.encode({comm=common,req_0={module=module,method=method,param=param}})
     P.raw('https://u.y.qq.com/cgi-bin/musicu.fcg',{method='POST',body=body,
-      headers={['Content-Type']='application/json',Cookie=M.cookie_header({uin=P.session.musicid,qqmusic_uin=P.session.musicid,qqmusic_key=P.session.musickey,qm_keyst=P.session.musickey})},operation=method},function(raw,e)
+      headers={['Content-Type']='application/json',Cookie=M.cookie_header({uin=session.musicid,qqmusic_uin=session.musicid,qqmusic_key=session.musickey,qm_keyst=session.musickey})},operation=method},function(raw,e)
       decode(raw,e,function(doc,err)
         local result=doc and doc.req_0;if not result then done(nil,err or 'QQ音乐接口无数据');return end
         P.diagnostics.code=result.code

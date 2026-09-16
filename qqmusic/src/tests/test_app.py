@@ -30,6 +30,7 @@ class Host:
         self.lua.execute('''
           function dofile(path)return assert(load(read_module(path),path))()end
           json={encode=encode,decode=decode}; ms=0
+          time={get=function()return 1789524123,456789 end}
           store={load=function()return nil end,save=function(_,s)saved=s;return true end}
           net={cancel=function()end}
           function net.create(url,opts)
@@ -73,9 +74,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
         html=(ROOT/'package/info.html').read_text(encoding='utf-8')
         self.assertIn('href="/main"',html)
-        self.assertIn('v1.0.0',html)
-        self.assertIn('version = 1.0.0',(ROOT/'package/app.info').read_text(encoding='utf-8'))
-        self.assertIn('"1.0.0"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        self.assertIn('v1.0.1',html)
+        self.assertIn('version = 1.0.1',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.1"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
         self.assertNotIn('每日推荐',html)
         icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
         self.assertIsNotNone(icon)
@@ -94,6 +95,24 @@ class AppTests(unittest.TestCase):
         self.h.run(r'''local c=Q.cookies({['Set-Cookie']='qrsig=abc; Path=/\np_skey=def; Expires=Wed, 01 Jan 2030\nMUSIC_U=never'})
           assert(c.qrsig=='abc'and c.p_skey=='def'and c.MUSIC_U==nil)
           assert(not Q.cookie_header({uin='12\r\nx=2'}):find('x=2'))''')
+    def test_qq_cookie_domain_selection(self):
+        self.h.run(r'''local headers={['set-cookie']='p_skey=graph-test; Domain=.graph.qq.com; Path=/\np_skey=; Domain=.qq.com; Path=/\np_uin=o123; Domain=.graph.qq.com'}
+          local c,info=Q.cookies(headers,'graph.qq.com')
+          assert(c.p_skey=='graph-test'and c.p_uin=='o123')
+          assert(info.p_skey_candidates==2 and info.p_skey_empty==1 and info.p_skey_usable)
+          assert(not json.encode(info):find('graph%-test'))
+          c=Q.cookies({['Set-Cookie']={'p_skey=; Domain=.qq.com','p_skey=graph-test; Domain=.graph.qq.com','p_skey=foreign-test; Domain=.evil.invalid'}},'graph.qq.com')
+          assert(c.p_skey=='graph-test')
+          c=Q.cookies({['Set-Cookie']={'p_skey=graph-test; Domain=.graph.qq.com','p_skey=; Domain=.graph.qq.com'}},'graph.qq.com')
+          assert(c.p_skey=='') -- honor deletions in the same scope
+        ''')
+    def test_qq_signature_not_truncated(self):
+        self.h.run('''local C=dofile('login.lua')
+          local uin,sig=C.signature('https://example.invalid/?uin=123&ptsigx=ab%2Bc_d-ef%3D&service=ptqrlogin')
+          assert(uin=='123'and sig=='ab+c_d-ef=')
+          assert(C.signature('https://example.invalid/?uin=123&ptsigx=a&ptsigx=b')==nil)
+          assert(C.signature('https://example.invalid/?uin=123&ptsigx=%0A')==nil)
+        ''')
     def test_top_normalization(self):
         self.h.run('P.top(26,20,result)')
         self.h.respond({'code':0,'req_0':{'code':0,'data':{'data':{'totalNum':300},'songInfoList':[{'mid':'abc123','title':'测试','interval':123,'album':{'pmid':'album_1'},'file':{'media_mid':'media123'},'singer':[{'name':'歌手'}]}]}}})
@@ -115,6 +134,78 @@ class AppTests(unittest.TestCase):
     def test_qr_parser(self):
         self.h.run('''local L=dofile('login.lua'); assert(L.parse("ptuiCB('66','0','','0','wait','');")==66)
           assert(L.parse('malicious()')==nil)''')
+    def qq_authorizing(self):
+        self.h.run(r'''
+          P.session={musicid='123',musickey='old-wechat-test',login_type=1}
+          L=dofile('login.lua').new(P,function()return ms end)
+          L.start(function()end,'qq')
+          respond(net.last,'\137PNG\r\n\26\n',200,{['set-cookie']='qrsig=test'})
+          ms=3000;L.poll()
+          assert(net.last.url:find('action=0%-0%-1789524123456'))
+          respond(net.last,"ptuiCB('0','0','https://example.invalid/?uin=123&ptsigx=ab%2Bc_d-ef%3D&service=ptqrlogin','0','','');")
+          assert(net.last.url:find('ptsigx=ab%2Bc_d-ef%3D',1,true))
+          respond(net.last,'',302,{['Set-Cookie']={'p_skey=test-key; Domain=.graph.qq.com; Path=/','p_uin=o123; Domain=.graph.qq.com; Path=/','p_skey=; Domain=.qq.com; Path=/'}})
+          assert(L.status=='authorizing'and P.diagnostics.operation=='qr_authorize')
+          oauth=net.last
+          assert(oauth.options.headers.Cookie:find('p_skey=test-key',1,true))
+          assert(oauth.options.body:find('auth_time=1789524123456',1,true))
+          state=oauth.options.body:match('[&?]state=([^&]+)')
+          ui=oauth.options.body:match('[&?]ui=([^&]+)')
+          assert(#state==36 and #ui==36 and ui~=state)
+          callback='https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https://y.qq.com/'
+        ''')
+    def test_qq_full_exchange_and_old_account_isolation(self):
+        self.qq_authorizing()
+        self.h.run('''respond(oauth,'',302,{Location=callback..'&state='..state:gsub('-','%%2D')..'&code=test%2Bcode%3D'})
+          local doc=json.decode(net.last.options.body)
+          assert(doc.req_0.module=='QQConnectLogin.LoginServer'and doc.req_0.method=='QQLogin')
+          assert(doc.req_0.param.code=='test+code='and doc.comm.tmeLoginType==2)
+          assert(doc.comm.uin=='0'and doc.comm.authst==nil and net.last.options.headers.Cookie=='')
+          assert(P.session.musickey=='old-wechat-test'and saved==nil)
+        ''')
+        self.h.respond({'code':0,'req_0':{'code':0,'data':{'str_musicid':'456','musickey':'qq-test-only'}}})
+        self.h.run("assert(L.status=='done'and saved.login_type==2 and saved.musicid=='456'and L.image==nil and L.diagnostics.stage=='done')")
+    def test_qq_callback_failures_preserve_account(self):
+        cases=[('', 'missing_location'),
+               ('https://evil.invalid/?code=test&state={state}', 'callback_mismatch'),
+               ('https://y.qq.com.evil.invalid/portal/wx_redirect.html?code=test&state={state}', 'callback_mismatch'),
+               ('http://y.qq.com/portal/wx_redirect.html?code=test&state={state}', 'callback_mismatch'),
+               ('{callback}&code=test', 'missing_state'),
+               ('{callback}&code=test&state=wrong', 'state_mismatch'),
+               ('{callback}&state={state}', 'missing_code'),
+               ('{callback}&state={state}&error=access_denied', 'authorization_denied'),
+               ('{callback}&state={state}&code=test&code=other', 'duplicate_parameter'),
+               ('{callback}&state={state}&state={state}&code=test', 'duplicate_parameter'),
+               ('{callback}&state={state}&code=%ZZ', 'invalid_encoding'),
+               ('{callback}&state={state}&code=test%0D%0A', 'invalid_code')]
+        for pattern,reason in cases:
+            with self.subTest(reason=reason,pattern=pattern):
+                self.h=Host();self.qq_authorizing()
+                location=pattern.format(state=self.h.lua.globals().state,callback=self.h.lua.globals().callback)
+                self.h.respond('',302,{'Location':location})
+                self.assertEqual(self.h.lua.globals().L.diagnostics.reason,reason)
+                self.h.run("assert(L.status=='error'and saved==nil and P.session.musickey=='old-wechat-test'); assert(not json.encode(L.diagnostics):find('test'))")
+    def test_qq_callback_header_array_and_cancel(self):
+        self.qq_authorizing()
+        self.h.run("respond(oauth,'',302,{Location={callback..'&code=test&state='..state}});assert(P.diagnostics.operation=='QQLogin'); L.cancel()")
+        self.h.respond({'code':0,'req_0':{'code':0,'data':{'str_musicid':'456','musickey':'qq-test-only'}}})
+        self.h.run("assert(saved==nil and P.session.login_type==1 and L.status=='idle')")
+        self.h.run("local C=dofile('login.lua');local code,reason=C.callback({'a','b'},'x');assert(not code and reason=='ambiguous_location')")
+    def test_qq_exchange_failure_preserves_account(self):
+        self.qq_authorizing()
+        self.h.run("respond(oauth,'',302,{Location=callback..'&code=test&state='..state})")
+        self.h.respond({'code':0,'req_0':{'code':20271,'data':{}}})
+        self.h.run("assert(L.status=='error'and L.diagnostics.reason=='login_exchange_failed'and saved==nil and P.session.login_type==1)")
+    def test_qq_epoch_precision_and_unsynced_clock(self):
+        self.h.run('''local C=dofile('login.lua')
+          assert(C.timestamp(function()return 1789524123,456789 end)=='1789524123456')
+          assert(C.timestamp(function()return 1789524123 end)=='1789524123000')
+          assert(C.timestamp(function()return 0 end)==nil)
+          assert(C.timestamp(function()error('clock unavailable')end)==nil)
+          L=C.new(P,function()return ms end,function()return 0 end)
+          L.start(function()end,'qq');respond(net.last,'\\137PNG\\r\\n\\26\\n',200,{['set-cookie']='qrsig=test'})
+          ms=3000;L.poll();assert(L.status=='error'and L.diagnostics.reason=='clock_unset')
+        ''')
     def test_qr_cancel_and_expiry(self):
         self.h.run('''L=dofile('login.lua').new(P,function()return ms end)
           L.start(function(s,e)login_status=s end); old=net.last; L.cancel()

@@ -10,6 +10,43 @@
 4. graph.qq.com/oauth2.0/authorize 返回授权 code；验证固定回调域名和随机 state。
 5. QQConnectLogin.LoginServer.QQLogin 交换音乐凭据并存入 /sd/data/qqmusic/session.json。
 
+### 2026-09-16 QQ 授权兼容修复
+
+- `login.lua` 的 `auth_time` 和轮询 `action` 改用 `time.get()` 的 Unix 时间，
+  不再发送应用启动后的毫秒计数。秒/毫秒分段拼接为十进制字符串，避免设备
+  32 位整数溢出或浮点精度损失；未校时明确提示，不发送错误时间。
+- `ui` 使用独立 UUID 格式标识，`state` 每次授权独立生成；仍校验当前授权状态。
+- `ptsigx` 按完整查询参数提取、解码再编码发送，避免 `%w` 正则截断符号。
+- `provider.lua` 逐条解析多值 Set-Cookie，按目标 `graph.qq.com` 选取域名更具体的同名
+  Cookie，拒绝其他域；根域清理 Cookie 不再覆盖子域凭据，同域清理仍然生效。
+- OAuth 回调先拆分查询参数再解码一次，完整提取授权码，拒绝重复参数、
+  非 HTTPS / 非精确回调路径、缺失或不匹配的 state。不跟随 Location。
+- 登录兑换 RPC 使用匿名上下文，不夹带之前保存的微信/QQ Cookie、authst 或账号。
+  成功取得并保存新凭据之前保留原会话，取消/失败不覆盖原账号。
+- `/qqmusic/status.login_diagnostics` 仅输出 revision、stage、固定 reason、HTTP 状态、
+  Cookie 条目/空值计数及凭据是否存在；
+  不输出 state、code、Cookie、完整 Location。
+
+旧设备观测：`qr_authorize` 返回 302，但统一报“QQ授权未完成或状态不匹配”。
+旧日志未保留具体分支，不能据此认定某一个参数就是此次现场失败的唯一原因。
+回归测试覆盖完整 QQ 兑换、编码回调、错误状态/地址/重复字段、取消、旧会话隔离、
+签名完整性、Cookie 域名选择、未校时及微信登录。
+
+第一轮实机扫码（诊断 revision 2）：302 `qr_exchange` 的 `p_skey` 缺失或为空，
+未进入音乐凭据兑换；失败后原微信会话仍保留。revision 3 补充无凭据的 Cookie
+计数诊断并修复上述域名覆盖/签名截断问题。
+
+第二轮实机扫码（revision 3）成功：`login_status=done`、`login_mode=qq`、
+`account.login_type=2`，进入收藏歌单；check_sig 与 authorize 均返回 302。
+安全诊断记录为 `cookie_lines=11`、`p_skey_candidates=2`、`p_skey_empty=1`、
+`p_skey_usable=true`，与“同名跨域空 Cookie 覆盖有效凭据”回归用例一致。
+30 项 Python/Lua 测试、网页回归及动态模块构建均通过；login.lua/provider.lua/web.lua
+已上传设备并逐个 SHA-256 校验；此轮实机验证时版本为 1.0.0，未推送云端。
+
+后续 1.0.1 发布包含以上修复，package 与 src 同步交付；清单、说明页、User-Agent
+及原生模块版本统一升级，30 项应用测试、网页回归、原生内存测试与构建全部通过。
+本次版本发布不重新启动设备或改动已登录账号。
+
 ## 微信
 
 1. open.weixin.qq.com/connect/qrconnect 获取 UUID。
