@@ -4,11 +4,23 @@
 local M={}
 function M.clock(micros)
   local previous=micros()&0xffffffff
-  local elapsed=0
+  local seconds,milliseconds,microseconds=0,0,0
   return function()
     local stamp=micros()&0xffffffff
-    elapsed=elapsed+((stamp-previous)&0xffffffff);previous=stamp
-    return elapsed/1000
+    local delta=(stamp-previous)&0xffffffff;previous=stamp
+    -- Lua on the device has int32/float32 numbers. Split the unsigned delta
+    -- before scaling: neither a microsecond total nor a float accumulator is
+    -- safe (35.8-minute overflow / lost small increments after long uptime).
+    -- 65536 us = 65 ms + 536 us; every intermediate below fits in int32.
+    local upper=(delta>>16)&0xffff
+    local tail=upper*536+(delta&0xffff)+microseconds
+    local ms=milliseconds+upper*65+tail//1000
+    microseconds=tail%1000
+    seconds=seconds+ms//1000;milliseconds=ms%1000
+    -- Exact integer milliseconds for ~23 days, with >1 day of headroom for
+    -- deadline additions. Then derive float readings, never float accumulation.
+    if seconds<2000000 then return seconds*1000+milliseconds end
+    return seconds*1000.0+milliseconds
   end
 end
 function M.new(http,now)

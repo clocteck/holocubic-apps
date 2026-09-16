@@ -55,6 +55,9 @@ class Host:
 
 class AppTests(unittest.TestCase):
     def setUp(self): self.h=Host()
+    def test_monotonic_clock(self):
+        self.h.lua.globals().ROOT=str(ROOT).replace('\\','/')
+        self.h.run((ROOT/'src/tests/test_clock.lua').read_text(encoding='utf-8'))
     def test_playback_pipeline(self):
         self.h.lua.globals().ROOT=str(ROOT).replace('\\','/')
         self.h.run((ROOT/'src/tests/test_playback_pipeline.lua').read_text(encoding='utf-8'))
@@ -74,9 +77,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
         html=(ROOT/'package/info.html').read_text(encoding='utf-8')
         self.assertIn('href="/main"',html)
-        self.assertIn('v1.0.1',html)
-        self.assertIn('version = 1.0.1',(ROOT/'package/app.info').read_text(encoding='utf-8'))
-        self.assertIn('"1.0.1"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        self.assertIn('v1.0.2',html)
+        self.assertIn('version = 1.0.2',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.2"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
         self.assertNotIn('每日推荐',html)
         icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
         self.assertIsNotNone(icon)

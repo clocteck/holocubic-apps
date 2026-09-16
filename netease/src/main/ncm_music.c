@@ -61,7 +61,7 @@ static const module_manifest_t manifest = {MODULE_MANIFEST_MAGIC,
                                            MODULE_SDK_VERSION,
                                            sizeof(module_manifest_t),
                                            "ncm_music",
-                                           "1.0.0",
+                                           "1.0.2",
                                            "Independent PSRAM ncm_music decoder",
                                            0,
                                            MODULE_BOOTSTRAP_ABI_VERSION};

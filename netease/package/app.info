@@ -7,4 +7,4 @@ category = media
 catalog_scope = community
 description = QR login, PSRAM MP3 streaming, 5-band EQ and virtual bass
 description_zh_cn = 扫码登录、在线歌单、MP3 流播、五段均衡与虚拟低音
-version = 1.0.0
+version = 1.0.2

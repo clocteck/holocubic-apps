@@ -30,7 +30,7 @@ function M.new(audio,net,now)
     local url=P.urls[math.min(P.attempt,#P.urls)]
     P.metrics.attempts=P.attempt;P.metrics.node=math.min(P.attempt,#P.urls);P.metrics.phase='queued'
     local c=net.create(url,{async=true,timeout=8000,queue_timeout=10000,bufsz=6144,max_redirects=4,
-      headers={['Accept-Encoding']='identity',['User-Agent']='CubicMusic/1.0.1'}})
+      headers={['Accept-Encoding']='identity',['User-Agent']='CubicMusic/1.0.2'}})
     P.connection=c;P.last_data=nil;P.attempt_started=nil;P.first_data=nil
     local status,expected=0,nil
     local function active()return P.alive and generation==P.generation end

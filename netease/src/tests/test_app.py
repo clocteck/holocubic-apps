@@ -420,9 +420,9 @@ class LuaTests(unittest.TestCase):
         self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
         html=(ROOT/'package/info.html').read_text(encoding='utf-8')
         self.assertIn('href="/main"',html)
-        self.assertIn('v1.0.0',html)
-        self.assertIn('version = 1.0.0',(ROOT/'package/app.info').read_text(encoding='utf-8'))
-        self.assertIn('"1.0.0"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        self.assertIn('v1.0.2',html)
+        self.assertIn('version = 1.0.2',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.2"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
         icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
         self.assertIsNotNone(icon)
         self.assertEqual(base64.b64decode(icon[1]),png)
@@ -433,6 +433,9 @@ class LuaTests(unittest.TestCase):
 
     def test_effects_settings(self):
         self.lua.execute((ROOT/"src/tests/test_effects.lua").read_text(encoding="utf-8"))
+
+    def test_monotonic_clock(self):
+        self.lua.execute((ROOT/'src/tests/test_clock.lua').read_text(encoding='utf-8'))
 
     def test_transport_backpressure_and_cancel(self):
         self.lua.execute("""

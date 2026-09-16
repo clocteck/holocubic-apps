@@ -122,7 +122,7 @@ function M.new(net,provider,player,now,disk)
     if C.active or provider.busy or net.current or net.pending then return end
     local attempts=((C.cache[M.identity(url)]or {}).attempts or 0)+1
     local c=net.create(url,{async=true,timeout=10000,bufsz=2048,max_redirects=0,
-      headers={['Accept-Encoding']='identity',['User-Agent']='CubicNetEase/1.0.0'}})
+      headers={['Accept-Encoding']='identity',['User-Agent']='CubicNetEase/1.0.2'}})
     C.active=c;C.requests=C.requests+1;C.started_at=now()
     local chunks,bytes,valid,status,expected={},0,true,0,nil
     local function bad(reason)
