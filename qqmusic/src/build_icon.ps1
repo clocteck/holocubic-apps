@@ -1,7 +1,7 @@
 # Deterministic device-asset compilation: source artwork is preserved in assets/.
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing
-$source=Join-Path $PSScriptRoot 'assets/icon-source.png'
+$source=Join-Path $PSScriptRoot 'assets/icon-transparent.png'
 $package=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../package'))
 $image=[Drawing.Image]::FromFile($source)
 $icon=[Drawing.Bitmap]::new(96,96,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -35,4 +35,12 @@ try {
     }}
   }finally{$writer.Dispose();$stream.Dispose()}
 }finally{$graphics.Dispose();$icon.Dispose();$image.Dispose()}
+# Keep standalone app information in sync with the compiled transparent PNG.
+$info=Join-Path $package 'info.html'
+if(Test-Path -LiteralPath $info){
+  $base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $package 'main.png')))
+  $html=[IO.File]::ReadAllText($info)
+  $html=[regex]::Replace($html,'src="data:image/png;base64,[^"]+"',('src="data:image/png;base64,'+$base64+'"'))
+  [IO.File]::WriteAllText($info,$html,[Text.UTF8Encoding]::new($false))
+}
 Get-Item (Join-Path $package 'main.png'),(Join-Path $package 'boot.bmp') | Select-Object Name,Length

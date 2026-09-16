@@ -2,6 +2,7 @@ import json
 import struct
 import base64
 import re
+from PIL import Image
 import unittest
 from pathlib import Path
 from lupa import LuaRuntime, lua_type
@@ -62,6 +63,10 @@ class AppTests(unittest.TestCase):
         self.h.lua.globals().ROOT=str(ROOT).replace('\\','/')
         self.h.run((ROOT/'src/tests/test_boot_icon.lua').read_text(encoding='utf-8'))
         png=(ROOT/'package/main.png').read_bytes()
+        with Image.open(ROOT/'package/main.png') as icon:
+            rgba=icon.convert('RGBA')
+            self.assertEqual([rgba.getpixel(p)[3] for p in ((0,0),(95,0),(0,95),(95,95))],[0,0,0,0])
+            self.assertGreater(sum(1 for p in rgba.getdata() if p[3]==0),100)
         self.assertEqual(struct.unpack('>II',png[16:24]),(96,96))
         bmp=(ROOT/'package/boot.bmp').read_bytes()
         self.assertEqual(len(bmp),18498)

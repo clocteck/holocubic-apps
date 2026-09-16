@@ -6,6 +6,7 @@ import json
 import math
 import random
 import re
+from PIL import Image
 import struct
 import zlib
 from pathlib import Path
@@ -409,6 +410,10 @@ class LuaTests(unittest.TestCase):
     def test_boot_icon_and_info(self):
         self.lua.execute((ROOT/"src/tests/test_boot_icon.lua").read_text(encoding="utf-8"))
         png=(ROOT/'package/main.png').read_bytes()
+        with Image.open(ROOT/'package/main.png') as icon:
+            rgba=icon.convert('RGBA')
+            self.assertEqual([rgba.getpixel(p)[3] for p in ((0,0),(95,0),(0,95),(95,95))],[0,0,0,0])
+            self.assertGreater(sum(1 for p in rgba.getdata() if p[3]==0),100)
         self.assertEqual(struct.unpack('>II',png[16:24]),(96,96))
         bmp=(ROOT/'package/boot.bmp').read_bytes()
         self.assertEqual(len(bmp),18498)

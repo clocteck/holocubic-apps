@@ -45,6 +45,9 @@ try {
     Start-Sleep -Seconds 3
   }
 }finally {
-  $null=Invoke-RestMethod "$Device/api/system/exit" -Method POST -TimeoutSec 15
-  Write-Host 'Returned to device home page.'
+  $current=(Invoke-RestMethod "$Device/api/system/state" -TimeoutSec 10).current_app.id
+  if($current -eq $App){
+    $null=Invoke-RestMethod "$Device/api/system/exit" -Method POST -TimeoutSec 15
+    Write-Host 'Returned to device home page.'
+  }elseif($current){Write-Host "Foreground changed to $current; left it untouched."}
 }

@@ -36,7 +36,8 @@
 `/status` 的 playback_phase、url_resolution、url_request、playback_timing、metadata_request
 区分排队、地址、CDN 首包及首次 PCM 写入，不输出签名播放地址；首次 PCM 写入不等同于麦克风测到出声。
 
-图标原图位于 `src/assets/icon-source.png`，`src/build_icon.ps1` 生成 96×96 PNG 和 RGB565 启动 BMP。
+图标原图保存在 `src/assets/icon-source.png`，透明编辑版位于 `src/assets/icon-transparent.png`；
+`src/build_icon.ps1` 生成保留 Alpha 的 96×96 PNG、按黑底合成的 RGB565 启动 BMP，并同步说明页 Base64。
 启动页使用 `/sd/...` 预加载句柄，设置图片后再显示，构建主界面时清理句柄；失败显示文字，
 不显示未解析图片。固件会处理 Lua 图片路径，不能把偶发白图直接归因于缺少 S: 前缀。
 `package/info.html` 为独立说明页，图标以内嵌 Base64 保存；测试会核对其与 main.png 字节一致。

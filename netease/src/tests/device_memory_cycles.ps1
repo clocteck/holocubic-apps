@@ -48,7 +48,9 @@ for($cycle=1;$cycle -le $Cycles;$cycle++) {
       $null=Snapshot 'continuous-play'
     }
   } finally {
-    $null=Invoke-RestMethod "$Device/api/system/exit" -Method POST -TimeoutSec 15
+    $current=(Invoke-RestMethod "$Device/api/system/state" -TimeoutSec 10).current_app.id
+    if($current -eq $App){$null=Invoke-RestMethod "$Device/api/system/exit" -Method POST -TimeoutSec 15}
+    elseif($current){throw "Foreground changed to $current; left it untouched."}
     Write-Host ((Get-Date -Format HH:mm:ss)+" $App cycle=$cycle exited; settle 15 seconds")
     Start-Sleep -Seconds 15
   }
