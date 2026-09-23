@@ -119,6 +119,7 @@ local function map_metrics(entries, metric_defs)
         end
         local label_matches = trim(entry.label):lower() == trim(alias):lower()
         local value = metric.kind ~= "text" and label_matches and entry.value or nil
+        if metric.kind == "temperature" and value and (entry.unit == "F" or entry.unit == "°F" or entry.unit == "℉") then value = (value - 32) * 5 / 9 end
         local valid = value ~= nil
         local min_valid = metric.min_valid
         if min_valid == nil and

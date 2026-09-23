@@ -1,3 +1,4 @@
+local Temperature = dofile("/sd/apps/NixieClock/temperature.lua")
 -- Fireworks Clock 烟花时钟
 -- Integrated as NixieClock face 9. Original app by community member sk:
 -- https://github.com/yizhengzhang1/holocubic-apps/tree/main/fireworks_clock
@@ -1341,8 +1342,8 @@ local function weather_values()
   local host = rawget(_G, "HOLO_TIME_APP")
   local state = host and host.state
   if not state then return "--", "--°", "103" end
-  local temp = tonumber(state.temp)
-  local temp_text = temp and string_format("%d°", math_floor(temp + 0.5)) or "--°"
+  local temp = Temperature.value(state.temp)
+  local temp_text = temp and Temperature.round(temp) .. "°" or "--°"
   return tostring(state.weather_text or "--"), temp_text, tostring(state.weather_code or "103")
 end
 
@@ -1418,8 +1419,8 @@ local function draw_clock()
   draw_text(99, 196, 40, weather_text, date_font, C.bg, 255)
   draw_text(99, 195, 40, weather_text, date_font, C.date, 220)
   draw_temperature_icon(177, 195, C.date, 220)
-  draw_text(188, 196, 28, temp_text, date_font, C.bg, 255)
-  draw_text(188, 195, 28, temp_text, date_font, C.date, 220)
+  draw_text(188, 196, 36, temp_text, date_font, C.bg, 255)
+  draw_text(188, 195, 36, temp_text, date_font, C.date, 220)
 end
 
 -- ---------------------------------------------------------------- render / tick

@@ -17,4 +17,4 @@ description_zh_tw = 動態呈現 AIDA64 RemoteSensor 的 320×240 LCD 版面與�
 description_zh_hant = 動態呈現 AIDA64 RemoteSensor 的 320×240 LCD 版面與即時感測器資料
 description_en = Dynamically renders AIDA64 RemoteSensor 320x240 LCD layouts and live sensor data
 description_ja = AIDA64 RemoteSensor の 320×240 LCD レイアウトとセンサーデータを動的に表示します
-version = 0.5.2
+version = 0.5.3

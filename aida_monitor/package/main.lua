@@ -11,6 +11,7 @@ if _G.__aida_monitor and _G.__aida_monitor.stop then pcall(_G.__aida_monitor.sto
 local config = dofile(APP_DIR .. "/config.lua")
 local Layout = dofile(APP_DIR .. "/aida_layout.lua")
 local Renderer = dofile(APP_DIR .. "/aida_renderer.lua")
+Renderer.temperature = dofile(APP_DIR .. "/temperature.lua")
 local AidaClient = dofile(APP_DIR .. "/aida_client.lua")
 local VectorFont = dofile(APP_DIR .. "/aida_vector_font.lua")
 local Pager = dofile(APP_DIR .. "/aida_pager.lua")

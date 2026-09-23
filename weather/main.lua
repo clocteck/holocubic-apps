@@ -1,3 +1,4 @@
+local Temperature = dofile("/sd/apps/weather/temperature.lua")
     if _G.WEATHER_APP and _G.WEATHER_APP.stop then
     pcall(function() _G.WEATHER_APP.stop("reload") end)
     end
@@ -971,16 +972,16 @@
 
     local function format_temp_text(temp)
     if temp == nil then
-        return "--" .. CELSIUS
+        return "--" .. Temperature.symbol()
     end
 
-    local n = temp
+    local n = Temperature.value(temp)
     if n >= 0 then
         n = math_floor(n + 0.5)
     else
         n = -math_floor(math_abs(n) + 0.5)
     end
-    return tostring(n) .. CELSIUS
+    return tostring(n) .. Temperature.symbol()
     end
 
     local function format_condition_text(text)
@@ -1028,10 +1029,10 @@
 
     local function format_forecast_temp_text(max_temp, min_temp)
     if max_temp == nil and min_temp == nil then
-        return "--/--" .. CELSIUS
+        return "--/--" .. Temperature.symbol()
     end
 
-    return rounded_int_text(max_temp) .. "/" .. rounded_int_text(min_temp) .. CELSIUS
+    return rounded_int_text(Temperature.value(max_temp)) .. "/" .. rounded_int_text(Temperature.value(min_temp)) .. Temperature.symbol()
     end
 
     local function format_wind_level(speed)
@@ -1349,7 +1350,7 @@
     local day = create_label(group, label or "--", FONT_12, C.text_soft, 0, 12, item_w, ALIGN_CENTER)
     local icon = create_img(group, qweather_icon_path_for("partly", "103"), 27, 38, 180)
     local text = create_label(group, "--", FONT_12, C.text, 8, 91, item_w - 16, ALIGN_CENTER)
-    local temp = create_label(group, "--/--" .. CELSIUS, FONT_16, C.text, 0, 114, item_w, ALIGN_CENTER)
+    local temp = create_label(group, "--/--" .. Temperature.symbol(), FONT_16, C.text, 0, 114, item_w, ALIGN_CENTER)
     local rain = create_label(group, "--mm", FONT_12, C.text_soft, 0, 141, item_w, ALIGN_CENTER)
 
     return {
@@ -1546,7 +1547,7 @@
 
     APP.ui.weather_icon = create_img(now_page, qweather_icon_path("partly"), 206, 20, 320)
     APP.state.displayed_icon_code = qweather_icon_code("partly")
-    APP.ui.temp_label = create_label(now_page, "--" .. CELSIUS, FONT_34, C.text, 184, 100, 124, ALIGN_CENTER)
+    APP.ui.temp_label = create_label(now_page, "--" .. Temperature.symbol(), FONT_28, C.text, 184, 100, 124, ALIGN_CENTER)
 
     local strip = lv_obj_create(now_page)
     APP.ui.strip = strip
@@ -1609,7 +1610,7 @@
     end
 
     if not APP.state.valid then
-        set_label_text(APP.ui.temp_label, "--" .. CELSIUS)
+        set_label_text(APP.ui.temp_label, "--" .. Temperature.symbol())
         set_label_text(APP.ui.cond_label, APP.state.request_inflight and tr("updating") or tr("waiting"))
         set_label_text(APP.ui.precip.value, "--mm")
         set_label_text(APP.ui.humidity.value, "--%")
@@ -1644,7 +1645,7 @@
         else
             set_img_src(col.icon, qweather_icon_path_for("partly", "103"))
             set_label_text(col.text, "--")
-            set_label_text(col.temp, "--/--" .. CELSIUS)
+            set_label_text(col.temp, "--/--" .. Temperature.symbol())
             set_label_text(col.rain, "--mm")
         end
         end
@@ -2192,6 +2193,11 @@ end
     APP.timers.clock:alarm(1000, tmr.ALARM_AUTO, function()
         if not APP.running or maybe_stop_for_exit() then return end
         render_clock()
+        if APP.temperature_unit ~= Temperature.unit() then
+            APP.temperature_unit = Temperature.unit()
+            render_weather()
+            render_forecast()
+        end
     end)
 
     APP.timers.fetch = tmr.create()

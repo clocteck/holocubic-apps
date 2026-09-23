@@ -17,4 +17,4 @@ description_zh_tw = 透過 AIDA64 RemoteSensor 顯示 CPU、GPU、記憶體、�
 description_zh_hant = 透過 AIDA64 RemoteSensor 顯示 CPU、GPU、記憶體、溫度、頻率、風扇與趨勢圖
 description_en = Shows CPU, GPU, memory, temperatures, clocks, fans, and trend charts through AIDA64 RemoteSensor
 description_ja = AIDA64 RemoteSensor を通じて CPU、GPU、メモリ、温度、クロック、ファン、推移グラフを表示します
-version = 1.0.4
+version = 1.0.5

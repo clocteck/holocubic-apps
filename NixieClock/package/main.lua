@@ -1,3 +1,4 @@
+local Temperature = dofile("/sd/apps/NixieClock/temperature.lua")
 local previous = rawget(_G, "HOLO_TIME_APP")
 if previous and previous.stop then
   pcall(function() previous.stop("reload") end)
@@ -612,7 +613,7 @@ end
 
 local function temp_text()
   if APP.state.weather_valid and APP.state.temp ~= nil then
-    return tostring(floor(tonumber(APP.state.temp) + 0.5)) .. "°"
+    return Temperature.round(Temperature.value(APP.state.temp)) .. "°"
   end
   return "--°"
 end
@@ -790,7 +791,7 @@ local function draw_mono(t)
   if not draw_ui_asset(27, 183, "pulse-weather") then
     draw_weather_icon(43, 199, 13, APP.state.weather_code, APP.state.weather_text)
   end
-  text(66, 183, 38, temp_text(), APP.font.en13, C.white)
+  text(66, 183, 48, temp_text(), APP.font.en13, C.white)
   text(66, 202, 40, weather_kind(APP.state.weather_code, APP.state.weather_text):upper(), APP.font.en10, 0x596571, nil, nil, 1)
   if not draw_ui_asset(119, 180, "pulse-humidity") then draw_droplet(135, 196, 15, C.cyan) end
   text(154, 183, 52, APP.state.humidity and (tostring(floor(APP.state.humidity)) .. "%") or "--%", APP.font.en13, C.white)
@@ -820,7 +821,7 @@ local function draw_neon_girl(t)
   text(94, 60, 24, ":", APP.font.n69, colon_color, ALIGN_CENTER)
   text(116, 68, 42, mm:sub(1, 1), APP.font.n69, C.white, ALIGN_CENTER)
   text(156, 68, 42, mm:sub(2, 2), APP.font.n69, C.white, ALIGN_CENTER)
-  text(19, 142, 40, temp_text(), APP.font.en20, C.white, nil, nil, -1)
+  text(19, 142, 56, temp_text(), APP.font.en20, C.white, nil, nil, -1)
   line(60, 144, 60, 163, 0x56CBE2, 255, 1)
   text(71, 148, 76, ascii_city_label(APP.state.city) .. " " .. string.char(194, 183), APP.font.en12, 0x8EB9CA, nil, nil, 1)
   local neon_weather = is_english()
@@ -973,7 +974,7 @@ local function draw_focus_memo(t)
     disc(47, 177, 5, C.soft, 255)
     rect(30, 176, 22, 7, C.soft, 255, 4)
   end
-  text(61, 164, 38, temp_text(), APP.font.en16, C.white)
+  text(61, 164, 50, temp_text(), APP.font.en16, C.white)
   text(12, 193, 88, ascii_city_label(APP.state.city), APP.font.en9, 0x77828D, ALIGN_CENTER, nil, 1)
 
   if not APP.state.memo_available then
@@ -1058,7 +1059,7 @@ local function draw_flip(t)
   local day, month, date = date_parts(t)
   text(26, 20, 55, day, APP.font.ui12, C.muted)
   text(105, 20, 110, month .. " " .. date, APP.font.ui12, C.white, ALIGN_CENTER)
-  text(245, 20, 50, temp_text() .. "C", APP.font.ui12, C.muted, ALIGN_RIGHT)
+  text(245, 20, 50, temp_text() .. Temperature.unit(), APP.font.ui12, C.muted, ALIGN_RIGHT)
   text(35, 48, 75, "HOUR", APP.font.ui12, C.muted, ALIGN_CENTER)
   text(210, 48, 75, "MINUTE", APP.font.ui12, C.muted, ALIGN_CENTER)
   local hh = format("%02d", t.hour)
@@ -1087,7 +1088,7 @@ local function draw_glow(t)
   text(20, 73, 275, value, APP.font.n56, 0xA9FBFF, ALIGN_CENTER, 255)
   text(276, 80, 34, format("%02d", t.sec), APP.font.ui16, C.cyan)
   draw_sun(25, 215, 6, C.cyan)
-  text(36, 208, 55, temp_text() .. "C", APP.font.ui12, C.cyan)
+  text(36, 208, 55, temp_text() .. Temperature.unit(), APP.font.ui12, C.cyan)
   text(115, 208, 90, "HOLO TIME", APP.font.ui12, C.cyan, ALIGN_CENTER)
   text(252, 208, 52, "82%", APP.font.ui12, C.cyan, ALIGN_RIGHT)
 end

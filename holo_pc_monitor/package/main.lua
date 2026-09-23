@@ -21,6 +21,7 @@ if _G.__aida_monitor and _G.__aida_monitor.stop then
   pcall(_G.__aida_monitor.stop)
 end
 
+local Temperature = dofile(APP_DIR .. "/temperature.lua")
 local config = dofile(APP_DIR .. "/config.lua")
 config.metrics = config.metrics or {}
 local function ensure_metric(def)
@@ -215,13 +216,7 @@ local function fmt_pct(value)
   return string_format("%d%%", math_floor(value + 0.5))
 end
 
-local function fmt_temp(value)
-  value = tonumber(value)
-  if not value then
-    return "-- C"
-  end
-  return string_format("%d C", math_floor(value + 0.5))
-end
+local function fmt_temp(value) return Temperature.text(value) end
 
 local function fmt_clock(value)
   value = tonumber(value)
@@ -510,7 +505,7 @@ local function draw_dashboard_card(cvs, x, title, value, color, caption, suffix)
   draw_text(cvs, x, 35, 75, title, C.text, 11, ALIGN_CENTER, 255)
   draw_arc_span(cvs, x + 37, 87, 32, 0, 359, C.line, 255, 2)
   draw_arc_span(cvs, x + 37, 87, 32, -90, (clamp_pct(value) or 0) * 3.58, color, 255, 3)
-  local display = value and tostring(math_floor(value + 0.5)) .. (suffix or "") or "--"
+  local display = suffix == "temperature" and Temperature.text(value) or (value and tostring(math_floor(value + 0.5)) .. (suffix or "") or "--")
   draw_text(cvs, x + 8, 78, 58, display, C.text, 18, ALIGN_CENTER, 255)
 end
 
@@ -579,7 +574,7 @@ end
 
 local function redraw_dashboard(cvs)
   local clock, date = dashboard_clock()
-  local weather = S.weather_city .. "//" .. S.weather_text .. "//" .. (S.weather_temp and tostring(math_floor(S.weather_temp + 0.5)) .. "°C" or "--°C")
+  local weather = S.weather_city .. "//" .. S.weather_text .. "//" .. Temperature.text(S.weather_temp)
   local function weather_icon(x, y, code)
     code = tostring(code or "999")
     local is_rain = code:match("^3") ~= nil
@@ -636,7 +631,7 @@ local function redraw_dashboard(cvs)
   draw_dashboard_card(cvs, 4, "CPU", S.cpu_usage, 0x25CEF4, "Usage", "%")
   draw_dashboard_card(cvs, 83, "GPU", S.gpu_usage, 0xA857F4, "Usage", "%")
   draw_dashboard_card(cvs, 162, "RAM", S.mem_usage, 0x8DF018, "Usage", "%")
-  draw_dashboard_card(cvs, 241, "TEMP", S.cpu_temp, 0xFF8707, "Temperature", " C")
+  draw_dashboard_card(cvs, 241, "TEMP", S.cpu_temp, 0xFF8707, "Temperature", "temperature")
 
   draw_panel(cvs, 4, 132, 184, 100, 6)
   draw_text(cvs, 11, 138, 156, "PERFORMANCE", C.text, 10, ALIGN_LEFT, 255)
@@ -743,7 +738,7 @@ end
 local function draw_clock_temp(cvs, x, y, clock_value, temp_value, color)
   draw_bold_text(cvs, x, y, 53, hex_clock(clock_value) .. " GHz", color, 12, ALIGN_LEFT)
   draw_arc_span(cvs, x + 58, y + 8, 1, 0, 359, color, 255, 2)
-  draw_bold_text(cvs, x + 65, y, 48, hex_number(temp_value) .. "°C", color, 12, ALIGN_LEFT)
+  draw_bold_text(cvs, x + 61, y, 58, Temperature.text(temp_value), color, 12, ALIGN_LEFT)
 end
 
 local function hex_voltage(value)
@@ -822,7 +817,7 @@ end
 local function redraw_hex(cvs)
   local clock, date = dashboard_clock()
   local weather = utf8_prefix(S.weather_city, 4) .. "/" .. utf8_prefix(S.weather_text, 3) .. "/" ..
-    (S.weather_temp and tostring(math_floor(S.weather_temp + 0.5)) .. "°C" or "--°C")
+    Temperature.text(S.weather_temp)
 
   draw_text(cvs, 12, 5, 60, clock, C.text, 14, ALIGN_LEFT, 255)
   draw_arc_span(cvs, 101, 12, 3, 0, 359, C.accent, 255, 1)

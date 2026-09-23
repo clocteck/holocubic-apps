@@ -1351,6 +1351,28 @@ end
 function Renderer:apply_update(update, defer_render)
   local view = self.views[update.id]
   if not view then return false end
+  -- Convert display text only; graph history, ranges and alarm thresholds keep source units.
+  local temperature = Renderer.temperature
+  if temperature and (update.kind == "text" or update.kind == "arc") then
+    local item = view.item
+    local source = item and item.unit and item.unit.text_style
+    if source and item.temperature_source_unit == nil then item.temperature_source_unit = source.text end
+    local unit = item and item.temperature_source_unit
+    if unit == "C" or unit == "°C" or unit == "℃" or unit == "F" or unit == "°F" or unit == "℉" then
+      local number = tonumber(tostring(update.text or ""):match("^%s*([+-]?%d+%.?%d*)%s*$"))
+      local copy = {}; for key, value in pairs(update) do copy[key] = value end
+      copy.text = number and temperature.round(temperature.value(temperature.to_celsius(number, unit))) or update.text
+      update = copy
+      source.text = temperature.symbol()
+      if view.unit then self:update_text_view(view.unit, source.text) end
+    else
+      local copy = {}; for key, value in pairs(update) do copy[key] = value end
+      copy.text = tostring(update.text or ""):gsub("([+-]?%d+%.?%d*)%s*°([CF])", function(n, u)
+        return temperature.text(temperature.to_celsius(n, u))
+      end)
+      update = copy
+    end
+  end
   if self.software_mode then
     local item = view.item
     if update.kind == "text" then
