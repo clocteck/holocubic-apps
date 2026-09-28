@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Afterglow · 余辉</title>
+<style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#000;color:#e9e3d7;font:15px/1.8 system-ui,sans-serif}main{max-width:680px;margin:0 auto;padding:24px}header{display:flex;gap:18px;align-items:center}img{width:80px;height:80px}h1{margin:0;color:#ffac00;font-size:28px}h2{font-size:18px;color:#ffac00;margin-top:28px}p{margin:10px 0}a{color:#ffce70;overflow-wrap:anywhere}select{background:#17130b;color:#ffce70;border:1px solid #655025;padding:8px;border-radius:6px}nav{display:flex;justify-content:flex-end;margin-bottom:20px}.muted{color:#aaa293}.tag{font-size:12px}li{margin:6px 0}footer{border-top:1px solid #393126;margin-top:28px;padding-top:14px;font-size:13px}</style></head>
+<body><main>
+<header><img src="main.png" alt="Afterglow"><div><h1>Afterglow <span data-t="name">余辉</span></h1><div class="tag muted">1.0.1 · HoloCubic · 320 × 240</div></div></header>
+<p data-t="intro">复古仪表时钟：IBM 3270 等宽时间码、日期和实时麦克风波形。</p>
+<h2 data-t="controlsTitle">操作方式</h2><ul><li data-t="tilt">左右倾斜设备，在 EL 琥珀、VFD 青蓝、CRT 绿色主题间切换。</li><li data-t="pad">手柄左／上：上一主题；右／下、A／Menu：下一主题。</li><li data-t="exit">手柄 Select／Home 或设备短按 HOME：返回启动器。</li><li data-t="feel">手柄按下切换一次，长按不连跳；切换间隔约 390ms。</li></ul>
+<h2 data-t="notesTitle">显示说明</h2><p data-t="gain">低输入以 8× 显示；大输入自动压缩，回落后逐档恢复。COMP 与 dB 表示显示增益压缩，并非声压测量值。</p><p data-t="fallback">VFD 与 CRT 为配色主题。缺少麦克风接口时显示内部示意波形；应用不录制或保存音频。</p><p data-t="clock">时间跟随设备系统时钟，请先在系统中设置时区并完成校时。</p>
+<h2 data-t="creditsTitle">致谢</h2><p data-t="credits">感谢 baigemozhengliu 开源 Afterglow 原项目。本版本在原项目基础上增加了中英文介绍和手柄控制。</p><a href="https://github.com/baigemozhengliu/afterglow-a-holocubic-apps" target="_blank" rel="noopener noreferrer">baigemozhengliu / afterglow-a-holocubic-apps ↗</a>
+<footer><span data-t="license">原项目采用 MIT 许可；随包保留应用及字体许可证。</span> <a href="LICENSE">MIT License</a> · <a href="FONT-LICENSE.txt" data-t="fontLicense">字体许可</a></footer></main>
+<script>
+const copy={en:{language:'Language',name:'',intro:'A retro instrument clock with IBM 3270 monospaced timecode, date and a live microphone waveform.',controlsTitle:'Controls',tilt:'Tilt left or right to switch between EL amber, VFD cyan and CRT green themes.',pad:'Gamepad Left / Up: previous theme. Right / Down, A / Menu: next theme.',exit:'Gamepad Select / Home, or a short press of the device HOME button: return to Launcher.',feel:'One change per press, without repeating while held. Theme changes are spaced about 390ms apart.',notesTitle:'Display notes',gain:'Quiet input uses 8× display gain. Loud input is compressed automatically; gain recovers in steps. COMP and dB describe display gain compression, not sound pressure level.',fallback:'VFD and CRT are color themes. An internal demonstration waveform is shown when the microphone interface is unavailable. The app does not record or save audio.',clock:'Time follows the device system clock. Set the system time zone and synchronize the clock first.',creditsTitle:'Acknowledgements',credits:'Thanks to baigemozhengliu for open-sourcing the original Afterglow project. This adaptation adds bilingual documentation and gamepad controls.',license:'The original project is MIT licensed. Application and font licenses are included.',fontLicense:'Font license'}};
+const nodes=[...document.querySelectorAll('[data-t]')];copy['zh-CN']=Object.fromEntries(nodes.map(n=>[n.dataset.t,n.textContent]));
+function apply(lang){lang=String(lang||'zh-CN').toLowerCase().startsWith('zh')?'zh-CN':'en';document.documentElement.lang=lang;nodes.forEach(n=>n.textContent=copy[lang][n.dataset.t]);}
+let reading=false;
+async function syncSystemLanguage(){
+ if(reading||document.visibilityState==='hidden')return;
+ reading=true;const abort=new AbortController();const timeout=setTimeout(()=>abort.abort(),5000);
+ try{const r=await fetch('/api/system/fs/file?path=%2Fsd%2Fapps%2Fsettings.json',{cache:'no-store',signal:abort.signal});if(!r.ok)throw Error('Settings unavailable');const s=await r.json();apply(s.language||s.locale||s.lang||'zh-CN');}catch{}finally{clearTimeout(timeout);reading=false;}
+}
+syncSystemLanguage();
+window.addEventListener('focus',syncSystemLanguage);
+document.addEventListener('visibilitychange',syncSystemLanguage);
+setInterval(syncSystemLanguage,5000);
+</script></body></html>

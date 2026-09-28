@@ -1,0 +1,11 @@
+name = Afterglow
+name_zh_cn = Afterglow 余辉
+name_en = Afterglow
+kind = app
+category = clock
+catalog_scope = community
+entry = main.lua
+icon = main.png
+description = Retro instrument clock with tilt/gamepad theme switching and live microphone waveform
+description_zh = 320x240 复古仪表时钟，支持左右倾斜及手柄切换主题，显示实时麦克风波形
+version = 1.0.1
