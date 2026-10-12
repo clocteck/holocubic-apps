@@ -44,7 +44,7 @@
       <div>
         <p class="kicker zh">系统启动器</p><p class="kicker en">System launcher</p>
         <h1 id="title">Launcher</h1>
-<p class="summary zh">Launcher 1.30：改进 Wi-Fi 配网断连状态判断，并保留应用状态局部刷新。</p><p class="summary en">Launcher 1.30 improves Wi-Fi provisioning disconnect handling while preserving in-place app state updates.</p>
+<p class="summary zh">Launcher 1.32：显示应用实际作者，商店连接失败时仍可查看和管理本地应用。</p><p class="summary en">Launcher 1.32 displays app authors and keeps local apps available when the store is unreachable.</p>
       </div>
       <button class="lang-toggle" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
     </section>
@@ -82,9 +82,9 @@
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App Info</h2>
         <div class="meta">
           <div class="meta-item"><span class="label zh">安装包大小</span><span class="label en">Package size</span><span class="value zh">约 1.2 MB</span><span class="value en">About 1.2 MB</span></div>
-<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.30</span></div>
+<div class="meta-item"><span class="label zh">版本号</span><span class="label en">Version</span><span class="value">1.32</span></div>
         </div>
-<p class="note zh">1.30 更新内容：识别常见 Wi-Fi 认证断连原因，忽略连接过程中的暂态或旧错误，并在超时时显示多语言提示及断连原因；保留 1.26 的应用状态局部刷新。</p><p class="note en">Version 1.30 recognizes common Wi-Fi authentication disconnect reasons, ignores transient or stale errors while connecting, and shows a localized timeout with the disconnect reason. The in-place app state updates from 1.26 remain intact.</p>
+<p class="note zh">1.32 更新内容：显示 app.info 中的作者；本地列表与云端目录独立加载，云端失败不影响本地信息查看和卸载；已安装列表跨官方/社区显示；设备断连时保留上次列表并禁用操作。未填写作者时保留默认文案，云端作者显示需要配套服务端目录接口更新。</p><p class="note en">Version 1.32 displays app.info authors and loads local apps independently of the cloud catalog. Local details and removal remain available when the store is unreachable. Installed apps span both scopes. Device disconnections preserve the last list and disable actions. Missing authors retain default labels; cloud author display requires the matching server update.</p>
       </section>
     </div>
     <footer class="opensource"><span class="zh">开源协议：GPL-3.0 · Git 地址：</span><span class="en">Open source license: GPL-3.0 · Git: </span><a href="https://github.com/clocteck" target="_blank" rel="noopener">https://github.com/clocteck</a></footer>

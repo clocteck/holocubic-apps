@@ -474,6 +474,8 @@
     .market-app[data-scope="community"] .community-note{display:flex}
     .community-note svg{width:19px;height:19px;flex:0 0 auto;margin-top:1px;color:var(--community)}
 
+    .store-status-note{margin:0 0 18px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:#fff8ee;color:var(--muted);font-size:13px;line-height:1.6}
+
     .catalog-toolbar{
       display:flex;
       align-items:center;
@@ -1094,6 +1096,7 @@
           </div>
         </div>
 
+        <p class="store-status-note" id="storeStatusNote" role="status" hidden></p>
         <div class="app-grid" id="appGrid"></div>
         <div class="empty-state" id="emptyState">
           <strong>应用加载中</strong>
@@ -1146,6 +1149,13 @@
       ja:{search:"アプリ、作者、カテゴリを検索",officialStore:"公式ストア",officialSubtitle:"公式に保守・検証",communityStore:"コミュニティ",communitySubtitle:"クリエイターのアプリと拡張",createApp:"アプリを作る",showInstalled:"インストール済み",showAll:"すべて表示",all:"すべて",detail:"詳細",install:"インストール",update:"更新",installed:"インストール済み",uninstall:"削除",uninstalling:"削除中",unavailable:"利用不可",preparing:"準備中",items:"件",loadingTitle:"アプリを読み込み中",loadingNote:"デバイスとクラウドのカタログを取得中。",emptyTitle:"該当するアプリはありません",emptyNote:"別の検索条件をお試しください。",loadFailed:"カタログを読み込めません",connected:"接続済み",connecting:"カタログに接続中",connectionFailed:"接続失敗",officialPublisher:"Cubic 公式",communityPublisher:"コミュニティ開発者",officialBadge:"公式",communityBadge:"コミュニティ",cloudInfo:"クラウドアプリ情報",openNew:"新しいウィンドウで開く",warningStrong:"インストール前に説明を確認してください。",warningText:"コミュニティアプリは作者が保守します。",categories:{game:"ゲーム",weather:"天気",clock:"時計",media:"音楽・メディア",tool:"ツール"},kinds:{app:"デバイスアプリ",service:"バックグラウンドサービス",launcher:"ランチャー"},scopes:{official:{kicker:"Cubic verified",title:"Cubic をもっと便利に。",description:"公式・安定・互換。",primary:"公式アプリ",cardLabel:"公式アプリ",cardValue:"安定した継続更新",eyebrow:"Official collection",catalog:"公式アプリ"},community:{kicker:"Made by creators",title:"コミュニティアプリを探す。",description:"ゲームと拡張を発見。",primary:"コミュニティアプリ",cardLabel:"コミュニティ",cardValue:"より多くの可能性",eyebrow:"Community picks",catalog:"コミュニティ"}}},
       "zh-TW":{search:"搜尋應用、作者或分類",officialStore:"官方商店",officialSubtitle:"官方維護與驗證",communityStore:"社群應用",communitySubtitle:"來自創作者的玩法與擴充",createApp:"創作應用",showInstalled:"查看已安裝",showAll:"顯示全部",all:"全部",detail:"詳情",install:"安裝",update:"更新",installed:"已安裝",uninstall:"卸載",uninstalling:"卸載中",unavailable:"不可安裝",preparing:"準備中",items:"個項目",loadingTitle:"應用載入中",loadingNote:"正在讀取裝置與雲端目錄。",emptyTitle:"沒有符合的應用",emptyNote:"請嘗試其他搜尋或分類。",loadFailed:"無法讀取應用目錄",connected:"已連線",connecting:"正在連線目錄",connectionFailed:"目錄連線失敗",officialPublisher:"Cubic 官方",communityPublisher:"社群開發者",officialBadge:"官方",communityBadge:"社群",cloudInfo:"雲端應用介紹",openNew:"新視窗開啟",warningStrong:"安裝前請查看說明。",warningText:"社群應用由創作者維護，請留意權限與相容性。",categories:{game:"遊戲",weather:"天氣",clock:"時間與時鐘",media:"音樂與媒體",tool:"工具"},kinds:{app:"裝置應用",service:"後台服務",launcher:"啟動器"},scopes:{official:{kicker:"Cubic verified",title:"為 Cubic，裝上更多可能。",description:"官方維護，相容穩定。",primary:"瀏覽官方應用",cardLabel:"官方應用",cardValue:"穩定、相容、持續更新",eyebrow:"Official collection",catalog:"官方應用"},community:{kicker:"Made by creators",title:"探索社群新作。",description:"發現更多遊戲與裝置擴充。",primary:"瀏覽社群應用",cardLabel:"社群創作",cardValue:"更多玩法，持續生長",eyebrow:"Community picks",catalog:"社群應用"}}}
     };
+    const CONNECTION_I18N = {
+      "zh-CN":{localApps:"已安装应用",deviceOffline:"无法连接设备",deviceOfflineNote:"无法连接设备。保留上次列表，操作暂不可用，请检查设备连接后重试。",deviceLoading:"正在连接设备",cloudOffline:"商店暂不可用",cloudOfflineNote:"商店暂时无法连接，已显示本地应用。仍可查看本地信息或卸载，请点击刷新重试。",cloudLoadingNote:"正在连接商店，本地应用可先查看和管理。",cloudUnavailable:"云端功能暂不可用",noLocalApps:"暂无已安装应用",retry:"刷新 / 重试",localInfo:"本地应用信息",refreshed:"应用目录已刷新"},
+      en:{localApps:"Installed apps",deviceOffline:"Device unreachable",deviceOfflineNote:"Cannot reach the device. Previous results are kept, but actions are disabled. Check the connection and retry.",deviceLoading:"Connecting to device",cloudOffline:"Store unavailable",cloudOfflineNote:"The store is unreachable. Local apps remain available for viewing and removal. Refresh to retry.",cloudLoadingNote:"Connecting to the store. You can already view and manage local apps.",cloudUnavailable:"Cloud unavailable",noLocalApps:"No installed apps",retry:"Refresh / Retry",localInfo:"Local app information",refreshed:"App catalog refreshed"},
+      ja:{localApps:"インストール済みアプリ",deviceOffline:"デバイスに接続できません",deviceOfflineNote:"デバイスに接続できません。前回の一覧を保持しますが、操作は無効です。接続を確認して再試行してください。",deviceLoading:"デバイスに接続中",cloudOffline:"ストアを利用できません",cloudOfflineNote:"ストアに接続できないため、ローカルアプリを表示しています。情報の確認と削除は可能です。更新して再試行してください。",cloudLoadingNote:"ストアに接続中です。ローカルアプリは確認・管理できます。",cloudUnavailable:"クラウド利用不可",noLocalApps:"インストール済みアプリはありません",retry:"更新 / 再試行",localInfo:"ローカルアプリ情報",refreshed:"アプリ一覧を更新しました"},
+      "zh-TW":{localApps:"已安裝應用",deviceOffline:"無法連線裝置",deviceOfflineNote:"無法連線裝置。保留上次清單，操作暫不可用，請檢查裝置連線後重試。",deviceLoading:"正在連線裝置",cloudOffline:"商店暫不可用",cloudOfflineNote:"商店暫時無法連線，已顯示本機應用。仍可查看本機資訊或卸載，請點擊重新整理重試。",cloudLoadingNote:"正在連線商店，本機應用可先查看和管理。",cloudUnavailable:"雲端功能暫不可用",noLocalApps:"暫無已安裝應用",retry:"重新整理 / 重試",localInfo:"本機應用資訊",refreshed:"應用清單已重新整理"}
+    };
+    Object.keys(CONNECTION_I18N).forEach((language)=>Object.assign(STORE_I18N[language],CONNECTION_I18N[language]));
     const categoryLabels = {game:true,weather:true,clock:true,media:true,tool:true};
     const kindLabels = {app:true,service:true,launcher:true};
     const iconPalettes = [
@@ -1194,7 +1204,9 @@
       apps:[], rawItems:[], system:null, scope:initialScope, filter:initialCategory,
       kindOnly:initialKind, installedOnly:false, query:"", selected:null,
       jobsById:new Map(), pending:new Map(), handledJobs:new Set(), pollTimer:0,
-      uninstalling:new Set(), loading:false, loadedOnce:false, loadError:""
+      uninstalling:new Set(), loading:false, loadedOnce:false,
+      deviceStatus:"idle", cloudStatus:"idle", deviceError:"", cloudError:"", catalogServer:"", deviceRequest:0,
+      installedMetadata:new Map()
     };
     const appRoot = document.getElementById("marketApp");
     const grid = document.getElementById("appGrid");
@@ -1233,6 +1245,13 @@
         throw new Error((data && (data.error || data.message)) || ("HTTP " + response.status));
       }
       return data;
+    }
+
+    async function readAPI(path,timeoutMs){
+      const controller = new AbortController();
+      const timer = window.setTimeout(()=>controller.abort(),timeoutMs);
+      try{return await api(path,{signal:controller.signal});}
+      finally{window.clearTimeout(timer);}
     }
 
     function localizedValue(raw,prefix){
@@ -1309,14 +1328,15 @@
       const description = localizedValue(raw,"description") || (currentLanguage === "zh-CN" ? "暂无应用介绍。" : "No description available.");
       const remoteVersion = String(raw && raw.version || "");
       const installedVersion = String(installedInfo && (installedInfo.version || installedInfo.app_version) || "");
+      const metadata = state.installedMetadata.get(id + "@" + installedVersion) || {};
       return {
         id,name,description,scope,kind,category,
-        publisher:scope === "official" ? storeText("officialPublisher") : storeText("communityPublisher"),
+        publisher:String(raw && raw.author || "").trim() || String(metadata.author || "").trim() || String(installedInfo && installedInfo.author || "").trim() || (scope === "official" ? storeText("officialPublisher") : storeText("communityPublisher")),
         verified:scope === "official",
         version:remoteVersion || "--",
         size:formatBytes(raw && raw.package_size),
         icon:initials(name),
-        iconUrl:String(raw && raw.icon_url || ""),
+        iconUrl:installedInfo && String(installedInfo.source || "").toLowerCase() === "sd" && state.cloudStatus !== "online" ? "/api/system/fs/file?path=" + encodeURIComponent("/sd/apps/" + id + "/main.png") : String(raw && raw.icon_url || ""),
         iconBg:iconBackground(id),
         manifestUrl:String(raw && raw.manifest_url || ""),
         descriptionPageUrl:String(raw && raw.description_page_url || ""),
@@ -1332,13 +1352,15 @@
       const items = [];
       installed.forEach((info,id)=>{
         if(!id || id === "launcher" || existingIds.has(id) || String(info && info.source || "").toLowerCase() !== "sd"){return;}
-        const raw = Object.assign({},info || {},{
+        const metadata = state.installedMetadata.get(id + "@" + String(info.version || info.app_version || "")) || {};
+        const source = Object.assign({},info,metadata);
+        const raw = Object.assign({},source,{
           id,
           app_id:id,
-          catalog_scope:"community",
-          kind:String(info && info.kind || "app"),
-          category:String(info && info.category || "tool"),
-          version:String(info && (info.version || info.app_version) || ""),
+          catalog_scope:String(source.catalog_scope || "community"),
+          kind:String(source.kind || "app"),
+          category:String(source.category || "tool"),
+          version:String(info.version || info.app_version || source.version || ""),
           package_size:Number(info && (info.package_size || info.size) || 0),
           icon_url:"/api/system/fs/file?path=" + encodeURIComponent("/sd/apps/" + id + "/main.png"),
           manifest_url:"",
@@ -1351,13 +1373,58 @@
 
     function updateNormalizedApps(){
       const installed = installedMap(state.system);
-      const catalogItems = state.rawItems.map((item)=>normalizeItem(item,installed)).filter((item)=>item.id);
+      // When the store is unavailable, installed metadata is the source of truth.
+      const catalogItems = state.cloudStatus === "online" ? state.rawItems.map((item)=>normalizeItem(item,installed)).filter((item)=>item.id) : [];
       const catalogIds = new Set(catalogItems.map((item)=>item.id));
       state.apps = catalogItems.concat(localInstalledItems(installed,catalogIds));
       state.apps.sort((a,b)=>{
         if(a.installed !== b.installed){return a.installed ? -1 : 1;}
         return a.name.localeCompare(b.name,currentLanguage,{numeric:true,sensitivity:"base"});
       });
+    }
+
+    function parseAppInfoMetadata(text){
+      const metadata = Object.create(null);
+      String(text || "").replace(/^\uFEFF/,"").split(/\r?\n/).forEach((line)=>{
+        const trimmed = line.trim();
+        if(!trimmed || trimmed[0] === "#" || trimmed[0] === ";"){return;}
+        const split = trimmed.indexOf("=");
+        const key = trimmed.slice(0,split).trim();
+        if(split > 0 && /^(author|version|kind|category|catalog_scope|name(?:_[a-z_]+)?|description(?:_[a-z_]+)?)$/.test(key)){
+          metadata[key] = trimmed.slice(split + 1).trim();
+        }
+      });
+      return metadata;
+    }
+
+    async function loadInstalledMetadata(){
+      if(state.deviceStatus !== "online"){return;}
+      const cache = state.installedMetadata;
+      const cacheKey = (app)=>app.id + "@" + String(app.installedInfo && (app.installedInfo.version || app.installedInfo.app_version) || "");
+      const pending = state.apps.filter((app)=>{
+        const info = app.installedInfo;
+        return info && String(info.source || "").toLowerCase() === "sd" &&
+          !cache.has(cacheKey(app));
+      });
+      pending.forEach((app)=>cache.set(cacheKey(app),{}));
+      for(let offset = 0; offset < pending.length; offset += 3){
+        if(cache !== state.installedMetadata || state.deviceStatus !== "online"){return;}
+        await Promise.all(pending.slice(offset,offset + 3).map(async (app)=>{
+          const key = cacheKey(app);
+          const controller = new AbortController();
+          const timer = window.setTimeout(()=>controller.abort(),5000);
+          try{
+            const path = "/sd/apps/" + app.id + "/app.info";
+            const response = await fetch("/api/system/fs/file?path=" + encodeURIComponent(path),{cache:"no-store",signal:controller.signal});
+            if(response.ok){cache.set(key,parseAppInfoMetadata(await response.text()));}
+          }catch(err){
+            // Older firmware or a missing app.info must not prevent browsing apps.
+          }finally{
+            window.clearTimeout(timer);
+          }
+        }));
+        if(cache === state.installedMetadata){updateNormalizedApps();render();}
+      }
     }
 
     function setConnection(text,mode){
@@ -1391,6 +1458,9 @@
     }
 
     function actionState(app){
+      if(state.deviceStatus !== "online"){
+        return {label:storeText("deviceOffline"),className:"card-button installed",disabled:true};
+      }
       const job = state.jobsById.get(app.id);
       if(job && ACTIVE_PHASES.has(String(job.phase || ""))){
         return {label:Math.max(0,Math.min(100,Math.round(Number(job.percent || 0)))) + "%",className:"card-button primary",disabled:true};
@@ -1398,7 +1468,10 @@
       if(state.pending.has(app.id)){
         return {label:storeText("preparing"),className:"card-button primary",disabled:true};
       }
-      if(app.update){return {label:storeText("update"),className:"card-button primary",disabled:false};}
+      if(state.cloudStatus !== "online"){
+        return {label:storeText(app.installed ? "installed" : "cloudUnavailable"),className:"card-button installed",disabled:true};
+      }
+      if(app.update){return {label:storeText("update"),className:"card-button primary",disabled:!app.manifestUrl};}
       if(app.installed){return {label:storeText("installed"),className:"card-button installed",disabled:true};}
       if(!app.manifestUrl){return {label:storeText("unavailable"),className:"card-button installed",disabled:true};}
       return {label:storeText("install"),className:"card-button primary",disabled:false};
@@ -1406,10 +1479,10 @@
 
     function cardMarkup(app){
       const action = actionState(app);
-      const removable = !!(app.installedInfo && app.installedInfo.source === "sd");
+      const removable = !!(app.id !== "launcher" && app.installedInfo && app.installedInfo.source === "sd");
       const uninstalling = state.uninstalling.has(app.id);
       const uninstallButton = removable
-        ? '<button class="card-button danger" type="button" data-action="uninstall" data-app-id="' + escapeHtml(app.id) + '"' + (uninstalling ? " disabled" : "") + '>' + (uninstalling ? storeText("uninstalling") : storeText("uninstall")) + '</button>'
+        ? '<button class="card-button danger" type="button" data-action="uninstall" data-app-id="' + escapeHtml(app.id) + '"' + (uninstalling || state.deviceStatus !== "online" ? " disabled" : "") + '>' + (uninstalling ? storeText("uninstalling") : storeText("uninstall")) + '</button>'
         : "";
       return '<article class="app-card" data-app-id="' + escapeHtml(app.id) + '">' +
         '<div class="app-card-top">' + iconMarkup(app,"") +
@@ -1418,17 +1491,17 @@
         '<p class="app-description">' + escapeHtml(app.description) + '</p>' +
         '<div class="app-tags">' + app.tags.map((tag)=>'<span class="app-tag">' + escapeHtml(tag) + '</span>').join("") + '</div>' +
         '<div class="app-card-footer"><div class="app-meta"><strong>v' + escapeHtml(app.version) + '</strong><span>' + escapeHtml(app.size) + ' · ' + escapeHtml(kindLabel(app.kind)) + '</span></div>' +
-        '<div class="app-actions"><button class="card-button" type="button" data-action="detail" data-app-id="' + escapeHtml(app.id) + '">' + escapeHtml(storeText("detail")) + '</button>' +
+        '<div class="app-actions"><button class="card-button" type="button" data-action="detail" data-app-id="' + escapeHtml(app.id) + '"' + (state.deviceStatus !== "online" ? ' disabled' : '') + '>' + escapeHtml(storeText("detail")) + '</button>' +
         uninstallButton + '<button class="' + action.className + '" type="button" data-action="install" data-app-id="' + escapeHtml(app.id) + '"' + (action.disabled ? " disabled" : "") + '>' + escapeHtml(action.label) + '</button></div></div></article>';
     }
 
     function visibleApps(){
       const query = state.query.trim().toLowerCase();
+      const localOnly = state.installedOnly || state.cloudStatus !== "online";
       return state.apps.filter((app)=>{
-        if(app.scope !== state.scope){return false;}
+        if(localOnly ? !app.installed : app.scope !== state.scope){return false;}
         if(state.filter !== "all" && app.category !== state.filter){return false;}
         if(state.kindOnly && app.kind !== state.kindOnly){return false;}
-        if(state.installedOnly && !app.installed){return false;}
         if(query){
           const text = [app.id,app.name,app.publisher,app.description,app.category,app.kind].concat(app.tags).join(" ").toLowerCase();
           if(!text.includes(query)){return false;}
@@ -1445,12 +1518,15 @@
       if(!apps.length){
         const title = emptyState.querySelector("strong");
         const note = emptyState.querySelector("span");
-        if(state.loading || !state.loadedOnce){
+        if(state.deviceStatus === "offline"){
+          title.textContent = storeText("deviceOffline");
+          note.textContent = storeText("deviceOfflineNote");
+        }else if(!state.loadedOnce){
           title.textContent = storeText("loadingTitle");
           note.textContent = storeText("loadingNote");
-        }else if(state.loadError){
-          title.textContent = storeText("loadFailed");
-          note.textContent = state.loadError;
+        }else if((state.installedOnly || state.cloudStatus !== "online") && !state.apps.some((app)=>app.installed)){
+          title.textContent = storeText("noLocalApps");
+          note.textContent = storeText(state.cloudStatus === "offline" ? "cloudOfflineNote" : state.cloudStatus === "loading" ? "cloudLoadingNote" : "emptyNote");
         }else{
           title.textContent = storeText("emptyTitle");
           note.textContent = storeText("emptyNote");
@@ -1462,6 +1538,34 @@
       const installedButton = document.getElementById("showInstalledBtn");
       installedButton.textContent = state.installedOnly ? storeText("showAll") : storeText("showInstalled");
       installedButton.setAttribute("aria-pressed",state.installedOnly ? "true" : "false");
+      const localOnly = state.installedOnly || state.cloudStatus !== "online";
+      document.getElementById("catalogTitle").textContent = localOnly ? storeText("localApps") : scopeCopyFor(state.scope).catalog;
+      document.getElementById("catalogEyebrow").textContent = localOnly ? "On your device" : scopeCopyFor(state.scope).eyebrow;
+      renderConnection();
+    }
+
+    function renderConnection(){
+      let note = "";
+      if(state.deviceStatus === "offline"){
+        setConnection(storeText("deviceOffline"),"error");
+        note = storeText("deviceOfflineNote");
+      }else if(state.deviceStatus !== "online"){
+        setConnection(storeText("deviceLoading"),"loading");
+      }else if(state.cloudStatus === "offline"){
+        setConnection(storeText("cloudOffline"),"error");
+        note = storeText("cloudOfflineNote");
+      }else if(state.cloudStatus !== "online"){
+        setConnection(storeText("connecting"),"loading");
+        note = storeText("cloudLoadingNote");
+      }else{
+        setConnection(storeText("connected") + " · " + state.apps.length,"");
+      }
+      const statusNote = document.getElementById("storeStatusNote");
+      statusNote.textContent = note;
+      statusNote.hidden = !note;
+      connectionChip.title = state.deviceError || state.cloudError || "";
+      refreshButton.title = storeText("retry");
+      refreshButton.setAttribute("aria-label",storeText("retry"));
     }
 
     function updateScope(scope){
@@ -1524,51 +1628,75 @@
 
     async function refreshSystemState(){
       try{
-        state.system = await api("/api/system/state");
-        updateNormalizedApps();
-        syncJobs(state.system,true);
-        if(state.selected){state.selected = state.apps.find((item)=>item.id === state.selected.id) || null;}
-        render();
-      }catch(err){
-        showToast("读取安装进度失败：" + err.message);
+        await loadDeviceState(true);
       }finally{
         schedulePoll();
       }
     }
 
+    async function loadDeviceState(announce,refreshMetadata){
+      const request = ++state.deviceRequest;
+      try{
+        const system = await readAPI("/api/system/state",6000);
+        if(!system || !Array.isArray(system.installed_apps)){throw new Error("Invalid device state");}
+        if(request !== state.deviceRequest){return;}
+        state.system = system;
+        if(refreshMetadata){state.installedMetadata = new Map();}
+        state.deviceStatus = "online";
+        state.deviceError = "";
+        state.loadedOnce = true;
+        updateNormalizedApps();
+        syncJobs(system,announce);
+        if(state.selected){state.selected = state.apps.find((item)=>item.id === state.selected.id) || null;}
+        render();
+        void loadInstalledMetadata();
+      }catch(err){
+        if(request !== state.deviceRequest){return;}
+        state.deviceStatus = "offline";
+        state.deviceError = err.message || String(err);
+        state.loadedOnce = true;
+        render();
+      }
+    }
+
+    async function loadCloudCatalog(server){
+      try{
+        const catalog = await readAPI("/api/system/apps/catalog?server=" + encodeURIComponent(server) + "&channel=stable",15000);
+        if(!catalog || !Array.isArray(catalog.items)){throw new Error("Invalid app catalog");}
+        state.rawItems = catalog.items;
+        state.cloudStatus = "online";
+        state.cloudError = "";
+      }catch(err){
+        state.cloudStatus = "offline";
+        state.cloudError = err.message || String(err);
+      }
+      // A failed catalog request must never erase the last device state.
+      updateNormalizedApps();
+      render();
+    }
+
     async function loadCatalog(silent){
       if(state.loading){return;}
       state.loading = true;
-      state.loadError = "";
+      state.deviceStatus = "loading";
+      state.cloudStatus = "loading";
+      state.deviceError = "";
+      state.cloudError = "";
       refreshButton.disabled = true;
-      setConnection(storeText("connecting"),"loading");
+      document.getElementById("previewSettingsBtn").disabled = true;
+      const server = currentServer();
+      if(server !== state.catalogServer){state.rawItems = [];state.catalogServer = server;}
       render();
       try{
-        const server = currentServer();
-        const [system,catalog] = await Promise.all([
-          api("/api/system/state"),
-          api("/api/system/apps/catalog?server=" + encodeURIComponent(server) + "&channel=stable")
-        ]);
-        state.system = system;
-        state.rawItems = Array.isArray(catalog && catalog.items) ? catalog.items : [];
-        updateNormalizedApps();
-        syncJobs(system,false);
-        state.loadedOnce = true;
-        setConnection(storeText("connected") + " · " + state.apps.length,"");
-        render();
-        if(!silent){showToast("应用目录已刷新");}
+        // Each loader applies and renders its own result immediately; neither
+        // waits for the other. allSettled only controls the refresh button.
+        await Promise.allSettled([loadDeviceState(false,true),loadCloudCatalog(server)]);
+        if(!silent && state.deviceStatus === "online" && state.cloudStatus === "online"){showToast(storeText("refreshed"));}
         schedulePoll();
-      }catch(err){
-        state.rawItems = [];
-        state.apps = [];
-        state.loadedOnce = true;
-        state.loadError = err.message || "请检查设备网络和商店地址。";
-        setConnection(storeText("connectionFailed"),"error");
-        render();
-        if(!silent){showToast("刷新失败：" + (err.message || err));}
       }finally{
         state.loading = false;
         refreshButton.disabled = false;
+        document.getElementById("previewSettingsBtn").disabled = false;
         render();
       }
     }
@@ -1598,8 +1726,10 @@
     }
 
     function openDetail(app){
+      if(!app || state.deviceStatus !== "online"){return;}
       state.selected = app;
-      const url = detailUrlWithLanguage(app.descriptionPageUrl);
+      const url = state.cloudStatus === "online" ? detailUrlWithLanguage(app.descriptionPageUrl) : "";
+      document.querySelector(".cloud-detail-copy span").textContent = storeText(url ? "cloudInfo" : "localInfo");
       document.getElementById("dialogTitle").textContent = app.name;
       document.getElementById("dialogPublisher").textContent = (app.scope === "official" ? storeText("officialStore") : storeText("communityStore")) + " · v" + app.version;
       modal.classList.add("open");
@@ -1658,15 +1788,14 @@
     }
 
     async function uninstallApp(app){
-      if(!app || !app.installedInfo || app.installedInfo.source !== "sd" || state.uninstalling.has(app.id)){return;}
+      if(!app || state.deviceStatus !== "online" || !app.installedInfo || app.installedInfo.source !== "sd" || app.id === "launcher" || state.uninstalling.has(app.id)){return;}
       if(!window.confirm((currentLanguage === "zh-CN" ? "确定卸载「" : "Uninstall ") + app.name + (currentLanguage === "zh-CN" ? "」吗？" : "?"))){return;}
       state.uninstalling.add(app.id);
       render();
       try{
         await api("/api/system/apps?id=" + encodeURIComponent(app.id),{method:"DELETE"});
-        state.system = await api("/api/system/state");
-        updateNormalizedApps();
-        syncJobs(state.system,false);
+        state.installedMetadata.delete(app.id + "@" + String(app.installedInfo.version || app.installedInfo.app_version || ""));
+        await loadDeviceState(false);
         showToast((currentLanguage === "zh-CN" ? "已卸载：" : "Uninstalled: ") + app.name);
       }catch(err){
         showToast("卸载失败：" + (err.message || err));
