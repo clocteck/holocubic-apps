@@ -1,0 +1,14 @@
+name = Pip Boy
+name_zh = Pip Boy 时钟
+name_zh_cn = Pip Boy 时钟
+name_en = Pip Boy Clock
+kind = app
+category = clock
+catalog_scope = community
+author = wzh
+entry = main.lua
+icon = main.png
+version = 0.0.0
+description = A phosphor-green pixel clock with live weather and display brightness
+description_zh = 荧光绿点阵时钟，显示实时天气、湿度与屏幕亮度
+description_zh_cn = 荧光绿点阵时钟，显示实时天气、湿度与屏幕亮度

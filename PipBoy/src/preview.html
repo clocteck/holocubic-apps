@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Pip Boy · 320×240 HTML 预览（非设备实时画面）</title>
+  <style>
+    :root { --green:#82f65c; --bright:#acff84; --muted:#8eb87b; --line:#558f3b; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; width:320px; height:240px; overflow:hidden; background:#030b04; }
+    body { font-family:"Cascadia Mono",Consolas,monospace; color:var(--green); }
+    .face { position:relative; width:320px; height:240px; overflow:hidden; isolation:isolate; background:#030b04 url("../package/assets/background.png") center / 320px 240px no-repeat; }
+    .text { position:absolute; margin:0; line-height:1; font-weight:700; }
+    .brand { left:13px; top:13px; font-size:12px; letter-spacing:1px; }
+    .weather-icon { position:absolute; left:278px; top:4px; width:28px; height:28px; }
+    .weather-unknown { left:278px; top:13px; width:28px; text-align:center; color:var(--muted); font-size:12px; }
+    .rule { position:absolute; left:13px; width:294px; height:1px; background:var(--line); }
+    .top-rule { top:34px; }
+    .weekday { left:13px; top:48px; width:41px; height:23px; padding-top:5px; background:var(--green); color:#092006; font-size:12px; text-align:center; }
+    .date { left:62px; top:53px; font-size:12px; color:var(--bright); }
+    .clock { position:absolute; left:10px; top:79px; width:182px; height:65px; font-variant-numeric:tabular-nums; }
+    .digits { position:absolute; top:0; font:600 56px/1.1 "Cascadia Mono",Consolas,monospace; letter-spacing:0; color:var(--bright); }
+    #hours { left:0; } #minutes { left:92px; }
+    .colon { position:absolute; left:67px; top:0; font:600 56px/1.1 "Cascadia Mono",Consolas,monospace; }
+    .seconds { left:153px; top:143px; font-size:14px; color:var(--muted); }
+    .temperature { left:13px; top:175px; font-size:24px; letter-spacing:0; color:var(--bright); }
+    .condition { left:113px; top:181px; font-size:12px; }
+    .bottom-rule { top:207px; width:174px; }
+    .humidity { left:13px; top:221px; font-size:12px; }
+    .weather-status { left:119px; top:221px; font-size:12px; }
+    .brightness { right:13px; top:221px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <main class="face" aria-label="Pip Boy 320×240 布局预览，非设备实时画面">
+    <h1 class="text brand">PIP BOY</h1>
+    <img class="weather-icon" id="weather-icon" src="../package/assets/weather-line/sun.png" alt="示例：浅绿色线稿晴天图标" hidden>
+    <div class="text weather-unknown" id="weather-unknown">--</div>
+    <div class="rule top-rule"></div>
+    <div class="text weekday" id="weekday">---</div>
+    <time class="text date" id="date">--.-- / ----</time>
+    <section class="clock" aria-label="浏览器本地时间">
+      <span class="digits" id="hours">--</span><span class="colon">:</span><span class="digits" id="minutes">--</span>
+    </section>
+    <div class="text seconds" id="seconds">:--</div>
+    <div class="text temperature" id="temperature">--°C</div>
+    <div class="text condition" id="condition">--</div>
+    <div class="rule bottom-rule"></div>
+    <div class="text humidity" id="humidity">RH --%</div>
+    <div class="text weather-status" id="weather-status">WX --</div>
+    <div class="text brightness" title="浏览器无法读取设备屏幕亮度；设备 app 通过 sys.getbrightness() 获取">BRI --%</div>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    const pad = n => String(n).padStart(2, '0');
+    const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    function updateClock() {
+      const now = new Date();
+      byId('hours').textContent = pad(now.getHours());
+      byId('minutes').textContent = pad(now.getMinutes());
+      byId('seconds').textContent = ':' + pad(now.getSeconds());
+      byId('weekday').textContent = weekdays[now.getDay()];
+      byId('date').textContent = `${pad(now.getMonth()+1)}.${pad(now.getDate())} / ${now.getFullYear()}`;
+      byId('date').dateTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    }
+    // This is a layout preview, not an invented live-device connection.
+    if (new URLSearchParams(location.search).get('demo') === '1') {
+      byId('weather-icon').hidden = false;
+      byId('weather-unknown').hidden = true;
+      byId('temperature').textContent = '24°C';
+      byId('condition').textContent = '示例';
+      byId('humidity').textContent = 'RH 48%';
+      byId('weather-status').textContent = 'DEMO';
+    }
+    updateClock(); setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
