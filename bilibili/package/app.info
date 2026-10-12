@@ -1,4 +1,5 @@
 name = BiliBili
+author = wzh
 name_zh_cn = BiliBili
 name_en = BiliBili
 entry = main.lua
