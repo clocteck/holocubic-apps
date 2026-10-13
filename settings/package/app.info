@@ -18,3 +18,5 @@ description_zh_hant = 調整 Wi-Fi、藍牙手把與螢幕亮度
 description_en = Adjusts Wi-Fi, Bluetooth controllers, and screen brightness
 description_ja = Wi-Fi、Bluetooth コントローラー、画面の明るさを設定します
 version = 0.0.4
+name_de = Einstellungen
+description_de = WLAN, Bluetooth-Controller und Bildschirmhelligkeit einstellen.

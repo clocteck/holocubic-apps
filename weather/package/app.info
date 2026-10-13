@@ -17,3 +17,5 @@ description_zh_hant = 顯示目前天氣、時間與三日天氣預報
 description_en = Shows current weather, time, and a three-day forecast
 description_ja = 現在の天気、時刻、3 日間の天気予報を表示します
 version = 1.15
+name_de = Wetter
+description_de = Aktuelles Wetter, Uhrzeit und eine Dreitagesvorhersage.

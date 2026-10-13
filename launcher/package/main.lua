@@ -31,7 +31,7 @@ local DISPLAY_SCHEDULE_SERVICE_ID = "display_schedule"
 local DISPLAY_SCHEDULE_APP_DIR = "/sd/apps/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_DIR = "/sd/apps/launcher/services/display_schedule"
 local DISPLAY_SCHEDULE_BUNDLE_VERSION = "1.11"
-local DISPLAY_SCHEDULE_BUNDLE_BUILD = "2026-07-28-handler-256"
+local DISPLAY_SCHEDULE_BUNDLE_BUILD = "2026-10-12-master-volume"
 
 local function configure_httpd_capacity()
   if not httpd or not httpd.start then return false end
@@ -48,13 +48,15 @@ end
 configure_httpd_capacity()
 
 local function normalize_language(value)
-  local text = tostring(value or ""):gsub("_", "-")
+  local text = tostring(value or ""):gsub("_", "-"):lower()
   if text == "en" or text:match("^en%-") then return "en" end
+  if text == "de" or text:match("^de%-") then return "de" end
   if text == "ja" or text:match("^ja%-") then return "ja" end
-  if text == "zh-TW" or text == "zh-Hant" or text:match("^zh%-Hant") or text:match("^zh%-HK") then
+  if text:match("^zh%-tw") or text:match("^zh%-hant") or text:match("^zh%-hk") or text:match("^zh%-mo") then
     return "zh-TW"
   end
-  return DEFAULT_LANGUAGE
+  if text == "" or text == "zh" or text:match("^zh%-") then return DEFAULT_LANGUAGE end
+  return "en"
 end
 
 local function read_settings()
@@ -120,6 +122,7 @@ local function ensure_display_schedule_service()
   local current_build = read_info_value(DISPLAY_SCHEDULE_APP_DIR .. "/app.info", "build")
   if file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
       and file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/main.html")
+      and file.exists(DISPLAY_SCHEDULE_APP_DIR .. "/volume.lua")
       and current_version ~= ""
       and not version_lt(current_version, DISPLAY_SCHEDULE_BUNDLE_VERSION)
       and current_build == DISPLAY_SCHEDULE_BUNDLE_BUILD then
@@ -127,13 +130,15 @@ local function ensure_display_schedule_service()
   end
 
   if file.mkdir then pcall(function() file.mkdir(DISPLAY_SCHEDULE_APP_DIR) end) end
-  local ok_info = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/app.info", DISPLAY_SCHEDULE_APP_DIR .. "/app.info")
+  local ok_volume = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/volume.lua", DISPLAY_SCHEDULE_APP_DIR .. "/volume.lua")
+  if not ok_volume then return false end
   local ok_main = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.lua", DISPLAY_SCHEDULE_APP_DIR .. "/main.lua")
   local ok_page = copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/main.html", DISPLAY_SCHEDULE_APP_DIR .. "/main.html")
-  if ok_info and ok_main and ok_page and app and app.rescan then
+  local ok_info = ok_main and ok_page and copy_file(DISPLAY_SCHEDULE_BUNDLE_DIR .. "/app.info", DISPLAY_SCHEDULE_APP_DIR .. "/app.info")
+  if ok_info and ok_main and ok_page and ok_volume and app and app.rescan then
     pcall(function() app.rescan() end)
   end
-  return ok_info and ok_main and ok_page
+  return ok_info and ok_main and ok_page and ok_volume
 end
 
 local function start_display_schedule_service()
@@ -160,11 +165,13 @@ local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART
 local UI_TEXT = {
   ["zh-CN"] = { no_apps = "暂无应用" },
   en = { no_apps = "NO APPS" },
+  de = { no_apps = "KEINE APPS" },
   ja = { no_apps = "アプリなし" },
   ["zh-TW"] = { no_apps = "暫無應用" },
 }
 
 local UI_FONT_PATHS = {
+  de = "/sd/apps/launcher/font/launcher_ui_de_16.bin",
   ["zh-CN"] = "/sd/apps/launcher/font/launcher_ui_zh_cn_16.bin",
   ja = "/sd/apps/launcher/font/launcher_ui_ja_16.bin",
   ["zh-TW"] = "/sd/apps/launcher/font/launcher_ui_zh_tw_16.bin",
@@ -267,16 +274,18 @@ local function localized_app_name(item)
   local info = app_info_names(id)
   local keys = LANGUAGE == "zh-CN" and { "name_zh_cn", "name_zh", "name_cn" }
     or LANGUAGE == "zh-TW" and { "name_zh_tw", "name_zh_hant", "name_tw" }
-    or LANGUAGE == "ja" and { "name_ja", "name_jp" }
+    or LANGUAGE == "ja" and { "name_ja", "name_jp", "name_en", "name_en_us" }
+    or LANGUAGE == "de" and { "name_de", "name_de_de", "name_en", "name_en_us" }
     or { "name_en", "name_en_us" }
   for _, key in ipairs(keys) do
     if info[key] and info[key] ~= "" then return info[key] end
   end
   local known = APP_NAMES[id]
   if known and known[LANGUAGE] then return known[LANGUAGE] end
+  if known and (LANGUAGE == "de" or LANGUAGE == "ja") and known.en then return known.en end
   local raw = text_or(item.name, id)
   -- 英文模式绝不把未本地化的 CJK 名称直接显示到桌面。
-  if LANGUAGE == "en" and raw:find("[\128-\255]") then return id ~= "" and id or "App" end
+  if (LANGUAGE == "en" or LANGUAGE == "de" or LANGUAGE == "ja") and raw:find("[\128-\255]") then return id ~= "" and id or "App" end
   return raw
 end
 

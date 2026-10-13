@@ -15,6 +15,9 @@ function M.new(fs,json)
   end
   function S.save(name,value)
     assert(name=='session' or name=='settings')
+    if name=='settings' then
+      local copy={};for k,v in pairs(value)do if k~='volume'then copy[k]=v end end;value=copy
+    end
     for _,p in ipairs({'/sd/data',root})do if not fs.exists(p)then fs.mkdir(p)end end
     local target=root..'/'..name..'.json'
     local tmp,backup=target..'.tmp',root..'/'..name..'.bak'

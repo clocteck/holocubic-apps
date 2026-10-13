@@ -17,3 +17,5 @@ description_zh_tw = Launcher 1.32：顯示應用實際作者，商店連線失�
 description_zh_hant = Launcher 1.32：顯示應用實際作者，商店連線失敗時仍可查看和管理本機應用
 description_en = Launcher 1.32 displays app authors and keeps local apps available for viewing and management when the store is unreachable.
 description_ja = Launcher 1.32 はアプリの作者を表示し、ストアに接続できない場合もローカルアプリの確認・管理が可能です
+name_de = Launcher
+description_de = Apps starten und das Gerät verwalten.

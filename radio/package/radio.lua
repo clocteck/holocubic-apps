@@ -1,5 +1,6 @@
 local DIR='/sd/apps/radio'
 local SETTINGS='/sd/apps/settings.json'
+local master_volume=dofile(DIR..'/volume.lua').new()
 local JSON=rawget(_G,'sjson') or rawget(_G,'json')
 local P=dofile(DIR..'/protocol.lua')
 local A={running=true,timers={},generation=0,index=1,volume=25,default_volume=25,language='zh-CN',status='idle',title='',error='',list_open=false,cursor=1,stats={}}
@@ -24,9 +25,8 @@ local function clamp(v) return math.max(0,math.min(100,math.floor(tonumber(v) or
 local settings=read_json(SETTINGS)
 if settings then
   A.language=settings.language or settings.locale or settings.lang or A.language
-  A.default_volume=clamp(settings.radio_volume);A.volume=A.default_volume
-  if settings.radio_volume==nil then settings.radio_volume=A.default_volume;write_json(SETTINGS,settings) end
 else A.error='Cannot read shared settings; using safe volume 25' end
+A.volume=master_volume.value;A.default_volume=A.volume
 local Storage=dofile(DIR..'/storage.lua').new(file,JSON)
 local catalog=Storage.load('stations')
 A.stations=(catalog and catalog.stations) or dofile(DIR..'/stations.lua')
@@ -36,6 +36,8 @@ for i,s in ipairs(A.stations) do if s.id==saved.station_id then A.index=i end en
 A.cursor=A.index
 local audio_ok,audio=pcall(require,DIR..'/modules/radio.so')
 if audio_ok then A.audio=audio;audio.volume(A.volume) else A.error=tostring(audio);A.status='error' end
+master_volume.on_error=function(e) if e then A.error=e end end
+master_volume.start(function(v) A.volume=v;A.default_volume=v;if A.audio then return A.audio.volume(v) end end)
 local function after(name,ms,fn)
   if A.timers[name] then A.timers[name]:unregister() end
   local t=tmr.create();A.timers[name]=t;t:alarm(ms,tmr.ALARM_SINGLE,function() if A.running then fn() end end)
@@ -155,10 +157,10 @@ play=function(index,save)
   end)
   return true
 end
-function A.set_volume(value) A.volume=clamp(value);if A.audio then A.audio.volume(A.volume) end end
+function A.set_volume(value) return master_volume.set(clamp(value)) end
 function A.next(delta) A.list_open=false;return play(A.index+delta,true) end
 function A.toggle() if A.status=='idle' or A.status=='error' then return play(A.index,true) else A.want_play=false;halt();return true end end
-function A.exit() if not A.running then return end;halt();A.running=false;for _,t in pairs(A.timers) do pcall(function()t:unregister()end) end;if key then key.off() end;if controller and controller.on then controller.on('ble-main',nil) end;if A.ui then A.ui.close() end;if app then app.exit() end end
+function A.exit() if not A.running then return end;master_volume.stop();halt();A.running=false;for _,t in pairs(A.timers) do pcall(function()t:unregister()end) end;if key then key.off() end;if controller and controller.on then controller.on('ble-main',nil) end;if A.ui then A.ui.close() end;if app then app.exit() end end
 local function response(doc,status) return {status=status or '200 OK',type='application/json; charset=utf-8',headers={['Cache-Control']='no-store'},body=JSON.encode(doc)} end
 local function api(req)
   local path=(req.uri or ''):match('/api/([^?]+)')
@@ -175,17 +177,18 @@ local function api(req)
       elseif d.action=='next' then A.next(1)
       elseif d.action=='prev' then A.next(-1)
       elseif d.action=='toggle' then A.toggle()
-      elseif d.action=='volume' then A.set_volume(d.value)
+      elseif d.action=='volume' then local ok,err=A.set_volume(d.value);if not ok then return response({ok=false,error=err},'500 Internal Server Error') end
       elseif d.action=='stop' then A.want_play=false;halt()
       elseif d.action=='exit' then after('exit',100,A.exit)
       else return response({ok=false,error='Unknown action'},'400 Bad Request') end
       return response({ok=true})
     elseif path=='settings' then
       local doc=read_json(SETTINGS);if not doc then return response({ok=false,error='Shared settings invalid; refusing overwrite'},'409 Conflict') end
-      if d.default_volume~=nil then doc.radio_volume=clamp(d.default_volume) end
+      local previous_language=doc.language
+      if d.default_volume~=nil then local ok,err=A.set_volume(d.default_volume);if not ok then return response({ok=false,error=err},'500 Internal Server Error') end end
       if d.language and ({['zh-CN']=true,['zh-TW']=true,en=true,ja=true})[d.language] then doc.language=d.language end
-      local ok,err=write_json(SETTINGS,doc);if not ok then return response({ok=false,error=err},'500 Internal Server Error') end
-      A.default_volume=doc.radio_volume or A.default_volume;A.language=doc.language or A.language
+      if doc.language~=previous_language then local ok,err=write_json(SETTINGS,doc);if not ok then return response({ok=false,error=err},'500 Internal Server Error') end end
+      A.language=doc.language or A.language
       return response({ok=true})
     elseif path=='station' then
       local list={};for i,s in ipairs(A.stations) do list[i]=s end

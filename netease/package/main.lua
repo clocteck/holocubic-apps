@@ -39,6 +39,8 @@ local function boot()
   A.web=dofile(DIR..'/web.lua').new(A,S,player,provider,apiNet,streamNet,JSON,DIR)
   local config=store.load('settings')or dofile(DIR..'/settings.lua')
   local defaults=dofile(DIR..'/settings.lua')
+  A.volume=dofile(DIR..'/volume.lua').new()
+  config.volume=A.volume.value;defaults.volume=A.volume.value
   for k,v in pairs(defaults)do if config[k]==nil then config[k]=v end end
   local Effects=dofile(DIR..'/effects.lua')
   local valid,validation_error=Effects.validate(defaults,config)
@@ -46,6 +48,8 @@ local function boot()
   local ok,err=Effects.apply(A.audio,config)
   if not ok then error(err)end
   A.config=config
+  A.volume.on_error=function(e) if e then A.error=e end end
+  A.volume.start(function(v) config.volume=v;A.config=config;return A.audio.volume(v) end)
   if not store.load('settings')then
     local saved=store.save('settings',config);if not saved then A.error='设置无法保存到 SD'end
   end
@@ -245,11 +249,12 @@ local function boot()
     elseif cmd=='volume'then
       local updated,e=Effects.validate(config,{volume=doc.value})
       if type(doc.value)~='number'or not updated then return nil,e or '无效音量'end
-      config.volume=updated.volume;A.audio.volume(config.volume);A.config=config
-      A.settings_save_at=now()+1000
+      local good,why=A.volume.set(updated.volume);if not good then return nil,why end
     elseif cmd=='effects'then
       local updated,e=Effects.validate(config,doc.settings)
       if not updated then return nil,e end
+      if doc.settings.volume~=nil then local good,why=A.volume.set(updated.volume);if not good then return nil,why end end
+      updated.volume=A.volume.value
       local applied,apply_error=Effects.apply(A.audio,updated)
       if not applied then return nil,apply_error end
       config=updated;A.config=config
@@ -359,6 +364,7 @@ local function boot()
   end)
 end
 function A.stop()
+  if A.volume then A.volume.stop() end
   if not A.alive then return end;A.alive=false
   for _,t in ipairs(A.timers)do pcall(function()t:unregister()end)end
   pcall(function()key.off()end)

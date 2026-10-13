@@ -873,44 +873,57 @@ local function maybe_gunzip(body)
   return body
 end
 
-local function save_weather_location(raw_location, location_id, city)
-  local doc = decode_json(read_text_file(SETTINGS_PATH)) or {}
-  local current_address = trim(doc.weather_address or doc.weatherAddress)
-  if current_address ~= raw_location then return false end
-  doc.weather_location_address = raw_location
-  doc.weather_location_id = location_id
-  if city ~= "" then doc.weather_city = city end
-  local encoded = encode_json(doc)
-  return encoded ~= nil and write_text_file(SETTINGS_PATH, encoded)
+local load_weather_font
+
+local function weather_language(value)
+  local lang = trim(value):lower():gsub("_", "-")
+  if lang:match("^zh%-tw") or lang:match("^zh%-hant") or lang:match("^zh%-hk") or lang:match("^zh%-mo") then return "zh-hant" end
+  if lang == "" or lang == "zh" or lang:match("^zh%-") then return "zh" end
+  if lang == "ja" or lang:match("^ja%-") then return "ja" end
+  if lang == "de" or lang:match("^de%-") then return "de" end
+  return "en"
+end
+
+local function weather_settings_match(raw, language)
+  local doc = decode_json(read_text_file(SETTINGS_PATH))
+  if not doc then return false end
+  local current = trim(doc.weather_address or doc.weatherAddress)
+  if current == "" then current = DEFAULT_WEATHER_LOCATION end
+  return current == raw and weather_language(doc.language or doc.locale or doc.lang) == language
 end
 
 local function load_weather_location()
   local doc = decode_json(read_text_file(SETTINGS_PATH)) or {}
   local raw = trim(doc.weather_address or doc.weatherAddress)
+  local lang = weather_language(doc.language or doc.locale or doc.lang)
   if raw == "" then
     raw = DEFAULT_WEATHER_LOCATION
-    doc.weather_address = raw
-    doc.weather_location_address = nil
-    doc.weather_location_raw = nil
-    doc.weather_location_id = nil
-    doc.weather_city = nil
-    local encoded = encode_json(doc)
-    if not encoded or not write_text_file(SETTINGS_PATH, encoded) then
-      log("default weather address write failed", SETTINGS_PATH)
-    end
   end
+  if S.weather_address and S.weather_address ~= raw then
+    S.weather_temp, S.weather_text, S.weather_code = nil, "--", "999"
+  end
+  if load_weather_font then load_weather_font(lang) end
   local cached_address = trim(doc.weather_location_address or doc.weather_location_raw)
   local location = trim(doc.weather_location_id)
-  if location ~= "" and cached_address ~= "" and cached_address ~= raw then
+  if cached_address ~= raw then
     location = ""
   end
+  if S.location_raw == raw then location = S.location_id or location end
   if location == "" and raw:match("^%d+$") then location = raw end
   local city = raw
-  if cached_address == "" or cached_address == raw then
+  if cached_address == raw then
     city = trim(doc.weather_city or doc.city_name or doc.city)
     if city == "" then city = raw end
   end
   S.weather_city = city ~= "" and city or "Weather"
+  local name_lang = trim(doc.weather_city_lang)
+  S.needs_city_name = name_lang == "" or weather_language(name_lang) ~= lang
+  if S.location_raw == raw and S.location_lang == lang and S.location_city then
+    S.weather_city = S.location_city
+    S.needs_city_name = false
+  end
+  S.weather_language = lang
+  S.weather_address = raw
   if type(doc.timezone) == "string" and doc.timezone ~= "" and time and time.settimezone then
     pcall(time.settimezone, doc.timezone)
   end
@@ -920,10 +933,11 @@ end
 local redraw
 
 local function request_weather_for(location)
-  local url = "/v1/weather/now?location=" .. url_encode(location) .. "&unit=m&lang=zh"
+  local raw, language = S.weather_address, S.weather_language
+  local url = "/v1/weather/now?location=" .. url_encode(location) .. "&unit=m&lang=" .. S.weather_language
   http.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status_code, body)
     S.weather_inflight = false
-    if state.stopped or status_code ~= 200 then return end
+    if state.stopped or status_code ~= 200 or not weather_settings_match(raw, language) then return end
     local doc = decode_json(maybe_gunzip(body))
     local now = doc and doc.now
     if tostring(doc and doc.code or "") == "200" and type(now) == "table" then
@@ -938,7 +952,7 @@ end
 local function request_weather()
   if S.weather_inflight or not http or not http.cubicserver or not http.cubicserver.get then return end
   local location, raw_location = load_weather_location()
-  if location ~= "" then
+  if location ~= "" and not S.needs_city_name then
     S.weather_inflight = true
     request_weather_for(location)
     return
@@ -946,21 +960,25 @@ local function request_weather()
   if raw_location == "" then return end
 
   S.weather_inflight = true
-  local url = "/v1/weather/cities?location=" .. url_encode(raw_location) .. "&number=1&lang=zh"
+  local language = S.weather_language
+  local url = "/v1/weather/cities?location=" .. url_encode(location ~= "" and location or raw_location) .. "&number=1&lang=" .. language
   http.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status_code, body)
     if state.stopped then return end
+    if not weather_settings_match(raw_location, language) then S.weather_inflight = false; return end
     local doc = status_code == 200 and decode_json(maybe_gunzip(body)) or nil
     local locations = doc and (doc.locations or doc.location)
     local first = tostring(doc and doc.code or "") == "200"
       and type(locations) == "table" and locations[1] or nil
     local location_id = type(first) == "table" and trim(first.id) or ""
     if location_id == "" then
+      if location ~= "" then request_weather_for(location); return end
       S.weather_inflight = false
       return
     end
     local city = trim(first.name)
     if city ~= "" then S.weather_city = city end
-    save_weather_location(raw_location, location_id, city)
+    -- Private in-memory cache only; never modify shared settings from this app.
+    S.location_raw, S.location_id, S.location_lang, S.location_city = raw_location, location_id, language, city
     request_weather_for(location_id)
   end)
 end
@@ -1152,10 +1170,19 @@ local function start_tick()
   end)
 end
 
-local function load_weather_font()
+load_weather_font = function(language)
   if lv_font_load then
-    local ok, handle = pcall(lv_font_load, "/sd/apps/weather/font/weather_ui_zh_cn_12.bin")
-    if ok and type(handle) == "number" and handle > 0 then WEATHER_FONT = handle end
+    local doc = decode_json(read_text_file(SETTINGS_PATH)) or {}
+    local lang = language or weather_language(doc.language or doc.locale or doc.lang)
+    if S.weather_font_language == lang then return end
+    local suffix = ({zh="zh_cn",["zh-hant"]="zh_tw",ja="ja",de="de"})[lang]
+    local path = "/sd/apps/weather/font/weather_ui_" .. (suffix and suffix .. "_" or "") .. "12.bin"
+    local ok, handle = pcall(lv_font_load, path)
+    if ok and type(handle) == "number" and handle > 0 then
+      if WEATHER_FONT and lv_font_free then pcall(lv_font_free, WEATHER_FONT) end
+      WEATHER_FONT = handle
+      S.weather_font_language = lang
+    end
   end
 end
 

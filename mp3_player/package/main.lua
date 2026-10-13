@@ -167,6 +167,7 @@ APP.events = {}
 local S = APP.state
 local scan_tracks
 local apply_audio_effects
+local master_volume = dofile(APP.APP_DIR .. "/volume.lua").new()
 local web_state
 
 local function call(fn, ...)
@@ -274,7 +275,7 @@ end
 local function merge_eq_settings(data)
   if type(data) ~= "table" then return false end
   local s = APP.eq_settings
-  if data.volume ~= nil then s.volume = clamp(data.volume, 0, 1.2) end
+  -- Volume is owned by firmware (or session-only on legacy firmware), not EQ JSON.
   if data.hpf_freq ~= nil then s.hpf_freq = clamp(data.hpf_freq, 80, 260) end
   if data.limiter_peak ~= nil then
     s.limiter_peak = clamp(data.limiter_peak, 20000, 32767)
@@ -327,7 +328,9 @@ end
 local function save_eq_settings_now()
   if not (file and file.open and json and json.encode) then return false end
   local path = eq_settings_path()
-  local ok, body = pcall(json.encode, eq_settings_snapshot())
+  local settings = eq_settings_snapshot()
+  settings.volume = nil
+  local ok, body = pcall(json.encode, settings)
   if not ok or type(body) ~= "string" then
     log("eq settings encode failed:", tostring(body))
     return false
@@ -405,7 +408,7 @@ local WEB_HTML = [=[
 <main>
   <header>
     <div><h1>Music</h1><div class="sub">管理 /sd/mp3 里的歌曲和歌词</div></div>
-    <div class="actions"><a class="btn homeBtn" href="/main">返回主页</a><div class="volumeBox"><label>音量</label><input id="mainVolume" type="range" min="0" max="1.2" step="0.01"><span id="mainVolumeVal">0.60</span></div><button class="btn" id="refreshBtn">刷新</button><button class="btn primary" id="eqBtn">EQ</button></div>
+    <div class="actions"><a class="btn homeBtn" href="/main">返回主页</a><div class="volumeBox"><label>音量</label><input id="mainVolume" type="range" min="0" max="1" step="0.01"><span id="mainVolumeVal">0.60</span></div><button class="btn" id="refreshBtn">刷新</button><button class="btn primary" id="eqBtn">EQ</button></div>
   </header>
   <div class="grid">
     <section class="panel upload">
@@ -930,8 +933,9 @@ local function web_eq(req)
   local changed = false
   web_log("web_eq enter", "method=" .. tostring(req and req.method), "query=" .. tostring(req and req.query or ""))
   if q.volume ~= nil then
-    APP.eq_settings.volume = clamp(q.volume, 0, 1.2)
-    changed = true
+    local value = tonumber(q.volume)
+    local ok, err = master_volume.set(value and value * 100)
+    if not ok then return web_err("400 Bad Request", err) end
   end
   if q.hpf_freq ~= nil then
     APP.eq_settings.hpf_freq = clamp(q.hpf_freq, 80, 260)
@@ -2201,9 +2205,8 @@ local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 1, 2, 4, 8
 local PAD_A, PAD_SELECT, PAD_MENU, PAD_HOME = 16, 4096, 8192, 32768
 
 local function adjust_volume(delta)
-  APP.eq_settings.volume = clamp((tonumber(APP.eq_settings.volume) or 0.4) + delta, 0, 1.2)
-  apply_audio_effects()
-  schedule_eq_settings_save()
+  local ok, err = master_volume.set(clamp(master_volume.value + delta * 100, 0, 100))
+  if not ok then log("volume:", err) end
   render_ui()
 end
 
@@ -2324,6 +2327,7 @@ local function after_loading_frame(fn)
 end
 
 function APP.stop(reason)
+  master_volume.stop()
   if not APP.running then return end
   APP.running = false
   S.playing = false
@@ -2363,6 +2367,11 @@ function APP.stop(reason)
 end
 
 load_eq_settings()
+master_volume.on_error = function(err) if err then log("volume:", err) end end
+master_volume.start(function(value)
+  APP.eq_settings.volume = value / 100
+  apply_audio_effects()
+end)
 load_ui_module()
 APP._ui_show_loading("Loading fonts")
 after_loading_frame(function()

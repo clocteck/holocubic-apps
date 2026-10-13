@@ -2,6 +2,15 @@
 
 部署文件位于 `launcher/package/`，安装到设备的 `/sd/apps/launcher/`。
 
+## 设备音量设置
+
+- 音量滑块统一为 0–100%，0 为静音，恢复默认值为 25。
+- 新固件：GET `/audio/api/settings` 读取内存音量；拖动时每约 100ms 合并发送 POST `?volume=N`，松开立即提交最终值。固件延迟合并保存到 `/sd/apps/settings.json` 的 `volume`，网页不再直接写音量字段。
+- 页面每秒同步内存状态和其他 App 的音量修改；`pending` 只显示“已应用、正在保存”，`saved=true` 才提示已保存，保存失败显示错误。快速请求串行处理，旧 GET 响应不能回退新滑块值。
+- 仅 404/501 判为旧固件，禁用主页音量滑块并显示升级提示。连接失败、503 或坏响应不当作旧固件，也不降级写 JSON。旧固件下 App 内调节只在本次运行有效。
+- 其他设置仍保留未知字段。新的音量适配和部署说明见 `tools/volume-integration.md`。
+- 验证：`node launcher/src/volume-settings.test.cjs`。
+
 ## 1.32 更新内容：应用作者与离线本地管理
 
 - 应用的 `app.info` 可填写 `author = 作者名称`；商店卡片优先显示此作者，搜索也支持作者名称。

@@ -259,6 +259,7 @@ end
 
 local WEEKDAYS = {
   en = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" },
+  de = { "SO", "MO", "DI", "MI", "DO", "FR", "SA" },
   zh_cn = { "周日", "周一", "周二", "周三", "周四", "周五", "周六" },
   zh_tw = { "週日", "週一", "週二", "週三", "週四", "週五", "週六" },
   ja = { "日", "月", "火", "水", "木", "金", "土" },
@@ -275,8 +276,9 @@ end
 local function weekday_label(index)
   local language = current_language()
   local labels = language:match("^en") and WEEKDAYS.en
+    or language:match("^de") and WEEKDAYS.de
     or language:match("^ja") and WEEKDAYS.ja
-    or (language == "zh-tw" or language == "zh-hk" or language == "zh-mo") and WEEKDAYS.zh_tw
+    or (language:match("^zh%-tw") or language:match("^zh%-hant") or language:match("^zh%-hk") or language:match("^zh%-mo")) and WEEKDAYS.zh_tw
     or WEEKDAYS.zh_cn
   return labels[index] or ""
 end
@@ -1551,7 +1553,7 @@ local function init_fonts()
     or font_load(APP.APP_DIR .. "/font/time_num_72.bin",
       rawget(_G, "LV_FONT_MONTSERRAT_28") or 28)
   APP.font_date_en = rawget(_G, "LV_FONT_MONTSERRAT_14") or rawget(_G, "LV_FONT_MONTSERRAT_12") or 14
-  APP.font_date_cjk = host and host.font and host.font.cn14 or APP.font_date_en
+  APP.font_date_cjk = host and host.font and (host.font.localized and host.font.localized[14] or host.font.cn14) or APP.font_date_en
   APP.font_date = APP.font_date_en
 end
 

@@ -6,7 +6,7 @@ end
 
 DISPLAY_SCHEDULE_SERVICE = {
   VERSION = "1.11",
-  BUILD = "2026-07-28-handler-256",
+  BUILD = "2026-10-12-master-volume",
   HTTP_MAX_HANDLERS = 256,
   APP_DIR = "/sd/apps/display_schedule",
   PAGE_PATH = "/sd/apps/display_schedule/main.html",
@@ -425,13 +425,14 @@ local function schedule_window_key(clock)
   }, "-")
 end
 
+local master_volume = dofile("/sd/apps/display_schedule/volume.lua").new()
 local function make_tone(frequency, duration_ms)
   local rate = 16000
   local samples = math.floor(rate * duration_ms / 1000)
   local chunks = {}
   for sample_index = 0, samples - 1 do
     local envelope = math.min(1, sample_index / 120, (samples - sample_index) / 120)
-    local value = math.floor(math.sin(sample_index * 2 * math.pi * frequency / rate) * 9500 * envelope)
+    local value = math.floor(math.sin(sample_index * 2 * math.pi * frequency / rate) * 9500 * envelope * master_volume.value / 100)
     if value < 0 then value = value + 65536 end
     chunks[#chunks + 1] = string.char(value % 256, math.floor(value / 256) % 256)
   end
@@ -439,6 +440,13 @@ local function make_tone(frequency, duration_ms)
 end
 
 local ALARM_TONE = make_tone(1000, 105)
+master_volume.on_error = function(err) if err then print("[alarm volume]", err) end end
+master_volume.start(function(value)
+  ALARM_TONE = make_tone(1000, 105)
+  if APP.alarm_audio and APP.alarm_audio.set_effects then
+    return APP.alarm_audio.set_effects({volume=value/100})
+  end
+end)
 local ALARM_PATTERN = {
   true, true, true, false, false,
   true, true, true, false, false, false,
@@ -486,6 +494,7 @@ local function start_mp3_alarm_audio()
     if i2s and i2s.stop then pcall(function() i2s.stop(0) end) end
     local opened, open_err = audio.open(path, { output_channels = 1 })
     if not opened then error(open_err or "audio.open failed") end
+    if audio.set_effects then audio.set_effects({volume=master_volume.value/100}) end
     local info, info_err = audio.info()
     if type(info) ~= "table" then error(info_err or "audio.info failed") end
     local i2s_ok, i2s_err = audio.i2s_start({
@@ -984,6 +993,7 @@ local function register_input_handlers()
 end
 
 function APP.stop(reason)
+  master_volume.stop()
   for i = #APP.routes, 1, -1 do
     local item = APP.routes[i]
     pcall(function() httpd.unregister(item.method, item.route) end)

@@ -69,6 +69,7 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     local string_format = string.format
 
     local I18N = {
+    de = { weather = "Wetter", waiting = "Warte auf Daten", updating = "Aktualisierung", today = "Heute", sync_time = "ZEITABGLEICH" },
     ["zh-CN"] = { weather = "天气", waiting = "等待数据", updating = "更新中", today = "今天", sync_time = "同步时间" },
     en = { weather = "Weather", waiting = "Waiting", updating = "Updating", today = "Today", sync_time = "SYNC TIME" },
     ja = { weather = "天気", waiting = "待機中", updating = "更新中", today = "今日", sync_time = "時刻同期" },
@@ -76,21 +77,25 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     }
 
     local function normalize_language(value)
-    local text = tostring(value or ""):gsub("_", "-")
+    local text = tostring(value or ""):gsub("_", "-"):lower()
     if text == "en" or text:match("^en%-") then return "en", "en" end
+    if text == "de" or text:match("^de%-") then return "de", "de" end
     if text == "ja" or text:match("^ja%-") then return "ja", "ja" end
-    if text == "zh-TW" or text == "zh-Hant" or text:match("^zh%-Hant") or text:match("^zh%-HK") then return "zh-TW", "zh-hant" end
-    return "zh-CN", "zh"
+    if text:match("^zh%-tw") or text:match("^zh%-hant") or text:match("^zh%-hk") or text:match("^zh%-mo") then return "zh-TW", "zh-hant" end
+    if text == "" or text == "zh" or text:match("^zh%-") then return "zh-CN", "zh" end
+    return "en", "en"
     end
 
     local function tr(key)
-    local dict = I18N[APP.LANGUAGE] or I18N["zh-CN"]
+    local dict = I18N[APP.LANGUAGE] or I18N.en
     return dict[key] or I18N.en[key] or tostring(key or "")
     end
 
     local function display_city_name()
-    if APP.CITY_NAME == "" or APP.CITY_NAME == "Weather" then return tr("weather") end
-    return APP.CITY_NAME
+    local city = tostring(APP.CITY_NAME or "")
+    if city == "" or city == "Weather" then return tr("weather") end
+    -- Keep the last usable name while its localized replacement is loading.
+    return city
     end
 
     local function startup_boot_city()
@@ -563,9 +568,16 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
         APP.state.resolved_location_raw = APP.WEATHER_LOCATION
         APP.state.resolved_location_id = cached_id
     end
-    if city ~= "" and (cached_address == "" or cached_address == APP.WEATHER_LOCATION) then
+    if city ~= "" and cached_address == APP.WEATHER_LOCATION then
         APP.CITY_NAME = city
+        APP.CITY_NAME_LANGUAGE = trim(doc.weather_city_lang)
     end
+    end
+
+    local function settings_still_current()
+    local doc = decode_json(read_text(APP.SETTINGS_PATH))
+    return doc and trim(doc.weather_address or doc.weatherAddress) == APP.WEATHER_LOCATION
+        and normalize_language(doc.language or doc.locale or doc.lang) == APP.LANGUAGE
     end
 
     local function save_location_cache(raw_location, location_id, city_name)
@@ -574,10 +586,14 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     city_name = trim(city_name)
     if raw_location == "" or location_id == "" then return false end
 
-    local doc = APP.settings_doc
-    if type(doc) ~= "table" then doc = {} end
+    -- Merge the latest settings, never overwrite edits made during the request.
+    local doc = decode_json(read_text(APP.SETTINGS_PATH))
+    if type(doc) ~= "table" then return false end
+    if trim(doc.weather_address or doc.weatherAddress) ~= raw_location
+        or normalize_language(doc.language or doc.locale or doc.lang) ~= APP.LANGUAGE then return false end
     if trim(doc.weather_location_address) == raw_location
         and trim(doc.weather_location_id) == location_id
+        and trim(doc.weather_city_lang) == APP.CITY_NAME_LANGUAGE
         and (city_name == "" or trim(doc.weather_city) == city_name) then
         return true
     end
@@ -585,6 +601,7 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     doc.weather_location_address = raw_location
     doc.weather_location_id = location_id
     if city_name ~= "" then doc.weather_city = city_name end
+    doc.weather_city_lang = APP.CITY_NAME_LANGUAGE
     local encoded = encode_json(doc)
     if not encoded then
         warn("location cache encode failed")
@@ -692,6 +709,9 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     elseif APP.LANGUAGE == "ja" then
         FONT_12 = load_font_ref("/sd/apps/weather/font/weather_ui_ja_12.bin", FONT_12)
         FONT_16 = load_font_ref("/sd/apps/weather/font/weather_ui_ja_16.bin", FONT_16)
+    elseif APP.LANGUAGE == "de" then
+        FONT_12 = load_font_ref("/sd/apps/weather/font/weather_ui_de_12.bin", FONT_12)
+        FONT_16 = load_font_ref("/sd/apps/weather/font/weather_ui_de_16.bin", FONT_16)
     else
         FONT_12 = load_font_ref("/sd/apps/weather/font/weather_ui_12.bin", FONT_12)
         FONT_16 = load_font_ref("/sd/apps/weather/font/weather_ui_16.bin", FONT_16)
@@ -962,6 +982,8 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
         return tr("sync_time")
     end
     if t.year and t.mon and t.day then
+        if APP.LANGUAGE == "de" then return string_format("%s.%s.%04d", two(t.day), two(t.mon), t.year) end
+        if APP.LANGUAGE == "ja" then return string_format("%04d/%s/%s", t.year, two(t.mon), two(t.day)) end
         return string_format("%04d.%s.%s", t.year, two(t.mon), two(t.day))
     end
     if t.mon and t.day then
@@ -1542,6 +1564,8 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
 
     APP.ui.time_label = create_label(now_page, "--:--", FONT_34, C.text, 14, 23, 150, ALIGN_LEFT)
     APP.ui.city_label = create_label(now_page, display_city_name(), FONT_16, C.text, 16, 68, 166, ALIGN_LEFT)
+    local ellipsis = rawget(_G, "LV_LABEL_LONG_DOT") or rawget(_G, "LABEL_LONG_DOT")
+    if ellipsis and lv_label_set_long_mode then call(lv_label_set_long_mode, APP.ui.city_label, ellipsis) end
     APP.ui.cond_label = create_label(now_page, tr("waiting"), FONT_12, C.text, 16, 90, 132, ALIGN_LEFT)
     APP.ui.date_label = create_label(now_page, "--/--", FONT_12, C.text_soft, 16, 113, 132, ALIGN_LEFT)
 
@@ -1883,6 +1907,11 @@ end
 
     -- 将用户输入的城市名解析成 QWeather location id，避免 now/3d 直接查询城市名失败。
     local function parse_city_lookup_body(status_code, body, raw_location)
+    local latest = decode_json(read_text(APP.SETTINGS_PATH))
+    if not latest or trim(latest.weather_address or latest.weatherAddress) ~= raw_location
+        or normalize_language(latest.language or latest.locale or latest.lang) ~= APP.LANGUAGE then
+        return nil, "SETTINGS CHANGED"
+    end
     if status_code ~= 200 or not body then
         return nil, "CITY HTTP " .. tostring(status_code)
     end
@@ -1918,6 +1947,7 @@ end
     local name = trim(city.name)
     if name ~= "" then
         APP.CITY_NAME = name
+        APP.CITY_NAME_LANGUAGE = APP.LANGUAGE
         render_clock()
     end
     save_location_cache(raw_location, id, name ~= "" and name or APP.CITY_NAME)
@@ -1927,7 +1957,7 @@ end
 
     local function city_name_needs_lookup(raw_location)
     local city = trim(APP.CITY_NAME)
-    return city == "" or city == "Weather" or city == trim(raw_location)
+    return city == "" or city == "Weather" or APP.CITY_NAME_LANGUAGE ~= APP.LANGUAGE
     end
 
     -- 城市名先解析成 location id；数字 id 在缺少显示名时也查一次城市名。
@@ -1945,8 +1975,9 @@ end
         return
     end
 
-    if APP.state.resolved_location_raw == raw_location and trim(APP.state.resolved_location_id) ~= "" then
-        on_done(APP.state.resolved_location_id, nil)
+    local cached_id = APP.state.resolved_location_raw == raw_location and trim(APP.state.resolved_location_id) or ""
+    if cached_id ~= "" and not city_name_needs_lookup(raw_location) then
+        on_done(cached_id, nil)
         return
     end
 
@@ -1969,7 +2000,7 @@ end
     APP.state.location_request_inflight = true
     local url = APP.WEATHER_CITY_PATH
         .. "?location="
-        .. url_encode(raw_location)
+        .. url_encode(cached_id ~= "" and cached_id or raw_location)
         .. "&number=1&lang="
         .. url_encode(APP.WEATHER_API_LANG)
 
@@ -1990,8 +2021,8 @@ end
         if plain then
         location_id, err = parse_city_lookup_body(status_code, plain, raw_location)
         end
-        if not location_id and raw_location:match("^%d+$") then
-        location_id = raw_location
+        if not location_id and err ~= "SETTINGS CHANGED" and (cached_id ~= "" or is_location_id) then
+        location_id = cached_id ~= "" and cached_id or raw_location
         err = nil
         end
         if not err and not location_id then
@@ -2054,6 +2085,7 @@ end
         return
         end
 
+        if not settings_still_current() then return end
         parse_weather_body(status_code, plain)
         render_weather()
         end)
@@ -2112,6 +2144,7 @@ end
         return
         end
 
+        if not settings_still_current() then return end
         parse_forecast_body(status_code, plain)
         render_forecast()
         end)

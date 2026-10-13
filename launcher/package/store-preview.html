@@ -1177,7 +1177,9 @@
     if(requestedLanguage){
       try{localStorage.setItem(STORE_LANGUAGE_KEY,storedLanguage);}catch(err){}
     }
-    const currentLanguage = /^en/i.test(storedLanguage) ? "en" : (/^ja/i.test(storedLanguage) ? "ja" : (/^zh-(tw|hant)/i.test(storedLanguage) ? "zh-TW" : "zh-CN"));
+    function normalizeStoreLanguage(value){var v=String(value||'').replace(/_/g,'-').toLowerCase();if(/^de(?:-|$)/.test(v))return 'de';if(/^ja(?:-|$)/.test(v))return 'ja';if(/^zh-(?:tw|hk|mo|hant)(?:-|$)/.test(v))return 'zh-TW';if(/^zh(?:-|$)/.test(v))return 'zh-CN';return 'en'}
+    const currentLanguage = normalizeStoreLanguage(storedLanguage);
+    STORE_I18N.de=Object.assign({},STORE_I18N.en,{"search":"Apps oder Autoren suchen","officialStore":"Offizieller Store","communityStore":"Community-Apps","createApp":"App erstellen","showInstalled":"Installierte Apps","showAll":"Alle anzeigen","all":"Alle","detail":"Details","install":"Installieren","update":"Aktualisieren","uninstall":"Deinstallieren","installed":"Installiert","open":"Öffnen","close":"Schließen","cancel":"Abbrechen","retry":"Erneut versuchen"});
     function storeLocale(){return STORE_I18N[currentLanguage] || STORE_I18N.en;}
     function storeText(key){return storeLocale()[key] || STORE_I18N.en[key] || key;}
     function categoryLabel(value){return (storeLocale().categories && storeLocale().categories[value]) || STORE_I18N.en.categories[value] || value;}
@@ -1255,11 +1257,12 @@
     }
 
     function localizedValue(raw,prefix){
-      if(currentLanguage === "en"){
-        return String(raw[prefix + "_en"] || raw[prefix] || "").trim();
+      if(currentLanguage === "en" || currentLanguage === "de"){
+        const value = String(raw[prefix + "_" + currentLanguage] || raw[prefix + "_en"] || raw[prefix] || "").trim();
+        return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/.test(value) ? (prefix === "name" ? String(raw.app_id || raw.id || "App") : "") : value;
       }
       if(currentLanguage === "ja"){
-        return String(raw[prefix + "_ja"] || raw[prefix + "_en"] || raw[prefix] || "").trim();
+        return String(raw[prefix + "_ja"] || raw[prefix + "_en"] || (prefix === "name" ? raw.app_id || raw.id || "App" : "")).trim();
       }
       if(currentLanguage === "zh-TW"){
         return String(raw[prefix + "_zh_tw"] || raw[prefix + "_zh_hant"] || raw[prefix + "_en"] || raw[prefix] || "").trim();

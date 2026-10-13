@@ -27,8 +27,12 @@ local function boot()
   A.covers=Covers.new(metaNet,metaProvider,player,now,dofile(DIR..'/cover_disk.lua').new(file,Covers.image_size,nil,Covers.identity))
   local Effects=dofile(DIR..'/effects.lua');local defaults=dofile(DIR..'/settings.lua')
   local config=store.load('settings')or defaults
+  A.volume=dofile(DIR..'/volume.lua').new()
+  config.volume=A.volume.value;defaults.volume=A.volume.value
   local valid=Effects.validate(defaults,config);config=valid or defaults;A.config=config
   local ok,err=Effects.apply(A.audio,config);assert(ok,err)
+  A.volume.on_error=function(e) if e then A.error=e end end
+  A.volume.start(function(v) config.volume=v;A.config=config;return A.audio.volume(v) end)
   A.uid=provider.session.musicid;A.nickname=provider.session.nickname or '游客'
   S.tab_count=A.uid and #Library.titles or 2
   local Catalog=dofile(DIR..'/catalog.lua')
@@ -178,9 +182,11 @@ local function boot()
       config.play_mode=doc.mode;A.settings_save_at=now()+500
     elseif cmd=='volume'then
       local updated,e=Effects.validate(config,{volume=doc.value});if type(doc.value)~='number'or not updated then return nil,e or '无效音量'end
-      config.volume=updated.volume;A.audio.volume(config.volume);A.settings_save_at=now()+1000
+      local good,why=A.volume.set(updated.volume);if not good then return nil,why end
     elseif cmd=='effects'then
       local updated,e=Effects.validate(config,doc.settings);if not updated then return nil,e end
+      if doc.settings.volume~=nil then local good,why=A.volume.set(updated.volume);if not good then return nil,why end end
+      updated.volume=A.volume.value
       local good,why=Effects.apply(A.audio,updated);if not good then return nil,why end
       config=updated;A.config=config;local saved,se=store.save('settings',config);if not saved then return nil,se end
     elseif cmd=='library'then
@@ -284,6 +290,7 @@ local function boot()
   end)
 end
 function A.stop()
+  if A.volume then A.volume.stop() end
   if not A.alive then return end;A.alive=false
   for _,t in ipairs(A.timers)do pcall(function()t:unregister()end)end
   pcall(function()key.off()end);if app.set_home_exit then pcall(app.set_home_exit,true)end

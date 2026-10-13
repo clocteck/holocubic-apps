@@ -201,8 +201,25 @@ local function is_english()
   return tostring(APP.state.language or ""):lower():match("^en") ~= nil
 end
 
+local function ui_language()
+  local v = tostring(APP.state.language or ""):lower():gsub("_", "-")
+  if v == "de" or v:match("^de%-") then return "de" end
+  if v == "ja" or v:match("^ja%-") then return "ja" end
+  if v:match("^zh%-tw") or v:match("^zh%-hant") or v:match("^zh%-hk") or v:match("^zh%-mo") then return "zh-hant" end
+  if v == "" or v == "zh" or v:match("^zh%-") then return "zh" end
+  return "en"
+end
+
+local LOCALE_TEXT = {
+  ["zh-hant"] = { ["NO CONTENT"]="暫無內容", ["INSTALL ASSISTANT APP"]="請先安裝 Assistant app", WEATHER="天氣", ["PARTLY CLOUDY"]="晴間多雲", ["WAITING FOR WEATHER"]="等待天氣", ["FEELS "]="體感 ", FEELS="體感", CLEAR="晴", ["FOCUS TIME"]="專注時間", ["Invalid face number"]="錶盤編號無效", ["Invalid setting value"]="設定值無效", ["Failed to save settings"]="設定儲存失敗" },
+  de = { ["NO CONTENT"]="KEIN INHALT", ["INSTALL ASSISTANT APP"]="ASSISTANT INSTALLIEREN", WEATHER="WETTER", ["PARTLY CLOUDY"]="TEILS BEWÖLKT", ["WAITING FOR WEATHER"]="WARTE AUF WETTER", ["FEELS "]="GEFÜHLT ", FEELS="GEFÜHLT", CLEAR="KLAR", ["FOCUS TIME"]="FOKUSZEIT", ["Invalid face number"]="Ungültiges Zifferblatt", ["Invalid setting value"]="Ungültige Einstellung", ["Failed to save settings"]="Einstellungen konnten nicht gespeichert werden" },
+  ja = { ["NO CONTENT"]="内容なし", ["INSTALL ASSISTANT APP"]="Assistant をインストール", WEATHER="天気", ["PARTLY CLOUDY"]="晴れ時々曇り", ["WAITING FOR WEATHER"]="天気を取得中", ["FEELS "]="体感 ", FEELS="体感", CLEAR="晴れ", ["FOCUS TIME"]="集中時間", ["Invalid face number"]="文字盤の番号が不正です", ["Invalid setting value"]="設定値が不正です", ["Failed to save settings"]="設定を保存できませんでした" },
+}
+
 local function tr(zh, en)
-  return is_english() and en or zh
+  local language = ui_language()
+  if language == "zh" then return zh end
+  return (LOCALE_TEXT[language] and LOCALE_TEXT[language][en]) or en
 end
 
 local function english_safe(value, fallback)
@@ -257,67 +274,25 @@ local function safe_city_label(value)
   return value:upper()
 end
 
-local function ascii_city_label(value)
-  value = trim(value)
-  if value == "" then return "LOCAL" end
-  if not value:find("[\128-\255]") then return value:upper():gsub("[^A-Z0-9 ._-]", "") end
-  local pinyin = {
-    ["北"]="BEI",["京"]="JING",["上"]="SHANG",["海"]="HAI",["天"]="TIAN",["津"]="JIN",["重"]="CHONG",["庆"]="QING",
-    ["河"]="HE",["南"]="NAN",["湖"]="HU",["广"]="GUANG",["东"]="DONG",["西"]="XI",["山"]="SHAN",["陕"]="SHAAN",
-    ["辽"]="LIAO",["宁"]="NING",["吉"]="JI",["林"]="LIN",["黑"]="HEI",["龙"]="LONG",["江"]="JIANG",["苏"]="SU",
-    ["浙"]="ZHE",["安"]="AN",["徽"]="HUI",["福"]="FU",["建"]="JIAN",["青"]="QING",["甘"]="GAN",["肃"]="SU",
-    ["云"]="YUN",["贵"]="GUI",["州"]="ZHOU",["四"]="SI",["川"]="CHUAN",["台"]="TAI",["湾"]="WAN",["内"]="NEI",
-    ["蒙"]="MENG",["古"]="GU",["新"]="XIN",["疆"]="JIANG",["藏"]="ZANG",["桂"]="GUI",["琼"]="QIONG",["香"]="XIANG",
-    ["港"]="GANG",["澳"]="AO",["门"]="MEN",["浦"]="PU",["徐"]="XU",["黄"]="HUANG",["静"]="JING",["长"]="CHANG",
-    ["普"]="PU",["虹"]="HONG",["杨"]="YANG",["闵"]="MIN",["宝"]="BAO",["嘉"]="JIA",["金"]="JIN",["松"]="SONG",
-    ["奉"]="FENG",["崇"]="CHONG",["明"]="MING",["深"]="SHEN",["圳"]="ZHEN",["杭"]="HANG",["武"]="WU",["汉"]="HAN",
-    ["成"]="CHENG",["都"]="DU",["昆"]="KUN",["厦"]="XIA",["佛"]="FO",["莞"]="GUAN",["珠"]="ZHU",["郑"]="ZHENG",
-    ["济"]="JI",["岛"]="DAO",["大"]="DA",["连"]="LIAN",["沈"]="SHEN",["阳"]="YANG",["哈"]="HA",["尔"]="ER",
-    ["滨"]="BIN",["波"]="BO",["石"]="SHI",["家"]="JIA",["庄"]="ZHUANG",["太"]="TAI",["原"]="YUAN",["呼"]="HU",["和"]="HE",
-    ["浩"]="HAO",["特"]="TE",["乌"]="WU",["鲁"]="LU",["木"]="MU",["齐"]="QI",["拉"]="LA",["萨"]="SA",
-    ["银"]="YIN",["兰"]="LAN",["昌"]="CHANG",["沙"]="SHA",["合"]="HE",["肥"]="FEI",["口"]="KOU",["三"]="SAN",
-    ["亚"]="YA",["路"]="LU",["街"]="JIE",["道"]="DAO",["号"]="HAO",["园"]="YUAN",["城"]="CHENG",["中"]="ZHONG",
-    ["华"]="HUA",["朝"]="CHAO",["白"]="BAI",["丰"]="FENG",["通"]="TONG",["顺"]="SHUN",["义"]="YI",["房"]="FANG",
-    ["兴"]="XING",["平"]="PING",["谷"]="GU",["密"]="MI",["延"]="YAN",["省"]="",["市"]="",["区"]="",["县"]="",
-    ["无"]="WU",["锡"]="XI",["常"]="CHANG",["温"]="WEN",["绍"]="SHAO",["衢"]="QU",["丽"]="LI",["舟"]="ZHOU",
-    ["扬"]="YANG",["盐"]="YAN",["泰"]="TAI",["宿"]="SU",["迁"]="QIAN",["淮"]="HUAI",["德"]="DE",["莆"]="PU",
-    ["泉"]="QUAN",["漳"]="ZHANG",["岩"]="YAN",["九"]="JIU",["赣"]="GAN",["饶"]="RAO",["景"]="JING",["萍"]="PING",
-    ["宜"]="YI",["春"]="CHUN",["鹰"]="YING",["潭"]="TAN",["烟"]="YAN",["潍"]="WEI",["坊"]="FANG",["淄"]="ZI",
-    ["博"]="BO",["枣"]="ZAO",["营"]="YING",["威"]="WEI",["日"]="RI",["照"]="ZHAO",["临"]="LIN",["沂"]="YI",
-    ["聊"]="LIAO",["菏"]="HE",["泽"]="ZE",["洛"]="LUO",["开"]="KAI",["封"]="FENG",["许"]="XU",["焦"]="JIAO",
-    ["作"]="ZUO",["鹤"]="HE",["壁"]="BI",["濮"]="PU",["漯"]="LUO",["峡"]="XIA",["商"]="SHANG",["丘"]="QIU",
-    ["周"]="ZHOU",["驻"]="ZHU",["马"]="MA",["店"]="DIAN",["信"]="XIN",["襄"]="XIANG",["荆"]="JING",["孝"]="XIAO",
-    ["感"]="GAN",["冈"]="GANG",["咸"]="XIAN",["随"]="SUI",["恩"]="EN",["施"]="SHI",["株"]="ZHU",["洲"]="ZHOU",
-    ["湘"]="XIANG",["衡"]="HENG",["邵"]="SHAO",["岳"]="YUE",["张"]="ZHANG",["界"]="JIE",["益"]="YI",["郴"]="CHEN",
-    ["永"]="YONG",["怀"]="HUAI",["化"]="HUA",["娄"]="LOU",["底"]="DI",["韶"]="SHAO",["关"]="GUAN",["湛"]="ZHAN",
-    ["茂"]="MAO",["名"]="MING",["肇"]="ZHAO",["惠"]="HUI",["梅"]="MEI",["汕"]="SHAN",["尾"]="WEI",["源"]="YUAN",
-    ["清"]="QING",["远"]="YUAN",["潮"]="CHAO",["揭"]="JIE",["浮"]="FU",["村"]="CUN",["弄"]="NONG",["巷"]="XIANG",
-    ["苑"]="YUAN",["公"]="GONG",["馆"]="GUAN",["站"]="ZHAN",["桥"]="QIAO",["鄞"]="YIN",["慈"]="CI",["溪"]="XI",
-    ["余"]="YU",["姚"]="YAO",["曙"]="SHU",["仑"]="LUN",["镇"]="",["乡"]=""
-  }
-  local parts = {}
-  for ch in value:gmatch("[\0-\127\194-\244][\128-\191]*") do
-    local converted = pinyin[ch]
-    if converted ~= nil then parts[#parts + 1] = converted
-    elseif ch:match("[%w]") then parts[#parts + 1] = ch:upper() end
-  end
-  local result = table.concat(parts)
-  return result ~= "" and result or "LOCAL"
-end
 
 local function load_settings()
   local doc = decode_json(read_text(APP.SETTINGS_PATH)) or {}
   local state = APP.state
-  state.language = trim(doc.language or doc.lang or "zh-CN")
+  state.language = trim(doc.language or doc.locale or doc.lang or "zh-CN")
   if state.language == "" then state.language = "zh-CN" end
   state.timezone = trim(doc.timezone)
   if state.timezone == "" then state.timezone = APP.DEFAULT_TIMEZONE end
   state.weather_address = trim(doc.weather_address or doc.weatherAddress)
-  state.weather_location_id = trim(doc.weather_location_id)
-  local city = state.weather_address ~= "" and state.weather_address or trim(doc.weather_city or doc.city_name or doc.city)
+  local cache_matches = trim(doc.weather_location_address or doc.weather_location_raw) == state.weather_address and state.weather_address ~= ""
+  state.weather_location_id = cache_matches and trim(doc.weather_location_id) or ""
+  state.city_language = cache_matches and trim(doc.weather_city_lang) or ""
+  if state.city_language == "zh-CN" then state.city_language = "zh"
+  elseif state.city_language == "zh-TW" then state.city_language = "zh-hant" end
+  local city = cache_matches and trim(doc.weather_city) or ""
+  if city == "" then city = state.weather_address end
   if city ~= "" then
-    state.city = is_english() and ascii_city_label(city) or safe_city_label(city)
-    state.location_label = ascii_city_label(city)
+    state.city = city
+    state.location_label = city
   end
 end
 
@@ -370,15 +345,18 @@ local function local_time()
 end
 
 local function weekday_of(t)
+  local weekdays = ({ zh={"周日","周一","周二","周三","周四","周五","周六"},
+    ["zh-hant"]={"週日","週一","週二","週三","週四","週五","週六"},
+    ja={"日","月","火","水","木","金","土"}, de={"SO","MO","DI","MI","DO","FR","SA"} })[ui_language()] or WEEKDAYS
   local wday = tonumber(t.wday)
-  if wday and WEEKDAYS[wday] then return WEEKDAYS[wday] end
+  if wday and weekdays[wday] then return weekdays[wday] end
   local y, m, d = t.year, t.mon, t.day
   if m < 3 then y = y - 1; m = m + 12 end
   local k = y % 100
   local j = floor(y / 100)
   local h = (d + floor(13 * (m + 1) / 5) + k + floor(k / 4) + floor(j / 4) + 5 * j) % 7
   local map = { 7, 1, 2, 3, 4, 5, 6 }
-  return WEEKDAYS[map[h + 1]] or "TUE"
+  return weekdays[map[h + 1]] or weekdays[3]
 end
 
 local function font_load(path, fallback)
@@ -413,9 +391,18 @@ local function init_fonts()
   APP.font.mono12 = font_load(APP.APP_DIR .. "/font/time_mono_12.bin", APP.font.en12)
   APP.font.mono24 = font_load(APP.APP_DIR .. "/font/time_mono_24.bin", APP.font.mono12)
   APP.font.mono56 = font_load(APP.APP_DIR .. "/font/time_mono_56.bin", rawget(_G, "LV_FONT_MONTSERRAT_28") or 28)
+  APP.font.n56 = APP.font.mono56
   APP.font.ui12 = APP.font.en10
   APP.font.ui14 = APP.font.en14
   APP.font.ui16 = APP.font.en16
+  local language = ui_language()
+  if language == "zh" then language = "zh_cn" elseif language == "zh-hant" then language = "zh_tw" end
+  if language ~= "en" then
+    APP.font.localized = {}
+    for _, size in ipairs({9, 10, 11, 12, 14, 16}) do
+      APP.font.localized[size] = font_load(APP.APP_DIR .. "/font/time_i18n_" .. language .. "_" .. size .. ".bin", APP.font.cn12)
+    end
+  end
   APP.font.n28 = font_load(APP.APP_DIR .. "/font/time_num_28.bin", rawget(_G, "LV_FONT_MONTSERRAT_28") or 28)
   APP.font.n34 = font_load(APP.APP_DIR .. "/font/time_num_34.bin", APP.font.n28)
   APP.font.n40 = font_load(APP.APP_DIR .. "/font/time_num_40.bin", APP.font.n28)
@@ -481,13 +468,45 @@ local function arc(cx, cy, radius, start_deg, end_deg, color, opa, width)
   pcall_fn(canvas_arc, APP.canvas, floor(cx), floor(cy), floor(radius), start_deg, end_deg, line_dsc)
 end
 
+local FACE_LABELS = {
+  SUN={zh="晴",["zh-hant"]="晴",ja="晴れ",de="SONNE"},
+  CLOUD={zh="多云",["zh-hant"]="多雲",ja="曇り",de="WOLKIG"},
+  RAIN={zh="雨",["zh-hant"]="雨",ja="雨",de="REGEN"},
+  SNOW={zh="雪",["zh-hant"]="雪",ja="雪",de="SCHNEE"},
+  STORM={zh="雷雨",["zh-hant"]="雷雨",ja="雷雨",de="STURM"},
+  MOON={zh="月相",["zh-hant"]="月相",ja="月相",de="MOND"},
+  ["SOLAR WEATHER"]={zh="日光天气",["zh-hant"]="日光天氣",ja="日照と天気",de="SONNENWETTER"},
+  NOW={zh="现在",["zh-hant"]="現在",ja="現在",de="JETZT"},
+  HUMIDITY={zh="湿度",["zh-hant"]="濕度",ja="湿度",de="FEUCHTE"},
+  WIND={zh="风速",["zh-hant"]="風速",ja="風速",de="WIND"},
+  ["WEATHER DATA"]={zh="天气数据",["zh-hant"]="天氣資料",ja="天気情報",de="WETTERDATEN"},
+  ["LUNAR PHASE"]={zh="月相",["zh-hant"]="月相",ja="月相",de="MONDPHASE"},
+  ["MEMO SYNC"]={zh="备忘同步",["zh-hant"]="備忘同步",ja="メモ同期",de="MEMO SYNC"},
+  NEXT={zh="接下来",["zh-hant"]="接下來",ja="次へ",de="DANACH"},
+  HOUR={zh="时",["zh-hant"]="時",ja="時",de="STUNDE"},
+  MINUTE={zh="分",["zh-hant"]="分",ja="分",de="MINUTE"},
+  MOVE={zh="活动",["zh-hant"]="活動",ja="活動",de="AKTIV"},
+  ["STARTING..."]={zh="启动中",["zh-hant"]="啟動中",ja="起動中",de="STARTET..."},
+}
+
+local function face_label(value)
+  return FACE_LABELS[value] and (FACE_LABELS[value][ui_language()] or value) or value
+end
+
 local function text(x, y, w, value, font, color, align, opa, letter_space)
   if not canvas_text then return end
+  value = face_label(value)
   local chosen_font = font or APP.font.ui12
-  if has_cjk(value) then
-    if chosen_font == APP.font.ui12 then chosen_font = APP.font.cn12 end
-    if chosen_font == APP.font.ui14 then chosen_font = APP.font.cn14 end
-    if chosen_font == APP.font.ui16 then chosen_font = APP.font.cn16 end
+  -- Only replace text fonts. A degree sign must not shrink a numeric font.
+  local numeric = font == APP.font.n28 or font == APP.font.n34 or font == APP.font.n40
+    or font == APP.font.n42 or font == APP.font.n52 or font == APP.font.n69 or font == APP.font.n72 or font == APP.font.mono24 or font == APP.font.mono56
+  if not numeric and APP.font.localized and tostring(value or ""):find("[\128-\255]") then
+    local size = (font == APP.font.ui14 or font == APP.font.cn14 or font == APP.font.en14) and 14
+      or (font == APP.font.ui16 or font == APP.font.en16) and 16
+      or (font == APP.font.cn11 or font == APP.font.en11 or font == APP.font.mono11) and 11
+      or (font == APP.font.en9 or font == APP.font.cn8 or font == APP.font.en8) and 9
+      or (font == APP.font.en10 or font == APP.font.cn10) and 10 or 12
+    chosen_font = APP.font.localized[size]
   end
   text_dsc.color = color or C.white
   text_dsc.opa = opa or 255
@@ -619,7 +638,11 @@ local function temp_text()
 end
 
 local function date_parts(t)
-  return weekday_of(t), MONTHS[t.mon] or "---", format("%02d", t.day)
+  local language = ui_language()
+  local month = MONTHS[t.mon] or "---"
+  if language == "zh" or language == "zh-hant" or language == "ja" then month = tostring(t.mon) .. "月"
+  elseif language == "de" then month = ({"JAN","FEB","MÄR","APR","MAI","JUN","JUL","AUG","SEP","OKT","NOV","DEZ"})[t.mon] or "---" end
+  return weekday_of(t), month, format("%02d", t.day)
 end
 
 local function draw_ticks(cx, cy, radius, count, color, major_every)
@@ -653,7 +676,7 @@ local function draw_meridian(t)
   -- Device fonts sit above browser glyphs; use matched visual baselines.
   text(17, 34, 90, day .. " · " .. month .. " " .. date, APP.font.en12, 0xBFC7D0)
   text(17, 67, 82, temp_text(), APP.font.n28, C.white)
-  text(17, 107, 88, english_safe(APP.state.city, "LOCAL"), APP.font.ui14, 0x8D99A6)
+  text(17, 107, 88, safe_city_label(APP.state.city), APP.font.ui14, 0x8D99A6)
   if not draw_ui_asset(18, 175, "mini-" .. weather_kind(APP.state.weather_code, APP.state.weather_text)) then
     draw_sun(28, 185, 8, C.orange)
   end
@@ -775,7 +798,7 @@ local function draw_mono(t)
   fill(C.black)
   local day, month, date = date_parts(t)
   text(14, 13, 136, day .. " " .. string.char(194, 183) .. " " .. month .. " " .. date, APP.font.en12, C.muted)
-  text(160, 13, 146, ascii_city_label(APP.state.city) .. "  " .. temp_text(), APP.font.en12, C.soft, ALIGN_RIGHT)
+  text(160, 13, 146, safe_city_label(APP.state.city) .. "  " .. temp_text(), APP.font.en12, C.soft, ALIGN_RIGHT)
   local hh = format("%02d", t.hour)
   local mm = format("%02d", t.min)
   draw_dot_digit(37, 56, hh:sub(1, 1), 0xFF607A, 0x0A0103)
@@ -810,6 +833,7 @@ local function draw_neon_girl(t)
   if canvas_img then pcall_fn(canvas_img, APP.canvas, 0, 0, src, { opa = 255 }) end
   local day, month, date = date_parts(t)
   local date_label = (FULL_DAY_NAMES[day] or day) .. ", " .. (FULL_MONTH_NAMES[month] or month) .. " " .. date
+  if ui_language() ~= "en" then date_label = day .. " · " .. month .. " " .. date end
   text(20, 31, 190, date_label, APP.font.en9, 0xA8D8EE, nil, nil, 4)
   local hh = format("%02d", t.hour)
   local mm = format("%02d", t.min)
@@ -823,10 +847,10 @@ local function draw_neon_girl(t)
   text(156, 68, 42, mm:sub(2, 2), APP.font.n69, C.white, ALIGN_CENTER)
   text(19, 142, 56, temp_text(), APP.font.en20, C.white, nil, nil, -1)
   line(60, 144, 60, 163, 0x56CBE2, 255, 1)
-  text(71, 148, 76, ascii_city_label(APP.state.city) .. " " .. string.char(194, 183), APP.font.en12, 0x8EB9CA, nil, nil, 1)
+  text(71, 148, 76, safe_city_label(APP.state.city) .. " " .. string.char(194, 183), APP.font.en12, 0x8EB9CA, nil, nil, 1)
   local neon_weather = is_english()
       and weather_kind(APP.state.weather_code, APP.state.weather_text):upper()
-      or (APP.state.weather_valid and APP.state.weather_text or "晴")
+      or (APP.state.weather_valid and APP.state.weather_text or tr("晴", "CLEAR"))
   text(148, 148, 40, neon_weather, APP.font.ui12, 0x8EB9CA)
   for i = 0, 11 do
     local x1 = 18 + i * 24
@@ -844,7 +868,7 @@ local function draw_solar_weather(t)
   fill(C.black)
   local day, month, date = date_parts(t)
   text(14, 11, 120, "SOLAR WEATHER", APP.font.en11, C.white, nil, nil, 1)
-  text(150, 11, 156, ascii_city_label(APP.state.city) .. " · " .. day .. " " .. date, APP.font.en11, 0x8995A1, ALIGN_RIGHT, nil, 1)
+  text(150, 11, 156, safe_city_label(APP.state.city) .. " · " .. day .. " " .. date, APP.font.en11, 0x8995A1, ALIGN_RIGHT, nil, 1)
 
   local previous_x, previous_y
   for i = 0, 48 do
@@ -907,7 +931,7 @@ local function draw_terminal(t)
   rect(14, 145, 141, 49, 0x031006, 255, 1, green_dim, 1)
   if not draw_ui_asset(18, 154, "terminal-weather") then draw_cloud(33, 169, 14, 0x61F05D) end
   text(53, 153, 94, temp_text() .. " " .. weather_kind(APP.state.weather_code, APP.state.weather_text):upper(), APP.font.mono12, green)
-  text(53, 172, 94, ascii_city_label(APP.state.city), APP.font.mono11, 0x36773C)
+  text(53, 172, 94, safe_city_label(APP.state.city), APP.font.mono11, 0x36773C)
   rect(165, 145, 141, 49, 0x031006, 255, 1, green_dim, 1)
   if not draw_ui_asset(169, 153, "terminal-humidity") then draw_droplet(181, 169, 13, 0x75FF82) end
   text(204, 153, 94, APP.state.humidity and (tostring(floor(APP.state.humidity)) .. "% RH") or "--% RH", APP.font.mono12, green)
@@ -942,12 +966,12 @@ local function draw_lunar(t)
   end
 
   text(164, 63, 142, format("%02d:%02d", t.hour, t.min), APP.font.n40, C.white, ALIGN_RIGHT)
-  text(164, 121, 142, temp_text() .. " · " .. weather_kind(APP.state.weather_code, APP.state.weather_text):upper(), APP.font.en11, 0xC5BAA0, ALIGN_RIGHT)
+  text(164, 121, 142, temp_text() .. " · " .. face_label(weather_kind(APP.state.weather_code, APP.state.weather_text):upper()), APP.font.en11, 0xC5BAA0, ALIGN_RIGHT)
   line(14, 198, 306, 198, 0x302D25, 255, 1)
 
   local orb_value = tostring(floor(moon_phase(t) * 100 + 0.5)) .. "%"
-  text(14, 208, 132, "MOON " .. orb_value, APP.font.en11, accent)
-  local humidity = APP.state.humidity and ("HUMIDITY " .. tostring(floor(APP.state.humidity)) .. "%") or "HUMIDITY --%"
+  text(14, 208, 132, face_label("MOON") .. " " .. orb_value, APP.font.en11, accent)
+  local humidity = face_label("HUMIDITY") .. " " .. (APP.state.humidity and tostring(floor(APP.state.humidity)) or "--") .. "%"
   text(165, 208, 141, humidity, APP.font.en11, 0x817B6D, ALIGN_RIGHT)
 end
 
@@ -975,7 +999,7 @@ local function draw_focus_memo(t)
     rect(30, 176, 22, 7, C.soft, 255, 4)
   end
   text(61, 164, 50, temp_text(), APP.font.en16, C.white)
-  text(12, 193, 88, ascii_city_label(APP.state.city), APP.font.en9, 0x77828D, ALIGN_CENTER, nil, 1)
+  text(12, 193, 88, safe_city_label(APP.state.city), APP.font.en9, 0x77828D, ALIGN_CENTER, nil, 1)
 
   if not APP.state.memo_available then
     rect(120, 63, 187, 112, 0x0C0D11, 255)
@@ -1266,6 +1290,12 @@ local function parse_forecast(status, body)
   return APP.state.forecast_valid
 end
 
+local function settings_still_current()
+  local doc = decode_json(read_text(APP.SETTINGS_PATH))
+  return doc and trim(doc.weather_address or doc.weatherAddress) == APP.state.weather_address
+    and trim(doc.language or doc.locale or doc.lang or "zh-CN") == APP.state.language
+end
+
 local function request_forecast_for(location)
   local http_mod = rawget(_G, "http")
   if not http_mod or not http_mod.cubicserver or not http_mod.cubicserver.get then
@@ -1273,10 +1303,10 @@ local function request_forecast_for(location)
     return
   end
   APP.state.forecast_inflight = true
-  local url = APP.WEATHER_3D_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. (is_english() and "en" or "zh")
+  local url = APP.WEATHER_3D_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. ui_language()
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     APP.state.forecast_inflight = false
-    if APP.running then parse_forecast(status, body) end
+    if APP.running and settings_still_current() then parse_forecast(status, body) end
   end)
 end
 
@@ -1286,10 +1316,10 @@ local function request_weather_for(location)
     APP.state.weather_inflight = false
     return
   end
-  local url = APP.WEATHER_NOW_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. (is_english() and "en" or "zh")
+  local url = APP.WEATHER_NOW_PATH .. "?location=" .. url_encode(location) .. "&unit=m&lang=" .. ui_language()
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     APP.state.weather_inflight = false
-    if APP.running then parse_weather(status, body) end
+    if APP.running and settings_still_current() then parse_weather(status, body) end
   end)
 end
 
@@ -1300,23 +1330,44 @@ local function request_weather()
   local raw_location = APP.state.weather_address
   local location = APP.state.weather_location_id
   if location == "" and raw_location:match("^%d+$") then location = raw_location end
-  if location ~= "" then
+  local language = ui_language()
+  if location ~= "" and APP.state.city_language == language then
     APP.state.weather_inflight = true
     request_weather_for(location)
     return
   end
   if raw_location == "" then return end
   APP.state.weather_inflight = true
-  local url = APP.WEATHER_CITY_PATH .. "?location=" .. url_encode(raw_location) .. "&number=1&lang=" .. (is_english() and "en" or "zh")
+  -- Translate a known ID rather than resolving the address again.
+  local url = APP.WEATHER_CITY_PATH .. "?location=" .. url_encode(location ~= "" and location or raw_location) .. "&number=1&lang=" .. language
   http_mod.cubicserver.get(url, "Accept-Encoding: gzip\r\n", function(status, body)
     if not APP.running then return end
     local doc = status == 200 and decode_json(maybe_gunzip(body)) or nil
-    local locations = doc and (doc.locations or doc.location)
+    local locations = doc and tostring(doc.code) == "200" and (doc.locations or doc.location)
     local first = type(locations) == "table" and locations[1] or nil
     local id = type(first) == "table" and trim(first.id) or ""
-    if APP.state.weather_address == "" and type(first) == "table" and trim(first.name) ~= "" then
-      APP.state.city = is_english() and ascii_city_label(first.name) or safe_city_label(first.name)
+    local latest = decode_json(read_text(APP.SETTINGS_PATH))
+    if not latest or trim(latest.weather_address or latest.weatherAddress) ~= raw_location
+      or trim(latest.language or latest.locale or latest.lang or "zh-CN") ~= APP.state.language then
+      APP.state.weather_inflight = false
+      return
     end
+    if id ~= "" and trim(first.name) ~= "" then
+      APP.state.city = trim(first.name)
+      APP.state.location_label = APP.state.city
+      APP.state.city_language = language
+      latest.weather_location_address = raw_location
+      latest.weather_location_id = id
+      latest.weather_city = APP.state.city
+      latest.weather_city_lang = language == "zh" and "zh-CN" or language == "zh-hant" and "zh-TW" or language
+      local codec = rawget(_G, "json") or rawget(_G, "sjson")
+      if codec and codec.encode then
+        local ok, encoded = pcall_fn(codec.encode, latest)
+        if ok and type(encoded) == "string" then write_text(APP.SETTINGS_PATH, encoded) end
+      end
+      render()
+    end
+    if id == "" then id = location end
     if id == "" then APP.state.weather_inflight = false; return end
     APP.state.weather_location_id = id
     request_weather_for(id)
@@ -1334,7 +1385,7 @@ end
 local WEB_HTML = [=[<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Holo Clock Faces</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#020406;color:#f7f9fc;font-family:Inter,"Microsoft YaHei",system-ui,sans-serif}.page{max-width:1100px;margin:auto;padding:24px 16px 48px}header{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:16px}h1{margin:0;font-size:28px;letter-spacing:-.03em}header p{margin:6px 0 0;color:#8995a1}.state{color:#53e6ff;font:600 13px ui-monospace,monospace}.settings{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;margin-bottom:20px;padding:14px;border:1px solid #26303a;border-radius:14px;background:#080b0f}.field{display:grid;gap:6px}.field label{color:#aeb7c2;font-size:13px}.field select{width:100%;min-height:44px;padding:0 12px;border:1px solid #36424e;border-radius:9px;background:#10151b;color:#f7f9fc;font-size:14px}.save{min-height:44px;padding:0 20px;border:0;border-radius:9px;background:#53e6ff;color:#001014;font-weight:800;cursor:pointer}.save:disabled{opacity:.5;cursor:default}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}.face{appearance:none;width:100%;padding:8px;border:1px solid #26303a;border-radius:14px;background:#080b0f;color:inherit;text-align:left;cursor:pointer;transition:border-color .16s,transform .16s,background .16s}.face:hover{transform:translateY(-2px);border-color:#53606d}.face:focus-visible,.save:focus-visible,.field select:focus-visible{outline:2px solid #53e6ff;outline-offset:2px}.face.selected{border-color:#53e6ff;background:#0a151a;box-shadow:0 0 0 1px #53e6ff,0 0 24px #53e6ff20}.face img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:#000}.meta{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 4px}.meta b{font-size:14px}.meta span{color:#75818d;font:600 11px ui-monospace,monospace}.face.selected .meta span{color:#53e6ff}@media(max-width:560px){header{align-items:start;flex-direction:column}.page{padding-top:18px}.settings{grid-template-columns:1fr}.save{width:100%}.grid{grid-template-columns:1fr 1fr;gap:8px}.face{padding:5px;border-radius:10px}.meta b{font-size:12px}.meta span{font-size:9px}}
 </style></head><body><main class="page"><header><div><h1>Holo Clock</h1><p id="subtitle">Select a face to switch the device immediately.</p></div><div id="state" class="state" aria-live="polite">Connecting to device</div></header><section id="settings" class="settings" aria-label="Face settings"><div class="field"><label id="defaultLabel" for="defaultFace">Default face at startup</label><select id="defaultFace"></select></div><div class="field"><label id="autoLabel" for="autoSwitch">Automatic face switching</label><select id="autoSwitch"><option value="0">Off</option><option value="600000">Every 10 minutes</option><option value="3600000">Every hour</option></select></div><button id="save" class="save" type="button">Save settings</button></section><section id="grid" class="grid"></section></main><script>
-const faces=['Meridian','Pulse WX','Neon Girl','Solar Weather','Terminal','Lunar','Focus Memo','Nixie','Fireworks'];const count=faces.length,grid=document.getElementById('grid'),state=document.getElementById('state'),settings=document.getElementById('settings'),defaultLabel=document.getElementById('defaultLabel'),autoLabel=document.getElementById('autoLabel'),defaultFace=document.getElementById('defaultFace'),autoSwitch=document.getElementById('autoSwitch'),save=document.getElementById('save'),subtitle=document.getElementById('subtitle');const base=location.pathname.replace(/\/?$/,'/'),faceApi=base+'api/face',settingsApi=base+'api/settings';let locale='en';const I={en:{title:'Holo Clock Faces',subtitle:'Select a face to switch the device immediately.',connecting:'Connecting to device',settings:'Face settings',defaultFace:'Default face at startup',autoSwitch:'Automatic face switching',off:'Off',tenMinutes:'Every 10 minutes',hour:'Every hour',save:'Save settings',current:'Current face',loading:'Loading failed',switching:'Switching',switchFailed:'Switch failed',saving:'Saving settings',saveFailed:'Save failed',saved:'Settings saved',preview:'face preview'},zh:{title:'Holo Clock 表盘',subtitle:'选择表盘会立即切换设备显示。',connecting:'正在连接设备',settings:'表盘设置',defaultFace:'开机默认表盘',autoSwitch:'自动切换表盘',off:'不切换',tenMinutes:'每 10 分钟',hour:'每 1 小时',save:'保存设置',current:'当前表盘',loading:'读取失败',switching:'正在切换',switchFailed:'切换失败',saving:'正在保存设置',saveFailed:'保存失败',saved:'设置已保存',preview:'表盘预览'}};const t=k=>I[locale][k];function applyLanguage(value){locale=String(value||'').toLowerCase().startsWith('en')?'en':'zh';document.documentElement.lang=locale==='en'?'en':'zh-CN';document.title=t('title');subtitle.textContent=t('subtitle');settings.setAttribute('aria-label',t('settings'));defaultLabel.textContent=t('defaultFace');autoLabel.textContent=t('autoSwitch');autoSwitch.options[0].textContent=t('off');autoSwitch.options[1].textContent=t('tenMinutes');autoSwitch.options[2].textContent=t('hour');save.textContent=t('save');document.querySelectorAll('.face img').forEach((img,i)=>img.alt=`${faces[i]} ${t('preview')}`)}faces.forEach((name,i)=>{const option=document.createElement('option');option.value=i+1;option.textContent=`${String(i+1).padStart(2,'0')} · ${name}`;defaultFace.appendChild(option);const b=document.createElement('button');b.className='face';b.dataset.face=i+1;const preview=`${String(i+1).padStart(2,'0')}.png`;b.innerHTML=`<img src="/apps/NixieClock/previews/${preview}" alt="${name} face preview"><span class="meta"><b>${name}</b><span>${String(i+1).padStart(2,'0')} / ${String(count).padStart(2,'0')}</span></span>`;b.onclick=()=>select(i+1);grid.appendChild(b)});function paint(face){document.querySelectorAll('.face').forEach(e=>e.classList.toggle('selected',Number(e.dataset.face)===face));state.textContent=`${t('current')} ${String(face).padStart(2,'0')} / ${String(count).padStart(2,'0')}`}async function load(){const [fr,sr]=await Promise.all([fetch(faceApi,{cache:'no-store'}),fetch(settingsApi,{cache:'no-store'})]),f=await fr.json(),s=await sr.json();applyLanguage(s.language);if(!f.ok||!s.ok)throw Error(f.error||s.error||t('loading'));paint(f.face);defaultFace.value=s.default_face;autoSwitch.value=s.auto_switch_ms}async function select(face){state.textContent=t('switching');try{const r=await fetch(faceApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({face})}),d=await r.json();if(!d.ok)throw Error(d.error||t('switchFailed'));paint(d.face)}catch(e){state.textContent=e.message}}save.onclick=async()=>{save.disabled=true;state.textContent=t('saving');try{const r=await fetch(settingsApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_face:Number(defaultFace.value),auto_switch_ms:Number(autoSwitch.value)})}),d=await r.json();if(!d.ok)throw Error(d.error||t('saveFailed'));state.textContent=t('saved')}catch(e){state.textContent=e.message}finally{save.disabled=false}};applyLanguage('en');load().catch(e=>state.textContent=e.message);
+const faces=['Meridian','Pulse WX','Neon Girl','Solar Weather','Terminal','Lunar','Focus Memo','Nixie','Fireworks'];const count=faces.length,grid=document.getElementById('grid'),state=document.getElementById('state'),settings=document.getElementById('settings'),defaultLabel=document.getElementById('defaultLabel'),autoLabel=document.getElementById('autoLabel'),defaultFace=document.getElementById('defaultFace'),autoSwitch=document.getElementById('autoSwitch'),save=document.getElementById('save'),subtitle=document.getElementById('subtitle');const base=location.pathname.replace(/\/?$/,'/'),faceApi=base+'api/face',settingsApi=base+'api/settings';let locale='en';const I={en:{title:'Holo Clock Faces',subtitle:'Select a face to switch the device immediately.',connecting:'Connecting to device',settings:'Face settings',defaultFace:'Default face at startup',autoSwitch:'Automatic face switching',off:'Off',tenMinutes:'Every 10 minutes',hour:'Every hour',save:'Save settings',current:'Current face',loading:'Loading failed',switching:'Switching',switchFailed:'Switch failed',saving:'Saving settings',saveFailed:'Save failed',saved:'Settings saved',preview:'face preview'},zh:{title:'Holo Clock 表盘',subtitle:'选择表盘会立即切换设备显示。',connecting:'正在连接设备',settings:'表盘设置',defaultFace:'开机默认表盘',autoSwitch:'自动切换表盘',off:'不切换',tenMinutes:'每 10 分钟',hour:'每 1 小时',save:'保存设置',current:'当前表盘',loading:'读取失败',switching:'正在切换',switchFailed:'切换失败',saving:'正在保存设置',saveFailed:'保存失败',saved:'设置已保存',preview:'表盘预览'}};I.de={"title":"Holo Clock – Zifferblätter","subtitle":"Zifferblatt auswählen, um die Anzeige zu wechseln.","connecting":"Gerät wird verbunden","settings":"Zifferblatt-Einstellungen","defaultFace":"Zifferblatt beim Start","autoSwitch":"Automatischer Wechsel","off":"Aus","tenMinutes":"Alle 10 Minuten","hour":"Jede Stunde","save":"Einstellungen speichern","current":"Aktuelles Zifferblatt","loading":"Laden fehlgeschlagen","switching":"Wechselt","switchFailed":"Wechsel fehlgeschlagen","saving":"Wird gespeichert","saveFailed":"Speichern fehlgeschlagen","saved":"Gespeichert","preview":"Zifferblatt-Vorschau"};I.ja={"title":"Holo Clock 文字盤","subtitle":"文字盤を選ぶとデバイスの表示が切り替わります。","connecting":"デバイスに接続中","settings":"文字盤の設定","defaultFace":"起動時の文字盤","autoSwitch":"文字盤の自動切替","off":"オフ","tenMinutes":"10分ごと","hour":"1時間ごと","save":"設定を保存","current":"現在の文字盤","loading":"読み込み失敗","switching":"切替中","switchFailed":"切替失敗","saving":"保存中","saveFailed":"保存失敗","saved":"保存しました","preview":"文字盤プレビュー"};I['zh-hant']={title:"Holo Clock 錶盤",subtitle:"選擇錶盤即可切換裝置顯示。",connecting:"正在連接裝置",settings:"錶盤設定",defaultFace:"啟動錶盤",autoSwitch:"自動切換錶盤",off:"關閉",tenMinutes:"每 10 分鐘",hour:"每小時",save:"儲存設定",current:"目前錶盤",loading:"載入失敗",switching:"切換中",switchFailed:"切換失敗",saving:"儲存中",saveFailed:"儲存失敗",saved:"已儲存",preview:"錶盤預覽"};const t=k=>I[locale][k]||I.en[k]||k;function applyLanguage(value){const code=String(value||'').toLowerCase();locale=/^zh[-_](tw|hk|mo|hant)/.test(code)?'zh-hant':code.startsWith('zh')?'zh':code.startsWith('de')?'de':code.startsWith('ja')?'ja':'en';document.documentElement.lang=locale==='zh'?'zh-CN':locale==='zh-hant'?'zh-TW':locale;document.title=t('title');subtitle.textContent=t('subtitle');settings.setAttribute('aria-label',t('settings'));defaultLabel.textContent=t('defaultFace');autoLabel.textContent=t('autoSwitch');autoSwitch.options[0].textContent=t('off');autoSwitch.options[1].textContent=t('tenMinutes');autoSwitch.options[2].textContent=t('hour');save.textContent=t('save');document.querySelectorAll('.face img').forEach((img,i)=>img.alt=`${faces[i]} ${t('preview')}`)}faces.forEach((name,i)=>{const option=document.createElement('option');option.value=i+1;option.textContent=`${String(i+1).padStart(2,'0')} · ${name}`;defaultFace.appendChild(option);const b=document.createElement('button');b.className='face';b.dataset.face=i+1;const preview=`${String(i+1).padStart(2,'0')}.png`;b.innerHTML=`<img src="/apps/NixieClock/previews/${preview}" alt="${name} face preview"><span class="meta"><b>${name}</b><span>${String(i+1).padStart(2,'0')} / ${String(count).padStart(2,'0')}</span></span>`;b.onclick=()=>select(i+1);grid.appendChild(b)});function paint(face){document.querySelectorAll('.face').forEach(e=>e.classList.toggle('selected',Number(e.dataset.face)===face));state.textContent=`${t('current')} ${String(face).padStart(2,'0')} / ${String(count).padStart(2,'0')}`}async function load(){const [fr,sr]=await Promise.all([fetch(faceApi,{cache:'no-store'}),fetch(settingsApi,{cache:'no-store'})]),f=await fr.json(),s=await sr.json();applyLanguage(s.language);if(!f.ok||!s.ok)throw Error(f.error||s.error||t('loading'));paint(f.face);defaultFace.value=s.default_face;autoSwitch.value=s.auto_switch_ms}async function select(face){state.textContent=t('switching');try{const r=await fetch(faceApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({face})}),d=await r.json();if(!d.ok)throw Error(d.error||t('switchFailed'));paint(d.face)}catch(e){state.textContent=e.message}}save.onclick=async()=>{save.disabled=true;state.textContent=t('saving');try{const r=await fetch(settingsApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_face:Number(defaultFace.value),auto_switch_ms:Number(autoSwitch.value)})}),d=await r.json();if(!d.ok)throw Error(d.error||t('saveFailed'));state.textContent=t('saved')}catch(e){state.textContent=e.message}finally{save.disabled=false}};applyLanguage('en');load().catch(e=>state.textContent=e.message);
 </script></body></html>]=]
 
 local function encode_json(value)

@@ -2,8 +2,9 @@
 const $=id=>document.getElementById(id);
 // Lua JSON represents an empty table as {}; only arrays may be iterated.
 const asArray=value=>Array.isArray(value)?value:[];
-const LANG=document.documentElement.lang||"zh-CN", LI={"zh-CN":0,en:1,"zh-TW":2,ja:3}[LANG]??0;
-const tr=k=>LABELS[k]?.[LI]||LABELS[k]?.[0]||k;
+const LANG=document.documentElement.lang||"zh-CN", LI={"zh-CN":0,en:1,"zh-TW":2,ja:3,de:4}[LANG]??1;
+const tr=k=>LABELS[k]?.[LI]||LABELS[k]?.[1]||k;
+document.title=LANG==="de"?"Ticker · Marktübersicht":LANG==="ja"?"Ticker · マーケット":LANG.startsWith("zh")?"Ticker · 行情看板":"Ticker · Market dashboard";
 const API=document.documentElement.dataset.base+"/api";
 const groups=["all","ashare","hongkong","nasdaq","taiwan","crypto","metal","fx"];
 let state=null,browse="all",onlySaved=false,mutation=false,revision=0,polling=false,searchToken=0,searchTimer=null,toastTimer=null;
@@ -140,4 +141,5 @@ $("updateAll").onclick=()=>updateDirectory("all");$("cancelDownload").onclick=()
 $("chart").onpointermove=e=>{chartHover=e.clientX-$("chart").getBoundingClientRect().left;drawChart();};$("chart").onpointerleave=()=>{chartHover=null;drawChart();};
 window.addEventListener("resize",drawChart);document.addEventListener("visibilitychange",()=>{if(!document.hidden)poll();});
 for(const id of ["fxBase","fxQuote","customBase","customQuote"]){$(id).maxLength=64;$(id).onfocus=()=>$(id).select();}
+$("refresh").title=tr("update");$("refresh").setAttribute("aria-label",tr("update"));
 syncCustom();setBrowse("all");loadCurrencies();poll();setInterval(poll,2500);

@@ -5,6 +5,7 @@ end
 
 MJPEG_PLAYER_APP = {}
 local APP = MJPEG_PLAYER_APP
+local master_volume = dofile("/sd/apps/mjpeg_player/volume.lua").new()
 APP.VERSION = "1.0.1"
 
 local SCREEN_W = 320
@@ -515,7 +516,7 @@ local function start_audio(name)
       " bits=" .. tostring(sample_bits) ..
       " module_rate=" .. tostring(info.sample_rate or "nil"))
     if APP.audio.set_effects then
-      pcall(function() APP.audio.set_effects({ volume = 0.20 }) end)
+      pcall(function() APP.audio.set_effects({ volume = master_volume.value / 100 }) end)
     end
     local started = false
     local start_error = nil
@@ -1020,6 +1021,7 @@ local function start_timers()
 end
 
 function APP.shutdown(reason)
+  master_volume.stop()
   if APP.shutdown_complete then return APP.shutdown_ok end
   if APP.shutting_down then return false end
   APP.shutting_down = true
@@ -1164,6 +1166,10 @@ register_safe_exit_api()
 show_message("LOADING MJPEG", "Native JPEG module")
 APP.jpg, APP.module_error = load_jpg_module()
 APP.audio, APP.audio_error = load_audio_module()
+master_volume.on_error = function(err) if err then APP.audio_error = err end end
+master_volume.start(function(value)
+  if APP.audio and APP.audio.set_effects then return APP.audio.set_effects({ volume = value / 100 }) end
+end)
 if not APP.audio then
   print("[mjpeg] audio unavailable: " .. tostring(APP.audio_error))
 end

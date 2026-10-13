@@ -4,11 +4,13 @@ local SETTINGS_PATH = "/sd/apps/settings.json"
 local DEFAULT_LANGUAGE = "zh-CN"
 
 local function normalize(value)
-  local text = tostring(value or ""):gsub("_", "-")
+  local text = tostring(value or ""):gsub("_", "-"):lower()
   if text == "en" or text:match("^en%-") then return "en" end
+  if text == "de" or text:match("^de%-") then return "de" end
   if text == "ja" or text:match("^ja%-") then return "ja" end
-  if text == "zh-TW" or text == "zh-Hant" or text:match("^zh%-Hant") or text:match("^zh%-HK") then return "zh-TW" end
-  return DEFAULT_LANGUAGE
+  if text:match("^zh%-tw") or text:match("^zh%-hant") or text:match("^zh%-hk") or text:match("^zh%-mo") then return "zh-TW" end
+  if text == "" or text == "zh" or text:match("^zh%-") then return DEFAULT_LANGUAGE end
+  return "en"
 end
 
 local function read_language()
@@ -23,6 +25,15 @@ local function read_language()
 end
 
 local TEXT = {
+  de = {
+    starting="Startet", waiting="Warte auf Daten", no_price="Kein Kurs", market="Markt",
+    sync="SYNC", ready="BEREIT", loading="LÄDT", cold="STARTET", error="FEHLER",
+    line="Linie", updated="Stand", points="Pkte", usd="USD", cny="CNY", twd="TWD", hkd="HKD", group_hongkong="Hongkong",
+    menu="Markteinstellungen", category="Kategorie", asset="Wert", base_currency="Basis", quote_currency="Zielwährung",
+    interval="Zeitraum", chart="Diagramm", candle="Kerzen", ma="Gleit. Mittel", display_currency="Währung",
+    tilt="Neigungswechsel", refresh_now="Aktualisieren", on="Ein", off="Aus", controller_hint="Oben/unten: Wahl  Links/rechts: Ändern",
+    group_fx="Devisen", group_crypto="Krypto", group_nasdaq="Nasdaq", group_metal="Metalle", group_ashare="China A", group_taiwan="Taiwan",
+  },
   ["zh-CN"] = {
     starting = "正在启动", waiting = "等待数据", no_price = "暂无价格", market = "行情",
     sync = "同步", ready = "就绪", loading = "加载中", cold = "启动中", error = "错误",
@@ -44,9 +55,9 @@ local TEXT = {
   ja = {
     starting = "起動中", waiting = "データ待ち", no_price = "価格なし", market = "相場",
     sync = "同期", ready = "準備完了", loading = "読込中", cold = "起動中", error = "エラー",
-    line = "折線", updated = "更新", points = "点", usd = "米ドル", cny = "人民元", twd = "台湾ドル", hkd = "香港ドル", group_hongkong = "香港株",
+    line = "折れ線", updated = "更新", points = "点", usd = "米ドル", cny = "人民元", twd = "台湾ドル", hkd = "香港ドル", group_hongkong = "香港株",
     menu = "相場コントロール", category = "カテゴリ", asset = "銘柄", base_currency = "基準通貨", quote_currency = "換算先",
-    interval = "期間", chart = "チャート", candle = "ローソク", ma = "移動平均", display_currency = "表示通貨",
+    interval = "期間", chart = "チャート", candle = "ローソク足", ma = "移動平均", display_currency = "表示通貨",
     tilt = "傾き切替", refresh_now = "今すぐ更新", on = "オン", off = "オフ", controller_hint = "上下:選択  左右:変更  MENU:戻る",
     group_fx = "為替", group_crypto = "暗号資産", group_nasdaq = "ナスダック", group_metal = "金銀銅", group_ashare = "中国A株", group_taiwan = "台湾株",
   },
@@ -102,13 +113,14 @@ local ASSET_NAMES = {
 
 I18n.language = read_language()
 I18n.font_path = ({
+  de = "/sd/apps/btc/font/btc_ui_de_12.bin",
   ["zh-CN"] = "/sd/apps/btc/font/btc_ui_zh_cn_12.bin",
   ja = "/sd/apps/btc/font/btc_ui_ja_12.bin",
   ["zh-TW"] = "/sd/apps/btc/font/btc_ui_zh_tw_12.bin",
 })[I18n.language]
 
 function I18n:t(key)
-  local dict = TEXT[self.language] or TEXT[DEFAULT_LANGUAGE]
+  local dict = TEXT[self.language] or TEXT.en
   return dict[key] or TEXT.en[key] or tostring(key or "")
 end
 
@@ -120,7 +132,7 @@ end
 
 function I18n:asset_name(asset)
   if not asset then return self:t("market") end
-  local names = ASSET_NAMES[self.language] or ASSET_NAMES[DEFAULT_LANGUAGE]
+  local names = ASSET_NAMES[self.language] or ASSET_NAMES.en
   return names[asset.id] or asset.text or asset.symbol or self:t("market")
 end
 

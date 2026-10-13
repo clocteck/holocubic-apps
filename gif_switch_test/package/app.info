@@ -1,0 +1,8 @@
+name = GIF Switch Test
+name_zh_cn = GIF 三秒切换测试
+kind = app
+category = tool
+catalog_scope = community
+entry = main.lua
+description = Three existing Xiaozhi GIFs, switched every 3000 ms using two preloaded canvases.
+version = 0.2.0

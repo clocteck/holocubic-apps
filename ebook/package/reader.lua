@@ -140,16 +140,25 @@ local function json_encode(value)
 end
 
 local function normalize_language(value)
-  local text = tostring(value or ""):gsub("_", "-")
+  local text = tostring(value or ""):gsub("_", "-"):lower()
   if text == "en" or text:match("^en%-") then return "en" end
+  if text == "de" or text:match("^de%-") then return "de" end
   if text == "ja" or text:match("^ja%-") then return "ja" end
-  if text == "zh-TW" or text == "zh-Hant" or text:match("^zh%-Hant") or text:match("^zh%-HK") then return "zh-TW" end
-  return "zh-CN"
+  if text:match("^zh%-tw") or text:match("^zh%-hant") or text:match("^zh%-hk") or text:match("^zh%-mo") then return "zh-TW" end
+  if text == "" or text == "zh" or text:match("^zh%-") then return "zh-CN" end
+  return "en"
 end
 
 local RUNTIME_SETTINGS = json_decode(read_small(SETTINGS_PATH, 65536)) or {}
 local LANGUAGE = normalize_language(RUNTIME_SETTINGS.language or RUNTIME_SETTINGS.locale or RUNTIME_SETTINGS.lang)
 local TEXT = {
+  de = {
+    app_title="E-Book", empty="Bibliothek ist leer\n\nBuch über die Weboberfläche hochladen.\nEPUB / UTF-8 TXT / Markdown.", choose="Buch auswählen", waiting="Warte auf ein Buch", page_hint="‹  SEITE  ›",
+    toc="INHALT", library="BIBLIOTHEK", items="%d Einträge", menu_hint="Steuerkreuz: Wahl  A: OK  B: Zurück", start="Lesen", chapter="Kapitel %d",
+    index_loaded="Inhaltsverzeichnis geladen", index_done="Inhalt gespeichert · %d Kapitel", index_failed="Inhalt konnte nicht geladen werden", index_build="Erstelle Inhalt %d%% · %d Kapitel", index_start="Erstelle Inhalt 0%", index_resume="Setze Inhalt fort %d%% · %d Kapitel", index_footer="INHALT %d%% · %s",
+    open_failed="Buch kann nicht geöffnet werden", read_failed="Lesefehler", end_book="—— ENDE ——", no_choice="Keine Auswahl", no_book="Kein Buch geöffnet", finished="Ende des Buches", first="Erste Seite",
+    chapter_missing="Kapitel nicht gefunden", invalid_book="Ungültiger Buchpfad", missing_book="Buch fehlt oder ist leer", book_missing="Buch nicht gefunden", invalid_path="Ungültiger Pfad", delete_failed="Löschen fehlgeschlagen", web_failed="Weboberfläche nicht verfügbar", unknown_action="Unbekannte Aktion", encoding_bad="Die Datei ist nicht UTF-8 oder wurde falsch konvertiert.\n\nOriginal erneut über die Weboberfläche hochladen.", main_body="Text", epub_loaded="EPUB-Inhalt geladen · %d Kapitel", epub_invalid="EPUB-Cache unvollständig",
+  },
   ["zh-CN"] = {
     app_title="电子书", empty="书库为空\n\n请打开网页控制页上传电子书。\n支持 EPUB / UTF-8 TXT / Markdown。", choose="请选择一本电子书", waiting="等待书籍", page_hint="‹  翻页  ›",
     toc="章节目录", library="书库", items="%d 项", menu_hint="方向键选择  A确认  B返回  START切换", start="开始阅读", chapter="章节 %d",
@@ -165,10 +174,10 @@ local TEXT = {
     chapter_missing="Chapter not found", invalid_book="Invalid book path", missing_book="Book is missing or empty", book_missing="Book not found", invalid_path="Invalid path", delete_failed="Delete failed", web_failed="Web UI failed to load", unknown_action="Unknown action", encoding_bad="This file is not UTF-8 or was converted incorrectly.\n\nUpload the original again from the updated Web UI.", main_body="Text", epub_loaded="EPUB contents loaded · %d chapters", epub_invalid="EPUB cache is incomplete",
   },
   ja = {
-    app_title="電子書", empty="ライブラリは空です\n\nWeb画面から本をアップロードしてください。\nEPUB / UTF-8 TXT / Markdown 対応。", choose="本を選択", waiting="本を待っています", page_hint="‹  ページ  ›",
+    app_title="電子書籍", empty="ライブラリは空です\n\nWeb画面から本をアップロードしてください。\nEPUB / UTF-8 TXT / Markdown 対応。", choose="本を選択", waiting="書籍を追加してください", page_hint="‹  ページ  ›",
     toc="目次", library="ライブラリ", items="%d 件", menu_hint="方向キー選択  A決定  B戻る  START切替", start="読み始める", chapter="第 %d 章",
     index_loaded="保存済み目次を読み込みました", index_done="目次を保存しました · %d 章", index_failed="目次の読み込みに失敗", index_build="目次を作成中 %d%% · %d 章", index_start="目次を作成中 0%", index_resume="目次を再開中 %d%% · %d 章", index_footer="目次 %d%% · %s",
-    open_failed="電子書を開けません", read_failed="読み込み失敗", end_book="—— 読了 ——", no_choice="選択項目がありません", no_book="本が開かれていません", finished="最後のページです", first="最初のページです",
+    open_failed="電子書籍を開けません", read_failed="読み込み失敗", end_book="—— 読了 ——", no_choice="選択項目がありません", no_book="本が開かれていません", finished="最後のページです", first="最初のページです",
     chapter_missing="章がありません", invalid_book="本のパスが無効です", missing_book="本がないか空です", book_missing="本が見つかりません", invalid_path="パスが無効です", delete_failed="削除失敗", web_failed="Web画面を読み込めません", unknown_action="不明な操作", encoding_bad="UTF-8 ではないか、誤って変換されたファイルです。\n\n更新後のWeb画面から元ファイルを再送信してください。", main_body="本文", epub_loaded="EPUB 目次を読み込みました · %d 章", epub_invalid="EPUB キャッシュが不完全です",
   },
   ["zh-TW"] = {

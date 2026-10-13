@@ -1,3 +1,6 @@
+local I18n = dofile("/sd/apps/settings/i18n.lua")
+local T = I18n.t
+
 local prev = rawget(_G, "SETTINGS_APP")
 if prev and prev.stop then
   pcall(function()
@@ -69,7 +72,7 @@ SETTINGS_APP = {
     {
       id = "hidpad",
       kind = "toggle",
-      title = "蓝牙手柄",
+      title = T("蓝牙手柄"),
       value = false,
       available = true,
       accent = 0x4DBD8B,
@@ -85,7 +88,7 @@ SETTINGS_APP = {
     {
       id = "brightness",
       kind = "slider",
-      title = "亮度",
+      title = T("亮度"),
       value = 80,
       available = true,
       accent = 0xF3B24C,
@@ -252,7 +255,7 @@ end
 
 local function json_encode(value)
   if not json or not json.encode then
-    return nil, "json.encode 不可用"
+    return nil, T("json.encode 不可用")
   end
   local ok, raw = pcall(function()
     return json.encode(value)
@@ -265,7 +268,7 @@ end
 
 local function json_decode(raw)
   if not json or not json.decode then
-    return nil, "json.decode 不可用"
+    return nil, T("json.decode 不可用")
   end
   local ok, value, err = pcall(function()
     return json.decode(raw)
@@ -274,7 +277,7 @@ local function json_decode(raw)
     return nil, tostring(value)
   end
   if type(value) ~= "table" then
-    return nil, tostring(err or "状态格式错误")
+    return nil, tostring(err or T("状态格式错误"))
   end
   return value
 end
@@ -320,6 +323,14 @@ local function load_font_ref(path, fallback)
 end
 
 local function init_fonts()
+  if I18n.language == "de" or I18n.language == "ja" or I18n.language == "en" then
+    local locale = I18n.language == "ja" and "ja" or "de"
+    FONT.title = load_font_ref(APP.APP_DIR .. "/font/settings_" .. locale .. "_18.bin", FONT.title)
+    FONT.label = load_font_ref(APP.APP_DIR .. "/font/settings_" .. locale .. "_15.bin", FONT.label)
+    FONT.value = FONT.label
+    FONT.small = load_font_ref(APP.APP_DIR .. "/font/settings_" .. locale .. "_12.bin", FONT.small)
+    return
+  end
   FONT.title = load_font_ref(APP.APP_DIR .. "/font/settings_cn_18_used.bin", FONT.title)
   FONT.label = load_font_ref(APP.APP_DIR .. "/font/settings_cn_15_used.bin", FONT.label)
   FONT.value = load_font_ref(APP.APP_DIR .. "/font/settings_cn_15_used.bin", FONT.value)
@@ -427,43 +438,43 @@ end
 
 local function wifi_value_text(mode)
   if not wifi then
-    return "不可用"
+    return T("不可用")
   end
-  if mode == wifi.NULLMODE then return "关闭" end
-  if mode == wifi.STATION then return "客户端" end
-  if mode == wifi.SOFTAP then return "热点" end
-  if mode == wifi.STATIONAP then return "客户端+热点" end
+  if mode == wifi.NULLMODE then return T("关闭") end
+  if mode == wifi.STATION then return T("客户端") end
+  if mode == wifi.SOFTAP then return T("热点") end
+  if mode == wifi.STATIONAP then return T("客户端+热点") end
   return wifi_mode_name(mode)
 end
 
 local function toggle_state_text(item)
   if not item then
-    return "不可用"
+    return T("不可用")
   end
   if item.id == "hidpad" then
-    if item.phase == "not_installed" then return "未安装" end
-    if item.phase == "unsupported" then return "不支持" end
-    if not item.available then return "不可用" end
-    if not item.value or item.phase == "disabled" then return "已禁用" end
-    if item.state_connected then return "已连接" end
-    if item.state_connecting or item.phase == "connecting" then return "连接中" end
-    if item.phase == "scanning" or item.phase == "select_device" then return "扫描中" end
-    return "已开启"
+    if item.phase == "not_installed" then return T("未安装") end
+    if item.phase == "unsupported" then return T("不支持") end
+    if not item.available then return T("不可用") end
+    if not item.value or item.phase == "disabled" then return T("已禁用") end
+    if item.state_connected then return T("已连接") end
+    if item.state_connecting or item.phase == "connecting" then return T("连接中") end
+    if item.phase == "scanning" or item.phase == "select_device" then return T("扫描中") end
+    return T("已开启")
   end
-  if not item.available then return "不可用" end
-  return item.value and "开启" or "关闭"
+  if not item.available then return T("不可用") end
+  return item.value and T("开启") or T("关闭")
 end
 
 local function item_summary(item)
   if not item then
-    return "设置"
+    return T("设置")
   end
   if item.id == "wifi" then
     return "Wi-Fi " .. text_or(item.value_label, "")
   elseif item.id == "brightness" then
-    return "亮度 " .. brightness_text(item.value)
+    return T("亮度 ") .. brightness_text(item.value)
   elseif item.id == "hidpad" then
-    return "蓝牙手柄 " .. toggle_state_text(item)
+    return T("蓝牙手柄 ") .. toggle_state_text(item)
   end
   return item.title
 end
@@ -529,10 +540,10 @@ end
 
 local function send_hidpad_command(topic)
   if not hidpad_installed(false) then
-    return nil, "不支持"
+    return nil, T("不支持")
   end
   if not ipc or not ipc.send then
-    return nil, "手柄通信不可用"
+    return nil, T("手柄通信不可用")
   end
   local payload, encode_err = json_encode({ reply = SETTINGS_HIDPAD_ENDPOINT })
   if not payload then
@@ -545,7 +556,7 @@ local function send_hidpad_command(topic)
     return nil, tostring(sent)
   end
   if not sent then
-    return nil, tostring(send_err or "手柄服务未运行")
+    return nil, tostring(send_err or T("手柄服务未运行"))
   end
   return true
 end
@@ -616,8 +627,8 @@ local function refresh_wifi_item()
   APP.state.wifi_ssid = "--"
   item.available = false
   item.value = false
-  item.detail = "不可用"
-  item.value_label = "不可用"
+  item.detail = T("不可用")
+  item.value_label = T("不可用")
   item.hint = ""
 
   if not wifi or not wifi.getmode then
@@ -628,7 +639,7 @@ local function refresh_wifi_item()
     return wifi.getmode()
   end)
   if mode == nil then
-    item.detail = clip_text(err or "读取失败", 18)
+    item.detail = clip_text(err or T("读取失败"), 18)
     return
   end
 
@@ -649,10 +660,10 @@ local function refresh_wifi_item()
   if item.value then
     APP.state.last_wifi_mode = mode
     item.detail = wifi_mode_name(mode)
-    item.hint = "← 关闭  切换 →"
+    item.hint = T("← 关闭  切换 →")
   else
-    item.detail = "未启用"
-    item.hint = "← 关闭  开启 →"
+    item.detail = T("未启用")
+    item.hint = T("← 关闭  开启 →")
   end
 end
 
@@ -663,7 +674,7 @@ local function refresh_hidpad_item()
   item.state_connected = false
   item.state_connecting = false
   item.phase = "unsupported"
-  item.detail = "不支持"
+  item.detail = T("不支持")
   item.name = ""
   item.address = ""
   item.profile = ""
@@ -677,7 +688,7 @@ local function refresh_hidpad_item()
 
   if not hidpad_installed(false) then
     item.phase = "not_installed"
-    item.detail = "要连接手柄请先安装 HID Pad 服务"
+    item.detail = T("要连接手柄请先安装 HID Pad 服务")
     return
   end
 
@@ -736,46 +747,46 @@ local function refresh_hidpad_item()
     item.available = false
     item.value = false
     item.phase = "unsupported"
-    item.detail = "不支持"
+    item.detail = T("不支持")
     item.hint = ""
     return
   elseif status_fresh and (status.command_ok == false or item.phase == "error") and item.last_error ~= "" then
     item.detail = clip_utf8_chars(item.last_error, 14)
-    item.hint = "← 关闭  重扫 →"
+    item.hint = T("← 关闭  重扫 →")
     return
   end
   if not running and not status_fresh then
     item.value = false
-    item.detail = "服务未运行"
-    item.hint = "→ 启动服务"
+    item.detail = T("服务未运行")
+    item.hint = T("→ 启动服务")
     return
   elseif not item.value or item.phase == "disabled" then
     item.value = false
     item.phase = "disabled"
-    item.detail = "BLE 驱动已停止"
-    item.hint = "← 关闭  开启 →"
+    item.detail = T("BLE 驱动已停止")
+    item.hint = T("← 关闭  开启 →")
     return
   end
 
   if item.state_connected then
-    item.detail = identity ~= "" and identity or "已连接"
-    item.hint = item.buttons ~= 0 and ("按键 " .. button_bitmap(item.buttons)) or "← 关闭  重扫 →"
+    item.detail = identity ~= "" and identity or T("已连接")
+    item.hint = item.buttons ~= 0 and (T("按键 ") .. button_bitmap(item.buttons)) or T("← 关闭  重扫 →")
   elseif item.state_connecting then
-    item.detail = identity ~= "" and identity or "正在连接手柄"
-    item.hint = "← 关闭  重扫 →"
+    item.detail = identity ~= "" and identity or T("正在连接手柄")
+    item.hint = T("← 关闭  重扫 →")
   elseif item.phase == "scanning" or item.phase == "select_device" then
-    item.detail = item.scan_count > 0 and ("发现 " .. tostring(item.scan_count) .. " 个设备") or "正在查找手柄"
-    item.hint = "← 关闭  重扫 →"
+    item.detail = item.scan_count > 0 and (T("发现 ") .. tostring(item.scan_count) .. T(" 个设备")) or T("正在查找手柄")
+    item.hint = T("← 关闭  重扫 →")
   else
-    item.detail = identity ~= "" and identity or "等待设备"
-    item.hint = "← 关闭  重扫 →"
+    item.detail = identity ~= "" and identity or T("等待设备")
+    item.hint = T("← 关闭  重扫 →")
   end
 end
 
 local function refresh_brightness_item()
   local item = APP.items[3]
   item.available = false
-  item.detail = "不可用"
+  item.detail = T("不可用")
   item.hint = ""
 
   if not sys or not sys.getbrightness then
@@ -786,14 +797,14 @@ local function refresh_brightness_item()
     return sys.getbrightness()
   end)
   if level == nil then
-    item.detail = clip_text(err or "读取失败", 18)
+    item.detail = clip_text(err or T("读取失败"), 18)
     return
   end
 
   item.available = true
   item.value = clamp(level, 0, 100)
   item.detail = brightness_text(item.value)
-  item.hint = "← 降低  提高 →"
+  item.hint = T("← 降低  提高 →")
 end
 
 local function refresh_ip_state()
@@ -824,7 +835,7 @@ local function refresh_ip_state()
     APP.state.ip_text = ap_ip
     APP.state.ip_mode = "AP"
   else
-    APP.state.ip_text = "未分配 IP"
+    APP.state.ip_text = T("未分配 IP")
     APP.state.ip_mode = wifi_mode_name(mode)
   end
 end
@@ -841,7 +852,7 @@ local function ensure_wifi_started(target_mode)
     return wifi.mode(target_mode, false)
   end)
   if ok_mode == nil then
-    return nil, err_mode or "Wi-Fi 设置失败"
+    return nil, err_mode or T("Wi-Fi 设置失败")
   end
 
   if wifi.start then
@@ -849,7 +860,7 @@ local function ensure_wifi_started(target_mode)
       return wifi.start()
     end)
     if ok_start == nil then
-      return nil, err_start or "Wi-Fi 启动失败"
+      return nil, err_start or T("Wi-Fi 启动失败")
     end
   end
 
@@ -865,7 +876,7 @@ end
 
 local function set_wifi_enabled(enable)
   if not wifi or not wifi.getmode or not wifi.mode then
-    return nil, "Wi-Fi 不可用"
+    return nil, T("Wi-Fi 不可用")
   end
 
   if enable then
@@ -895,14 +906,14 @@ local function set_wifi_enabled(enable)
     return wifi.mode(wifi.NULLMODE, false)
   end)
   if ok_mode == nil then
-    return nil, err_mode or "Wi-Fi 关闭失败"
+    return nil, err_mode or T("Wi-Fi 关闭失败")
   end
-  return true, "Wi-Fi 已关闭"
+  return true, T("Wi-Fi 已关闭")
 end
 
 local function cycle_wifi_mode()
   if not wifi or not wifi.mode then
-    return nil, "Wi-Fi 不可用"
+    return nil, T("Wi-Fi 不可用")
   end
   local mode = APP.state.wifi_mode
   local target = wifi.STATION
@@ -922,7 +933,7 @@ end
 
 local function set_hidpad_enabled(enable)
   if not hidpad_installed(false) then
-    return nil, "蓝牙手柄不支持"
+    return nil, T("蓝牙手柄不支持")
   end
 
   local command = enable and "enable" or "disable"
@@ -933,29 +944,29 @@ local function set_hidpad_enabled(enable)
         return app.start_service(HIDPAD_SERVICE_ID)
       end)
       if not ok_call or not started then
-        return nil, tostring(start_err or started or "手柄服务启动失败")
+        return nil, tostring(start_err or started or T("手柄服务启动失败"))
       end
-      return true, "手柄服务启动中"
+      return true, T("手柄服务启动中")
     end
-    return true, "等待手柄服务"
+    return true, T("等待手柄服务")
   end
 
   local sent, send_err = send_hidpad_command(command)
   if not sent then
     return nil, send_err
   end
-  return true, enable and "蓝牙手柄正在开启" or "蓝牙手柄正在关闭"
+  return true, enable and T("蓝牙手柄正在开启") or T("蓝牙手柄正在关闭")
 end
 
 local function rescan_hidpad()
   if not hidpad_installed(false) then
-    return nil, "蓝牙手柄不支持"
+    return nil, T("蓝牙手柄不支持")
   end
   local sent, send_err = send_hidpad_command("rescan")
   if not sent then
     return nil, send_err
   end
-  return true, "蓝牙手柄重新扫描"
+  return true, T("蓝牙手柄重新扫描")
 end
 
 local function set_brightness_level(level)
@@ -963,25 +974,25 @@ local function set_brightness_level(level)
   local target = clamp(level, 0, 100)
   if not sys or not sys.setbrightness then
     item.available = false
-    return nil, "亮度不可用"
+    return nil, T("亮度不可用")
   end
   local ok_call, ok_set, err = pcall(function()
     return sys.setbrightness(target)
   end)
   if not ok_call or not ok_set then
-    return nil, tostring(err or ok_set or "亮度设置失败")
+    return nil, tostring(err or ok_set or T("亮度设置失败"))
   end
   item.available = true
   item.value = target
   item.detail = brightness_text(target)
-  return true, "亮度 " .. item.detail
+  return true, T("亮度 ") .. item.detail
 end
 
 local function apply_selected_value(direction)
   if APP.selected_index == 4 then
     APP.state.page = APP.state.page == 1 and 2 or 1
     APP.selected_index = 4
-    set_message(APP.state.page == 1 and "设置" or "设备信息")
+    set_message(APP.state.page == 1 and T("设置") or T("设备信息"))
     return
   end
 
@@ -1010,11 +1021,11 @@ local function apply_selected_value(direction)
   elseif item.id == "brightness" then
     ok, message = set_brightness_level(item.value + (direction > 0 and item.step or -item.step))
   else
-    ok, message = nil, "不支持"
+    ok, message = nil, T("不支持")
   end
 
   refresh_runtime_state()
-  set_message(ok and message or (message or "操作失败"))
+  set_message(ok and message or (message or T("操作失败")))
 end
 
 local function move_selection(delta)
@@ -1033,7 +1044,7 @@ local function move_selection(delta)
   end
   APP.selected_index = next_index
   if next_index == 4 then
-    set_message("左右切换页面")
+    set_message(T("左右切换页面"))
   else
     set_message(item_summary(current_item()))
   end
@@ -1072,7 +1083,7 @@ local function refresh_info_items()
     version = text_or(v, "--")
   end
 
-  local bluetooth = "不支持"
+  local bluetooth = T("不支持")
   local gp = APP.items[2]
   if gp.available then
     bluetooth = toggle_state_text(gp)
@@ -1084,17 +1095,17 @@ local function refresh_info_items()
 
   local sd_text = "--"
   if total then
-    sd_text = format_bytes(used) .. " / 余 " .. format_bytes(remain)
+    sd_text = format_bytes(used) .. T(" / 余 ") .. format_bytes(remain)
   end
 
   APP.info_items = {
-    { name = "处理器", value = "ESP32-S3 · 240M" },
-    { name = "运存", value = "8 MB PSRAM" },
-    { name = "SD卡", value = sd_text },
-    { name = "系统版本", value = version },
+    { name = T("处理器"), value = "ESP32-S3 · 240M" },
+    { name = T("运存"), value = "8 MB PSRAM" },
+    { name = T("SD卡"), value = sd_text },
+    { name = T("系统版本"), value = version },
     { name = "Wi-Fi", value = APP.state.wifi_ssid },
-    { name = "IP 地址", value = APP.state.ip_text },
-    { name = "蓝牙手柄", value = bluetooth },
+    { name = T("IP 地址"), value = APP.state.ip_text },
+    { name = T("蓝牙手柄"), value = bluetooth },
   }
 end
 
@@ -1108,7 +1119,7 @@ local function create_header(title)
 end
 
 local function build_settings_page()
-  create_header("设置")
+  create_header(T("设置"))
 
   local row_y = { 38, 92, 146 }
   local row_h = { 48, 48, 58 }
@@ -1138,7 +1149,7 @@ local function build_settings_page()
           APP.selected_index = 3
           local ok, message = set_brightness_level(lv_slider_get_value(card.slider))
           refresh_runtime_state()
-          set_message(ok and message or (message or "亮度设置失败"))
+          set_message(ok and message or (message or T("亮度设置失败")))
           refresh_ui()
         end, EVENT_VALUE_CHANGED, "settings-brightness")
       end
@@ -1149,11 +1160,11 @@ local function build_settings_page()
     APP.ui.cards[i] = card
   end
 
-  APP.ui.footer = create_text(APP.ui.root, "上下选择  左右调整  A 确认", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
+  APP.ui.footer = create_text(APP.ui.root, T("上下选择  左右调整  A 确认"), FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
 end
 
 local function build_info_page()
-  create_header("设备信息")
+  create_header(T("设备信息"))
 
   for i = 1, #APP.info_items do
     local y = 40 + (i - 1) * 23
@@ -1168,7 +1179,7 @@ local function build_info_page()
     APP.ui.info_rows[i] = row
   end
 
-  APP.ui.footer = create_text(APP.ui.root, "B 返回设置  Select/Home 退出", FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
+  APP.ui.footer = create_text(APP.ui.root, T("B 返回设置  Select/Home 退出"), FONT.small, C.text_muted, 10, 215, 300, ALIGN_CENTER)
 end
 
 function refresh_ui()
@@ -1215,7 +1226,7 @@ function refresh_ui()
         lv_obj_set_style_text_color(card.label, item.available and C.text or C.text_dim, MAIN_STYLE)
 
         if item.id == "brightness" then
-          lv_label_set_text(card.value, item.available and brightness_text(item.value) or "不可用")
+          lv_label_set_text(card.value, item.available and brightness_text(item.value) or T("不可用"))
           lv_obj_set_style_text_color(card.value, item.available and item.accent or C.text_dim, MAIN_STYLE)
           if card.slider then
             style_slider(card.slider, item.available and item.accent or C.text_dim)
@@ -1224,7 +1235,7 @@ function refresh_ui()
             APP.state.slider_syncing = false
           end
         else
-          local value_text = item.id == "wifi" and text_or(item.value_label, "关闭") or toggle_state_text(item)
+          local value_text = item.id == "wifi" and text_or(item.value_label, T("关闭")) or toggle_state_text(item)
           local detail_text = item.id == "wifi" and text_or(APP.state.ip_text, "--") or text_or(item.detail, "--")
           lv_label_set_text(card.value, value_text)
           if item.id == "hidpad" and item.phase == "not_installed" then
@@ -1336,7 +1347,7 @@ local function should_repeat(evt_type, evt_code)
 end
 
 local function request_exit(kind)
-  set_message(kind == "long" and "强制退出" or "返回上级")
+  set_message(kind == "long" and T("强制退出") or T("返回上级"))
   refresh_ui()
   if app and app.exit then
     pcall(function()
@@ -1399,7 +1410,7 @@ local function bind_input()
   APP.input.exit_type = (KEYMOD and KEYMOD.EXIT) or rawget(_G, "KEY_EVENT_EXIT")
 
   if not up_code or not down_code or not left_code or not right_code then
-    set_message("按键映射不可用")
+    set_message(T("按键映射不可用"))
     return
   end
 
@@ -1502,7 +1513,7 @@ local function start_polling()
     elseif (pressed & PAD_MENU) ~= 0 then
       APP.state.page = APP.state.page == 1 and 2 or 1
       APP.selected_index = 4
-      set_message(APP.state.page == 1 and "设置" or "设备信息")
+      set_message(APP.state.page == 1 and T("设置") or T("设备信息"))
       refresh_info_items()
       refresh_ui()
     elseif (pressed & PAD_B) ~= 0 and APP.state.page == 2 then

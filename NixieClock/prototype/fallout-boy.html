@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Pip Boy · 320 × 240（旧版布局草稿）</title>
+  <style>
+    :root { --green:#82f65c; --bright:#acff84; --muted:#8eb87b; --line:#558f3b; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; width:320px; height:240px; overflow:hidden; background:#030b04; }
+    body { font-family:"Cascadia Mono",Consolas,monospace; color:var(--green); }
+    .face { position:relative; width:320px; height:240px; overflow:hidden; isolation:isolate; background:#030b04 url("assets/fallout-background.png") center / 320px 240px no-repeat; }
+    .face::after { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.16; background:repeating-linear-gradient(0deg,#000 0 1px,transparent 1px 3px); }
+    .text { position:absolute; margin:0; line-height:1; font-weight:700; }
+    .brand { left:13px; top:13px; font-size:12px; letter-spacing:1px; }
+    .vault { right:13px; top:14px; font-size:11px; color:var(--muted); }
+    .rule { position:absolute; left:13px; width:294px; height:1px; background:var(--line); }
+    .top-rule { top:34px; }
+    .weekday { left:13px; top:48px; padding:5px 7px; background:var(--green); color:#092006; font-size:12px; letter-spacing:1px; }
+    .date { left:61px; top:53px; font-size:13px; letter-spacing:.3px; color:var(--bright); }
+    .clock { position:absolute; left:10px; top:79px; width:182px; height:64px; font-variant-numeric:tabular-nums; }
+    .digits { position:absolute; top:0; font:600 59px/1.1 "Bahnschrift","Arial Narrow",sans-serif; letter-spacing:-3px; color:var(--bright); text-shadow:0 0 8px #82f65c30; }
+    #hours { left:0; } #minutes { left:91px; }
+    .colon { position:absolute; left:75px; top:8px; font:43px/1 "Bahnschrift",sans-serif; }
+    .seconds { left:157px; top:143px; font-size:12px; color:var(--muted); }
+    .weather { left:13px; top:173px; font-size:23px; letter-spacing:-1px; color:var(--bright); }
+    .weather span { margin-left:9px; font-size:12px; letter-spacing:0; color:var(--green); }
+    .bottom-rule { top:207px; width:174px; }
+    .hp { left:13px; top:221px; font-size:11px; }
+    .hp-bar { position:absolute; left:36px; top:222px; width:63px; height:7px; border:1px solid var(--line); padding:1px; }
+    .hp-bar::after { content:""; display:block; width:86%; height:3px; background:var(--green); }
+    .rad { left:119px; top:221px; font-size:11px; }
+    .power { right:13px; top:221px; font-size:11px; }
+  </style>
+</head>
+<body>
+  <main class="face" aria-label="辐射小子 320×240 固定布局时钟，右侧为荧光绿点阵人物背景">
+    <h1 class="text brand">PIP BOY</h1>
+    <div class="text vault">WX --</div>
+    <div class="rule top-rule"></div>
+    <div class="text weekday" id="weekday">MON</div>
+    <time class="text date" id="date">10.12 / 2026</time>
+    <section class="clock" aria-label="当前本地时间">
+      <span class="digits" id="hours">14</span>
+      <span class="colon">:</span>
+      <span class="digits" id="minutes">30</span>
+    </section>
+    <div class="text seconds" id="seconds">:00</div>
+    <div class="text weather" title="示例天气，尚未连接天气服务">24°C<span>晴</span></div>
+    <div class="rule bottom-rule"></div>
+    <div class="text hp">HP</div><div class="hp-bar" aria-label="示例生命值 86%"></div>
+    <div class="text rad" title="装饰性示例数据，非真实辐射读数">RAD 000</div>
+    <div class="text power" title="设备 app 使用 sys.getbrightness()；浏览器未连接设备">BRI --%</div>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    const pad = n => String(n).padStart(2, '0');
+    const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    function updateClock() {
+      const now = new Date();
+      byId('hours').textContent = pad(now.getHours());
+      byId('minutes').textContent = pad(now.getMinutes());
+      byId('seconds').textContent = ':' + pad(now.getSeconds());
+      byId('weekday').textContent = weekdays[now.getDay()];
+      byId('date').textContent = `${pad(now.getMonth()+1)}.${pad(now.getDate())} / ${now.getFullYear()}`;
+      byId('date').dateTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>

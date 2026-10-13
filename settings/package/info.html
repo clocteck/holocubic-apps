@@ -36,6 +36,33 @@
     @media (max-width: 660px) { .page { padding: 12px; } .top { grid-template-columns: 56px minmax(0,1fr) auto; padding: 12px; gap: 12px; } .icon { width:56px; height:56px; border-radius:14px; } h1 { font-size: 28px; } .grid { grid-template-columns: 1fr; } }
     @media (max-width: 380px) { .top { grid-template-columns: 48px minmax(0,1fr); } .icon { width:48px; height:48px; } .lang-toggle { grid-column: 1 / -1; justify-self: end; } }
   </style>
+<style>body{visibility:hidden}</style><script>
+// Embedded in single-file app descriptions. Never writes device settings.
+window.CubicInfoLanguage = (function () {
+  function normalize(value) {
+    var v = String(value || "").replace(/_/g, "-").toLowerCase();
+    if (/^de(?:-|$)/.test(v)) return "de";
+    if (/^ja(?:-|$)/.test(v)) return "ja";
+    if (/^zh-(?:tw|hk|mo|hant)(?:-|$)/.test(v)) return "zh-TW";
+    if (/^zh(?:-|$)/.test(v)) return "zh-CN";
+    return "en";
+  }
+  var requested = "", stored = "", listeners = [];
+  try { var q = new URLSearchParams(location.search); requested = q.get("lang") || q.get("language") || ""; } catch (_) {}
+  try { stored = localStorage.getItem("cubic.mainpage.language") || ""; } catch (_) {}
+  var current = normalize(requested || stored || navigator.language);
+  function publish(value) { current = normalize(value); listeners.forEach(function (fn) { fn(current); }); }
+  if (!requested) {
+    fetch("/api/system/fs/file?path=%2Fsd%2Fapps%2Fsettings.json", {cache:"no-store"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (s) { if (s && (s.language || s.locale || s.lang)) publish(s.language || s.locale || s.lang); })
+      .catch(function () {});
+  }
+  return { normalize:normalize, subscribe:function (fn) { listeners.push(fn); fn(current); } };
+}());
+
+document.addEventListener("DOMContentLoaded",function(){document.body.style.visibility="visible"});
+</script>
 </head>
 <body data-lang="zh">
   <main class="page">
@@ -78,21 +105,22 @@
       var body = document.body;
       var toggle = document.querySelector("[data-lang-toggle]");
       var img = document.querySelector("[data-alt-zh]");
-      var lang = "zh";
-      try { lang = localStorage.getItem("settings.info.lang") || lang; } catch (err) { lang = "zh"; }
+      var lang = "en";
+      try { lang = "en"; } catch (err) { lang = "en"; }
       function applyLang(next) {
         lang = next === "en" ? "en" : "zh";
         body.setAttribute("data-lang", lang);
         document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
         document.title = lang === "zh" ? "Settings 信息" : "Settings Info";
-        if (toggle) { toggle.textContent = lang === "zh" ? "EN" : "中文"; toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文"); }
+        if (toggle) { toggle.textContent = lang === "zh" ? "EN" : "Chinese"; toggle.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "Switch to Chinese"); }
         if (img) { img.alt = lang === "zh" ? img.getAttribute("data-alt-zh") : img.getAttribute("data-alt-en"); }
         try { localStorage.setItem("settings.info.lang", lang); } catch (err) {}
       }
       if (toggle) { toggle.addEventListener("click", function () { applyLang(lang === "zh" ? "en" : "zh"); }); }
       applyLang(lang);
+      window.CubicInfoLanguage.subscribe(function(value){applyLang(value.indexOf("zh")===0?"zh":"en")});
     })();
   </script>
-<section class="controller-support" style="width:calc(100% - 28px);max-width:932px;margin:14px auto 0;padding:14px 16px;border:1px solid rgba(59,130,246,.22);border-left:4px solid #3b82f6;border-radius:12px;background:linear-gradient(135deg,rgba(239,246,255,.98),rgba(255,255,255,.98));box-shadow:0 8px 24px rgba(37,99,235,.08)"><h2 style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">蓝牙手柄控制</h2><p style="margin:0;color:#475569;font-size:13px;line-height:1.65">上下：选择设置；左右：调整数值；A：确认或切换；MENU：切换设置/设备信息；B：返回设置；SELECT/HOME：退出并返回桌面。</p></section>
+<section class="controller-support" style="width:calc(100% - 28px);max-width:932px;margin:14px auto 0;padding:14px 16px;border:1px solid rgba(59,130,246,.22);border-left:4px solid #3b82f6;border-radius:12px;background:linear-gradient(135deg,rgba(239,246,255,.98),rgba(255,255,255,.98));box-shadow:0 8px 24px rgba(37,99,235,.08)"><div class="zh"><h2 style="margin:0 0 6px;color:#1d4ed8;font-size:15px;line-height:1.35">蓝牙手柄控制</h2><p style="margin:0;color:#475569;font-size:13px;line-height:1.65">上下：选择设置；左右：调整数值；A：确认或切换；MENU：切换设置/设备信息；B：返回设置；SELECT/HOME：退出并返回桌面。</p></div><div class="en"><h2>Bluetooth controller</h2><p>Up/down: select; left/right: adjust; A: confirm; MENU: switch pages; B: settings; SELECT/HOME: exit.</p></div></section>
 </body>
 </html>
