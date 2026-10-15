@@ -23,8 +23,8 @@ M.APP_DIR = M.SERVICE_DIR
 -- closing either runtime cannot dlclose code still used by the other one.
 M.XZ_MODULE = M.SERVICE_DIR .. "/xzvoice.so"
 M.WAKE_MODULE = M.SERVICE_DIR .. "/xzwk.so"
-M.CONFIG_PATH = M.SERVICE_DIR .. "/config.json"
-M.APP_UI_CONFIG_PATH = M.UI_APP_DIR .. "/config.json"
+M.CONFIG_PATH = "/sd/data/xiaozhi/config.json"
+M.APP_UI_CONFIG_PATH = M.CONFIG_PATH
 M.COMPAT_CONFIG_PATH = M.APP_UI_CONFIG_PATH
 M.MCP_DIR = M.SERVICE_DIR .. "/mcp"
 -- xzwk.so reuses the prebuilt wake implementation with a service-only module
@@ -46,51 +46,10 @@ M.EMOJI_PNG_DIR = M.ASSET_DIR .. "/emojis/png"
 M.TEXT_FONT_PATH = M.ASSET_DIR .. "/fonts/noto_sans_sc_medium_16_2bpp_common4000.bin"
 
 M.AUDIO = {
-  rate = 16000,
-  wake_rate = 16000,
-  channels = 1,
-  frame_ms = 60,
-  bitrate = 12000,
-  volume = 100,
-  complexity = 0,
-  mic_bits = 32,
-  mic_pack = "b23",
-  wake_mic_pack = "b23",
-  tx_mic_pack = "b23",
-  mic_gain_shift = 0,
-  wake_gain_shift = 0,
-  tx_gain_shift = 2,
+  rate = 16000, channels = 1, frame_ms = 60,
+  bitrate = 12000, complexity = 0,
+  wake_gain_shift = 0, tx_gain_shift = 2,
   i2s_id = 0,
-  read_wait_ms = 20,
-  tx_read_wait_ms = 0,
-  capture_task_core = 0,
-  capture_task_stack = 32768,
-  capture_task_priority = 2,
-  capture_queue_depth = 4,
-  capture_read_timeout_ms = 100,
-  wake_capture_task_core = 0,
-  wake_capture_task_stack = 8192,
-  wake_capture_task_priority = 2,
-  wake_capture_read_timeout_ms = 100,
-  poll_ms = 35,
-  wake_poll_ms = 40,
-  tx_poll_ms = 60,
-  tx_chunk_ms = 60,
-  wake_bridge_enabled = false,
-  wake_preroll_ms = 120,
-  wake_bridge_ms = 240,
-  wake_bridge_flush_ms = 120,
-  wake_bridge_poll_ms = 40,
-  rx_buffer_count = 2,
-  tx_buffer_count = 3,
-  level_enabled = false,
-  max_rx_frames_per_poll = 1,
-  max_encode_frames_per_poll = 1,
-  tx_pending_frames = 4,
-  tts_text_lead_ms = 180,
-  tts_audio_lead_frames = 3,
-  capture_once = false,
-  capture_ms = 1600,
 }
 
 M.websocket = {
@@ -337,7 +296,7 @@ local function apply_optional_app_ui_config()
   apply_ui_config({ type = pick_string(raw, "ui_type") }, "app")
 end
 
-function M.load()
+local function load_config()
   local raw = read_text(M.CONFIG_PATH)
   if not raw then
     raw = read_text(M.COMPAT_CONFIG_PATH)
@@ -424,6 +383,12 @@ function M.load()
   apply_optional_app_ui_config()
 
   return M
+end
+
+function M.load()
+  dofile(M.APP_DIR .. "/store.lua").ensure()
+  load_config()
+  return dofile(M.APP_DIR .. "/preferences.lua").apply(M)
 end
 
 return M

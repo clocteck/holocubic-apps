@@ -50,6 +50,9 @@ endif()
 
 project(xiaozhi)
 
+set(XZ_MODULE_NAME "xiaozhi" CACHE STRING "Native module identity")
+idf_build_set_property(COMPILE_DEFINITIONS "XZ_MODULE_ID=${XZ_MODULE_NAME}" APPEND)
+idf_build_set_property(COMPILE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/main" APPEND)
 idf_build_get_property(xz_build_dir BUILD_DIR)
 idf_component_get_property(xz_opus_dir 78__esp-opus COMPONENT_DIR)
 execute_process(
@@ -241,18 +244,34 @@ endforeach()
 # Keep Opus inside xiaozhi.so, but list only the official component sources.
 # project_so() recursively gathers every .c for ELF_COMPONENTS, which would
 # accidentally pull Opus demo/test/DNN sources.
-set(ELF_LIBS ${xz_opus_sources} "${XZ_LIBGCC}")
-set(ELF_SO_COMPILE_FLAGS -Os)
+execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=libm.a OUTPUT_VARIABLE XZ_LIBM OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(ELF_LIBS ${xz_opus_sources}
+    "${XZ_LIBM}" "${XZ_LIBGCC}")
+set(ELF_SO_COMPILE_FLAGS -O2)
+configure_file("${CMAKE_SOURCE_DIR}/exports.map" "${CMAKE_BINARY_DIR}/exports.map" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/xiaozhi_so.ld" "${CMAKE_BINARY_DIR}/xiaozhi_so.ld" COPYONLY)
 set(ELF_SO_LINK_FLAGS
     "-Wl,-Bsymbolic"
     "-Wl,--exclude-libs,ALL"
     "-Wl,-z,notext"
     "-Wl,--no-check-sections"
-    "-Wl,--version-script=${CMAKE_SOURCE_DIR}/exports.map"
+    "-Wl,--version-script=${CMAKE_BINARY_DIR}/exports.map"
     "-Wl,-N"
     "-Wl,-Map,${xz_build_dir}/xiaozhi_so.map"
-    "-Wl,-T,${CMAKE_SOURCE_DIR}/xiaozhi_so.ld"
+    "-Wl,-T,${CMAKE_BINARY_DIR}/xiaozhi_so.ld"
 )
 
 include(elf_loader)
+# elf_loader 1.3.1 does not consume custom link flags. Patch a generated copy,
+# not managed_components (dependency resolution replaces that directory).
+set(xz_loader_dir "${ELF_LOADER_CMAKE_DIR}")
+file(READ "${xz_loader_dir}/elf_loader.cmake" xz_loader)
+if(NOT xz_loader MATCHES "if\\(ELF_SO_LINK_FLAGS\\)")
+    string(REPLACE "set(so_output" "list(APPEND so_link_flags \${ELF_SO_LINK_FLAGS})\n        set(so_output" xz_loader "${xz_loader}")
+    file(WRITE "${CMAKE_BINARY_DIR}/xz_elf_loader.cmake" "${xz_loader}")
+    include("${CMAKE_BINARY_DIR}/xz_elf_loader.cmake")
+    set(ELF_LOADER_CMAKE_DIR "${xz_loader_dir}")
+endif()
 project_so(xiaozhi)
+add_custom_command(OUTPUT "${xz_build_dir}/so_objs/main_xiaozhi_module.o" APPEND
+    DEPENDS "${CMAKE_SOURCE_DIR}/main/playback.inc" "${CMAKE_SOURCE_DIR}/main/xz_memory.inc" "${CMAKE_SOURCE_DIR}/main/xz_alloc.inc" "${MODULE_ABI_DIR}/module_abi.h")

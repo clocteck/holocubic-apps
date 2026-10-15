@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local W, H = 200, 100
@@ -62,7 +63,7 @@ function M.new(cfg)
   local self = {
     canvas = nil,
     state = "idle",
-    status = "小智待命中",
+    status = T("小智待命中"),
     emotion = "neutral",
     user_text = "",
     assistant_text = "",
@@ -313,14 +314,14 @@ function M.new(cfg)
 
   function self:set_status(value)
     self.status = tostring(value or "")
-    if silent_activation() and not self.status:find("验证码", 1, true) then return end
+    if silent_activation() and not self.status:find(T("验证码"), 1, true) then return end
     show_bubble_temporarily()
     show()
   end
 
   function self:show_notification(value)
     self.notice = tostring(value or "")
-    if silent_activation() and not self.notice:find("验证码", 1, true) then return end
+    if silent_activation() and not self.notice:find(T("验证码"), 1, true) then return end
     show_bubble_temporarily()
     show()
   end
@@ -338,7 +339,7 @@ function M.new(cfg)
       self.bubble_pages = split_bubble_pages(content)
       self.bubble_page_index = 1
     else self.notice = content end
-    if silent_activation() and not content:find("验证码", 1, true) then return end
+    if silent_activation() and not content:find(T("验证码"), 1, true) then return end
     show_bubble_temporarily()
     -- Chat text is latency-sensitive: commit it before the first queued TTS
     -- audio frame instead of waiting for the normal 120 ms render coalescer.
@@ -355,8 +356,8 @@ function M.new(cfg)
   function self:on_state(state)
     self.state = tostring(state or "idle")
     local labels = {
-      starting = "正在启动", activating = "正在连接服务", connecting = "正在连接",
-      listening = "我在听", speaking = "小智正在回答", fatal_error = "启动失败",
+      starting = T("正在启动"), activating = T("正在连接服务"), connecting = T("正在连接"),
+      listening = T("我在听"), speaking = T("小智正在回答"), fatal_error = T("启动失败"),
     }
     self.status = labels[self.state] or self.status
     if self.state == "idle" then
@@ -370,7 +371,7 @@ function M.new(cfg)
 
   function self:alert(status, message)
     self.state = "fatal_error"
-    self.status = tostring(status or "发生错误")
+    self.status = tostring(status or T("发生错误"))
     self.notice = tostring(message or "")
     show_bubble_temporarily()
     if ensure_canvas() then

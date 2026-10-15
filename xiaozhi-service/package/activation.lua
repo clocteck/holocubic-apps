@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local function json_escape(text)
@@ -146,86 +147,21 @@ local function default_runtime_config(cfg)
 end
 
 local function write_runtime_config(cfg)
-  if not file then
-    return false, "file api missing"
-  end
-  if sjson and sjson.encode then
-    local doc = read_runtime_config(cfg.CONFIG_PATH) or default_runtime_config(cfg)
-    if type(doc.websocket) ~= "table" then
-      doc.websocket = {}
-    end
-    doc.websocket.url = cfg.websocket.url or ""
-    doc.websocket.token = cfg.websocket.token or ""
-    doc.websocket.version = cfg.websocket.version or 1
-
-    local encoded_ok, encoded = pcall(sjson.encode, doc)
-    if encoded_ok and type(encoded) == "string" then
-      local text = encoded .. "\n"
-      if file.putcontents then
-        local ok, ret = pcall(function()
-          return file.putcontents(cfg.CONFIG_PATH, text)
-        end)
-        if ok and ret then
-          return true
-        end
-      end
-      local fd = file.open and file.open(cfg.CONFIG_PATH, "w+")
-      if not fd then
-        return false, "open config failed"
-      end
-      local ok = fd:write(text)
-      fd:close()
-      return ok and true or false, ok and nil or "write config failed"
-    end
-  end
-
-  local text = "{\n" ..
-    '  "ota": {\n' ..
-    '    "url": "' .. json_escape(cfg.ota.url or "") .. '",\n' ..
-    '    "enabled": ' .. tostring(cfg.ota.enabled ~= false) .. ',\n' ..
-    '    "force": false,\n' ..
-    '    "interval_ms": ' .. tostring(cfg.ota.interval_ms or 3000) .. ',\n' ..
-    '    "max_polls": ' .. tostring(cfg.ota.max_polls or 80) .. "\n" ..
-    "  },\n" ..
-    '  "websocket": {\n' ..
-    '    "url": "' .. json_escape(cfg.websocket.url or "") .. '",\n' ..
-    '    "token": "' .. json_escape(cfg.websocket.token or "") .. '",\n' ..
-    '    "version": ' .. tostring(cfg.websocket.version or 1) .. "\n" ..
-    "  },\n" ..
-    '  "audio": {\n' ..
-    '    "sample_rate": ' .. tostring(cfg.AUDIO.rate or 16000) .. ',\n' ..
-    '    "channels": ' .. tostring(cfg.AUDIO.channels or 1) .. ',\n' ..
-    '    "frame_duration": ' .. tostring(cfg.AUDIO.frame_ms or 60) .. ',\n' ..
-    '    "bitrate": ' .. tostring(cfg.AUDIO.bitrate or 12000) .. "\n" ..
-    "  },\n" ..
-    '  "wake_word": "' .. json_escape(cfg.WAKE_WORD or "你好小智") .. '",\n' ..
-    '  "ui": {\n' ..
-    '    "type": "' .. json_escape(cfg.UI_TYPE or (cfg.UI and cfg.UI.type) or "subtitle") .. '"\n' ..
-    "  }\n" ..
-    "}\n"
-  if file.putcontents then
-    local ok, err = pcall(function()
-      return file.putcontents(cfg.CONFIG_PATH, text)
-    end)
-    if ok and err then
-      return true
-    end
-  end
-  local fd = file.open and file.open(cfg.CONFIG_PATH, "w+")
-  if not fd then
-    return false, "open config failed"
-  end
-  local ok = fd:write(text)
-  fd:close()
-  return ok and true or false, ok and nil or "write config failed"
+  local Store = dofile(cfg.APP_DIR .. "/store.lua")
+  return Store.update(function(doc)
+    if Store.device_id() ~= cfg.ACTIVATION_ID then return false, "identity_changed" end
+    doc.websocket = { url=cfg.websocket.url, token=cfg.websocket.token, version=cfg.websocket.version }
+  end)
 end
 
 function M.new(cfg)
+  cfg.ACTIVATION_ID = identity(cfg).device_id()
   local self = {
     cfg = cfg,
     timer = nil,
     active = false,
     poll_count = 0,
+    network_retries = 0,
     code = "",
     challenge = "",
     pending_websocket = nil,
@@ -306,7 +242,9 @@ function M.new(cfg)
     }, body_text)
     print("[xiaozhi] ota status", tostring(code), "bytes=" .. tostring(body and #body or 0))
     if tonumber(code) ~= 200 then
-      return nil, "ota status " .. tostring(code) .. " " .. tostring(body or "")
+      local n = tonumber(code) or -1
+      return nil, "ota status " .. tostring(code) .. " " .. tostring(body or ""), false,
+        n < 0 or n == 408 or n == 429 or n >= 500
     end
     return parse_response(body or ""), nil
   end
@@ -332,7 +270,8 @@ function M.new(cfg)
     if code == 202 then
       return "pending"
     end
-    return nil, "activate status " .. tostring(code) .. " " .. tostring(body or "")
+    return nil, "activate status " .. tostring(code) .. " " .. tostring(body or ""),
+      not code or code < 0 or code == 408 or code == 429 or code >= 500
   end
 
   local function finish(ok, data)
@@ -344,6 +283,13 @@ function M.new(cfg)
   local check_again
   local poll_activate
   local start_after_identity_ready
+
+  local function retry_network(err, fn)
+    self.network_retries = self.network_retries + 1
+    if self.network_retries > 5 then finish(false, err); return end
+    emit("pending", {code=self.code, message=err, retry=self.network_retries})
+    schedule(math.min(15000, 2000 * self.network_retries), fn)
+  end
 
   start_after_identity_ready = function()
     if not self.active then
@@ -368,24 +314,30 @@ function M.new(cfg)
       return
     end
     emit("checking", nil)
-    local res, err, waiting_mac = request_ota()
+    local res, err, waiting_mac, transient = request_ota()
+    if not self.active then return end
     if not res then
       if waiting_mac then
         emit("waiting_mac", err)
         schedule(1000, check_again)
         return
       end
+      if transient then retry_network(err, check_again); return end
       finish(false, err)
       return
     end
 
+    self.network_retries = 0
     local activation = res.activation or {}
-    self.code = activation.code or self.code or ""
-    self.challenge = activation.challenge or self.challenge or ""
+    -- A fresh OTA response without activation means binding has completed.
+    -- Never let the previous code mask newly returned websocket credentials.
+    self.code = activation.code or ""
+    self.challenge = activation.challenge or ""
     if self.code ~= "" or self.challenge ~= "" then
       self.pending_websocket = res.websocket or self.pending_websocket
     elseif apply_websocket(res.websocket) then
-      write_runtime_config(self.cfg)
+      local saved, save_err = write_runtime_config(self.cfg)
+      if not saved then finish(false, save_err); return end
       finish(true, "configured")
       return
     end
@@ -393,19 +345,18 @@ function M.new(cfg)
     if self.code ~= "" then
       emit("code", {
         code = self.code,
-        message = activation.message or "在后台添加设备输入验证码",
+        message = activation.message or T("在后台添加设备输入验证码"),
       })
     elseif self.challenge ~= "" then
       emit("code", {
         code = "",
-        message = "等待后台设备绑定",
+        message = T("等待后台设备绑定"),
       })
     else
       finish(false, "ota response has no activation or websocket")
       return
     end
 
-    self.poll_count = 0
     schedule(self.cfg.ota.interval_ms or 3000, poll_activate)
   end
 
@@ -414,16 +365,22 @@ function M.new(cfg)
       return
     end
     self.poll_count = self.poll_count + 1
+    if self.poll_count > (self.cfg.ota.max_polls or 80) then
+      finish(false, "activation timeout")
+      return
+    end
     emit("pending", {
       code = self.code,
       count = self.poll_count,
       max = self.cfg.ota.max_polls or 80,
     })
-    local status, err = request_activate()
+    local status, err, transient = request_activate()
+    if not self.active then return end
     if status == "ok" then
       emit("activated", self.code)
       if apply_websocket(self.pending_websocket) then
-        write_runtime_config(self.cfg)
+        local saved, save_err = write_runtime_config(self.cfg)
+      if not saved then finish(false, save_err); return end
         finish(true, "configured")
         return
       end
@@ -431,6 +388,7 @@ function M.new(cfg)
       return
     end
     if status == "pending" then
+      self.network_retries = 0
       if self.poll_count >= (self.cfg.ota.max_polls or 80) then
         finish(false, "activation timeout")
       else
@@ -438,18 +396,25 @@ function M.new(cfg)
       end
       return
     end
+    if transient then
+      -- Recheck OTA after a transport failure: the user may have bound the code
+      -- while this request was in flight.
+      retry_network(err, check_again)
+      return
+    end
     finish(false, err)
   end
 
   function self:start(callback)
     self.callback = callback
+    self.poll_count, self.network_retries = 0, 0
     local websocket_configured = self.cfg.websocket and self.cfg.websocket.url ~= "" and
         self.cfg.ota and not self.cfg.ota.force
     if (not self.cfg.ota or self.cfg.ota.enabled == false) and not websocket_configured then
       return false, "ota disabled"
     end
     if not websocket_configured and (not self.cfg.ota.url or self.cfg.ota.url == "") then
-      emit("need_config", "未配置 ota.url")
+      emit("need_config", T("未配置 ota.url"))
       return false, "ota url missing"
     end
     self.active = true

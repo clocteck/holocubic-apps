@@ -7,7 +7,7 @@ M.BOARD_NAME = "bread-compact-wifi-lcd"
 M.APP_DIR = "/sd/apps/xiaozhi"
 M.XZ_MODULE = M.APP_DIR .. "/xiaozhi.so"
 M.WAKE_MODULE = M.APP_DIR .. "/wake.so"
-M.CONFIG_PATH = M.APP_DIR .. "/config.json"
+M.CONFIG_PATH = "/sd/data/xiaozhi/config.json"
 M.SERVICE_CONFIG_PATH = "/sd/apps/xiaozhi-service/service.json"
 M.MCP_DIR = M.APP_DIR .. "/mcp"
 M.WAKE_MODEL_DIR = M.APP_DIR .. "/wake/wn9s_nihaoxiaozhi"
@@ -23,42 +23,10 @@ M.EMOJI_PNG_DIR = M.ASSET_DIR .. "/emojis/png"
 M.TEXT_FONT_PATH = M.ASSET_DIR .. "/fonts/noto_sans_sc_medium_16_2bpp_common4000.bin"
 
 M.AUDIO = {
-  rate = 16000,
-  wake_rate = 16000,
-  channels = 1,
-  frame_ms = 60,
-  bitrate = 12000,
-  complexity = 0,
-  mic_bits = 32,
-  mic_pack = "b23",
-  wake_mic_pack = "b23",
-  tx_mic_pack = "b23",
-  mic_gain_shift = 0,
-  wake_gain_shift = 0,
-  tx_gain_shift = 2,
+  rate = 16000, channels = 1, frame_ms = 60,
+  bitrate = 12000, complexity = 0,
+  wake_gain_shift = 0, tx_gain_shift = 2,
   i2s_id = 0,
-  read_wait_ms = 20,
-  tx_read_wait_ms = 0,
-  capture_task_core = 0,
-  capture_task_stack = 12288,
-  capture_task_priority = 2,
-  capture_queue_depth = 6,
-  capture_read_timeout_ms = 100,
-  poll_ms = 35,
-  wake_poll_ms = 35,
-  tx_poll_ms = 60,
-  tx_chunk_ms = 60,
-  wake_bridge_enabled = false,
-  wake_preroll_ms = 120,
-  wake_bridge_ms = 240,
-  wake_bridge_flush_ms = 120,
-  wake_bridge_poll_ms = 35,
-  rx_buffer_count = 8,
-  max_rx_frames_per_poll = 1,
-  max_encode_frames_per_poll = 1,
-  tx_pending_frames = 4,
-  capture_once = false,
-  capture_ms = 1600,
 }
 
 M.websocket = {
@@ -232,7 +200,7 @@ local function apply_service_runtime_config()
   end
 end
 
-function M.load()
+local function load_config()
   local raw = read_text(M.CONFIG_PATH)
   if not raw then
     apply_service_runtime_config()
@@ -315,6 +283,12 @@ function M.load()
 
   apply_service_runtime_config()
   return M
+end
+
+function M.load()
+  dofile(M.APP_DIR .. "/store.lua").ensure()
+  load_config()
+  return dofile(M.APP_DIR .. "/preferences.lua").apply(M)
 end
 
 return M

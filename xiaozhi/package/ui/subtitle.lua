@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 local FIXED_VIEW_MODE = "default"
 
@@ -332,34 +333,34 @@ local emotion_alias = {
 
 local emotion_text = {
   neutral = "AI",
-  listening = "听",
-  speaking = "说",
-  sleepy = "休",
-  happy = "笑",
-  laughing = "笑",
-  funny = "乐",
-  sad = "忧",
-  angry = "怒",
-  crying = "哭",
-  loving = "爱",
-  embarrassed = "羞",
-  surprised = "惊",
-  shocked = "惊",
-  thinking = "想",
-  winking = "眨",
-  cool = "酷",
-  relaxed = "松",
-  delicious = "馋",
-  kissy = "亲",
-  confident = "稳",
-  silly = "玩",
+  listening = T("听"),
+  speaking = T("说"),
+  sleepy = T("休"),
+  happy = T("笑"),
+  laughing = T("笑"),
+  funny = T("乐"),
+  sad = T("忧"),
+  angry = T("怒"),
+  crying = T("哭"),
+  loving = T("爱"),
+  embarrassed = T("羞"),
+  surprised = T("惊"),
+  shocked = T("惊"),
+  thinking = T("想"),
+  winking = T("眨"),
+  cool = T("酷"),
+  relaxed = T("松"),
+  delicious = T("馋"),
+  kissy = T("亲"),
+  confident = T("稳"),
+  silly = T("玩"),
   confused = "?",
   microchip_ai = "AI",
   triangle_exclamation = "!",
   circle_xmark = "!",
-  cloud_slash = "云",
+  cloud_slash = T("云"),
   download = "↓",
-  link = "链",
+  link = T("链"),
 }
 
 local function emotion_name(emotion)
@@ -748,7 +749,7 @@ function M.new(cfg)
     -- the default value as if the layout had already been initialized.
     view_mode = nil,
     last_state = "",
-    last_status = "正在初始化",
+    last_status = T("正在初始化"),
     last_status_ms = 0,
     last_emotion = "microchip_ai",
     last_role = "system",
@@ -870,12 +871,12 @@ function M.new(cfg)
       set_hidden(self.ui.bottom_bar, true)
       refresh_chat_area()
       if not quiet then
-        self:show_notification("微信气泡模式", 1200)
+        self:show_notification(T("微信气泡模式"), 1200)
       end
     else
       set_hidden(self.ui.bottom_bar, self.last_message == "")
       if not quiet then
-        self:show_notification("官方字幕模式", 1200)
+        self:show_notification(T("官方字幕模式"), 1200)
       end
     end
   end
@@ -1055,16 +1056,16 @@ function M.new(cfg)
   function self:on_state(state)
     self.last_state = text_or(state, "")
     local status = {
-      starting = "启动中",
-      wifi_configuring = "配网中",
-      activating = "激活中",
-      idle = "待命",
-      connecting = "连接中",
-      listening = "聆听中",
-      speaking = "回答中",
-      upgrading = "升级中",
-      audio_testing = "音频测试",
-      fatal_error = "错误",
+      starting = T("启动中"),
+      wifi_configuring = T("配网中"),
+      activating = T("激活中"),
+      idle = T("待命"),
+      connecting = T("连接中"),
+      listening = T("聆听中"),
+      speaking = T("回答中"),
+      upgrading = T("升级中"),
+      audio_testing = T("音频测试"),
+      fatal_error = T("错误"),
     }
     local emotion = {
       starting = "microchip_ai",
@@ -1083,7 +1084,7 @@ function M.new(cfg)
   end
 
   function self:alert(status, message, emotion)
-    self:set_status(status or "错误")
+    self:set_status(status or T("错误"))
     self:set_emotion(emotion or "circle_xmark")
     self:set_chat_message("system", message or "")
   end

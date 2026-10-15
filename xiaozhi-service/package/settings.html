@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XiaoZhi · Control center</title>
+<style>
+:root{color-scheme:light;--bg:#f4f6f3;--card:#fff;--ink:#20332d;--muted:#6a7972;--line:#dfe7e1;--accent:#22775d;--soft:#eaf4ef;--danger:#ad433d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:auto;padding:36px 24px 28px}header{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:14px;margin-bottom:26px}
+.home-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:1px solid var(--line);border-radius:10px;background:white;color:var(--ink);font-weight:600;text-decoration:none;white-space:nowrap;align-self:start}
+.home-button:hover{background:var(--soft)}.home-button:focus-visible{outline:3px solid #7dc7ae;outline-offset:3px}
+.brand{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--accent);color:white;font-size:24px;font-weight:700}
+h1{font-size:25px;line-height:1.2;letter-spacing:-.5px;margin:0 0 5px}h2{font-size:17px;line-height:1.3;margin:0 0 18px}
+p{margin:10px 0}small,.muted{color:var(--muted);font-size:13px}header p{margin:0;color:var(--muted)}
+.card,details.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}.grid .card{height:100%;margin:0}.grid{margin-bottom:18px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.stack{display:grid;gap:16px}
+label{display:block;margin:14px 0 0;font-size:14px;font-weight:500}label>span{display:block;margin-bottom:6px}
+input,select,button{font:inherit;border-radius:10px;border:1px solid var(--line);color:var(--ink)}
+input:not([type=checkbox]):not([type=range]),select{width:100%;padding:10px 12px;background:#fafcf9;min-height:44px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:14px 0 6px}input[type=checkbox]{accent-color:var(--accent);width:17px;height:17px;margin:0;flex-shrink:0}
+.check{display:flex;gap:9px;align-items:center;font-weight:400}.check span{margin:0}
+button{padding:10px 17px;min-height:44px;background:white;cursor:pointer;font-weight:600;transition:background .15s}
+button:hover{background:var(--soft)}button.primary{background:var(--accent);color:white;border-color:var(--accent)}button.primary:hover{background:#196249}
+button.danger{color:var(--danger);border-color:#e9cfcc}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #7dc7ae;outline-offset:3px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.actions button{flex-shrink:0}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:99px;background:var(--soft);color:var(--accent);font-size:13px;font-weight:600}
+.pill:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.pill[data-error=true]{color:var(--danger);background:#fff0ee}
+#status{font-weight:650;font-size:18px}#statusDetail{min-height:21px;overflow-wrap:anywhere}
+.notice{background:var(--soft);padding:11px 14px;border-radius:10px;font-size:13px;color:#456353}
+#message{position:sticky;top:12px;z-index:3;margin:0 0 18px;padding:12px 16px;border:1px solid #cfdfd5;border-radius:12px;background:#eaf4ef;overflow-wrap:anywhere}
+#message:empty{display:none}#message[data-error=true]{background:#fff0ee;color:var(--danger);border-color:#e9cfcc}
+.volume{max-width:360px;width:100%}.volume label{margin:0}.volume output{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+code{font:13px ui-monospace,monospace;overflow-wrap:anywhere;background:#f2f5f1;padding:4px 7px;border-radius:6px}
+#pairCode{color:var(--accent);font-size:22px;font-weight:700;letter-spacing:2px}#pairCode:empty{display:none}
+summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}summary:after{content:"+";font-size:25px;color:var(--muted)}details[open]>summary:after{content:"−"}
+summary strong{display:block;font-size:17px}summary small{display:block;font-weight:400;margin-top:4px}
+.details-body{border-top:1px solid var(--line);margin-top:20px;padding-top:4px}
+#deny{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}#deny label{display:flex;align-items:center;gap:8px;margin:0;padding:8px;border-radius:8px;background:#f6f8f5;font-size:13px;overflow-wrap:anywhere}
+footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px;padding:8px 3px}[hidden]{display:none!important}
+@media(max-width:680px){main{padding:22px 16px}.grid{grid-template-columns:1fr}.card,details.card{padding:20px}h1{font-size:23px}.overview>.row{align-items:stretch}.volume{max-width:none;border-top:1px solid var(--line);padding-top:18px}.actions button{flex:1}.row.controls{display:grid;grid-template-columns:1fr 1fr;width:100%}#deny{grid-template-columns:1fr}}
+@media(max-width:480px){header{grid-template-columns:36px minmax(0,1fr) auto;gap:10px}.brand{width:36px;height:36px;border-radius:12px;font-size:20px}header h1{font-size:20px}header p{display:none}.home-button{font-size:13px;padding:9px 10px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head>
+<body><main>
+<header><div class="brand" aria-hidden="true">小</div><div><h1>XiaoZhi <span data-t="controlCenter">Control center</span></h1><p data-t="subtitle">Your voice companion, at a glance.</p></div><a class="home-button" id="backHome" href="/" data-t="backHome">Back to home</a></header>
+<div id="message" role="status" aria-live="polite"></div>
+<section class="card overview" aria-labelledby="overviewTitle">
+<div class="row between"><div class="stack"><div><span class="pill" id="modeBadge" data-t="half">Half duplex</span><h2 id="overviewTitle" style="margin:12px 0 4px"><span id="status" aria-live="polite">Connecting…</span></h2><div id="statusDetail" class="muted"></div></div>
+<div class="row controls"><button class="primary" id="startChat" data-t="startChat">Start talking</button><button id="stopChat" data-t="stopChat">End conversation</button></div></div>
+<div class="volume" data-form="volume"><div class="row between"><label for="volume" data-t="volume">Volume</label><output id="volumeValue" for="volume">—</output></div>
+<input id="volume" aria-label="Volume" type="range" min="0" max="100"><div class="row between"><small data-t="volumeHint">Follows the device volume</small><button id="saveVolume" data-t="saveVolume">Apply volume</button></div></div></div>
+<p class="notice" data-t="audioMode">The microphone is off during playback. Wait for the reply to finish before speaking.</p>
+</section>
+<div class="grid">
+<section class="card" data-form="preferences"><h2 data-t="voice">Voice & language</h2>
+<label><span data-t="wake">Wake word</span><select id="wake"><option value="nihaoxiaozhi">你好小智</option><option value="hi_esp">Hi ESP</option></select></label>
+<label><span data-t="language">Interface language</span><select id="language"><option value="auto" data-t="auto">System</option><option value="zh-CN">简体中文</option><option value="en">English</option></select></label>
+<p><small data-t="strict">End the conversation before changing these settings.</small></p><div class="actions"><button id="savePreferences" class="primary" data-t="save">Save</button></div>
+</section>
+<section class="card" data-form="ui"><h2 data-t="appearance">Appearance & background</h2>
+<label><span data-t="appStyle">App style</span><select id="appStyle"></select></label>
+<div id="serviceOptions"><label class="check"><input id="enabled" type="checkbox"><span data-t="background">Background wake enabled</span></label>
+<details style="margin-top:18px"><summary><strong data-t="backgroundDetails">Background display & idle settings</strong></summary><label><span data-t="mode">Wake presentation</span><select id="mode"><option value="floating" data-t="floating">Floating</option><option value="app" data-t="foreground">Open App</option></select></label>
+<label><span data-t="floatStyle">Floating style</span><select id="floatStyle"></select></label><label><span data-t="character">Character</span><select id="character"></select></label>
+<label><span data-t="timeout">Idle timeout (seconds)</span><select id="timeout"><option>10</option><option>20</option><option>30</option><option>60</option></select></label>
+<details style="margin-top:18px"><summary><small data-t="deny">Pause audio for selected apps</small></summary><div id="deny"></div></details></details></div>
+<div class="actions"><button id="saveUi" data-t="save">Save</button></div>
+</section></div>
+<section class="card" data-form="identity"><div class="row between"><h2 style="margin-bottom:8px" data-t="pairing">Pairing & identities</h2><code id="mac">—</code></div>
+<small data-t="current">Current device identity</small><p id="pairCode" aria-live="polite"></p>
+<div class="actions"><button id="pair" class="primary" data-t="newPair">New identity & pairing code</button><button id="retryPair" data-t="retry">Retry current identity</button></div>
+<details style="margin-top:22px"><summary><strong data-t="identities">Saved identities</strong></summary><div class="details-body">
+<label><span data-t="identities">Saved identities</span><select id="identities"></select></label>
+<div class="actions"><button id="selectIdentity" data-t="use">Use selected identity</button><button id="deleteIdentity" class="danger" data-t="delete">Delete saved identity</button></div>
+<label><span data-t="name">Name of current identity</span><input id="identityName" maxlength="64"></label><div class="actions"><button id="renameIdentity" data-t="rename">Rename</button></div>
+<p><small data-t="identityHint">Virtual identities do not change Wi-Fi MAC. Old cloud devices are not deleted.</small></p>
+</div></details></section>
+<details class="card" id="advanced" data-form="server">
+<summary><div><strong data-t="advanced">Advanced options</strong><small data-t="advancedHint">Server connection, token and protocol</small></div></summary>
+<div class="details-body"><p class="notice" data-t="serverHint">Usually no changes are needed here. Changing servers may require pairing again.</p>
+<label>OTA URL<input id="ota" type="url" spellcheck="false"></label><label>WebSocket URL<input id="ws" type="url" spellcheck="false"></label>
+<label>Token<input id="token" type="password" autocomplete="off" spellcheck="false"></label><small data-t="tokenHint">Blank keeps the saved token. Check below to clear it.</small>
+<label class="check"><input id="clearToken" type="checkbox"><span data-t="clearToken">Clear token</span></label>
+<label><span data-t="protocol">Protocol version</span><select id="version"><option>1</option><option>3</option></select></label><div class="actions"><button id="saveServer" data-t="saveServer">Save server configuration</button></div></div>
+</details>
+<footer><span data-t="sharedHint">Shared settings · App and Service</span><span id="configPath"></span></footer>
+</main>
+<script>
+const q=s=>document.querySelector(s);let state={},loaded=false,busy=false,refreshing=false;const dirty=new Set();document.querySelectorAll('[data-form]').forEach(el=>el.addEventListener('input',()=>dirty.add(el.dataset.form)));
+const zh={backHome:'返回主页',backgroundDetails:'后台显示与休眠设置',controlCenter:'控制中心',subtitle:'对话、设备与偏好设置，一处管理。',half:'半双工',startChat:'开始对话',stopChat:'结束对话',volumeHint:'跟随设备统一音量',advanced:'高级选项',advancedHint:'服务器连接、Token 与协议',serverHint:'通常无需修改。更换服务器后可能需要重新配对。',saveServer:'保存服务器配置',sharedHint:'前台与服务 · 共用一份配置',idle:'待唤醒',listening:'正在听你说',speaking:'正在回复',connecting:'正在连接',activating:'等待配对',fatal_error:'音频异常',applied:'已发送',offline:'设备暂时不可达',voice:'语音和语言',language:'界面语言',auto:'跟随系统',wake:'唤醒词',audioMode:'播放时麦克风关闭，等回复结束后再说话。',strict:'修改这些设置前，请先结束当前对话。',save:'保存',volume:'音量',saveVolume:'保存音量',pairing:'配对与设备身份',current:'当前设备身份',newPair:'新建身份并获取配对码',retry:'重试当前身份',identities:'已保存的身份',use:'切换到所选身份',delete:'删除已保存身份',name:'当前身份名称',rename:'重命名',identityHint:'虚拟身份不会修改 Wi-Fi MAC。配对仍由服务端批准，不会自动删除云端旧设备。',server:'服务器',tokenHint:'留空保留现有 Token，勾选下方可清除。',clearToken:'清除 Token',protocol:'协议版本',appearance:'界面',appStyle:'前台样式',background:'启用后台唤醒',mode:'唤醒显示方式',floating:'悬浮界面',foreground:'打开小智 App',floatStyle:'悬浮样式',character:'角色',timeout:'无交互休眠秒数',deny:'这些前台应用运行时暂停音频',confirmPair:'将保存旧身份并创建新虚拟身份，需要重新绑定。继续吗？',confirmDelete:'删除所选的本地身份记录？不会删除云端设备。',saved:'已保存，正在应用…',pairCode:'配对码',stop_session_before_changing_preferences:'请先结束当前语音会话',cannot_delete_active_identity:'不能删除当前使用中的身份',wake_model_missing:'缺少所选唤醒模型',restart_in_progress:'正在重启，请稍后',invalid_mac:'MAC 地址无效',config_write_failed:'配置写入失败',waiting:'等待服务重启…'};
+const en={backHome:'Back to home',idle:'Ready to wake',listening:'Listening',speaking:'Speaking',connecting:'Connecting',activating:'Pairing required',fatal_error:'Audio error',applied:'Command sent',offline:'Device is unreachable',confirmPair:'Archive this identity and create a new virtual identity? Pairing will be required.',confirmDelete:'Delete this local saved identity? Cloud devices are not deleted.',saved:'Saved. Applying…',pairCode:'Pairing code',waiting:'Waiting for restart…'};
+const styleNames={
+  'zh-CN':{subtitle:'字幕模式',wechat:'聊天气泡',window:'悬浮窗口',assistant:'角色助手',headless:'无界面',driver:'界面驱动'},
+  en:{subtitle:'Subtitles',wechat:'Chat bubbles',window:'Floating window',assistant:'Character assistant',headless:'No interface',driver:'UI driver'},
+  'zh-TW':{subtitle:'字幕模式',wechat:'聊天氣泡',window:'浮動視窗',assistant:'角色助手',headless:'無介面',driver:'介面驅動'},
+  de:{subtitle:'Untertitel',wechat:'Chatblasen',window:'Schwebendes Fenster',assistant:'Charakterassistent',headless:'Ohne Oberfläche',driver:'UI-Treiber'},
+  ja:{subtitle:'字幕',wechat:'チャット吹き出し',window:'フローティングウィンドウ',assistant:'キャラクターアシスタント',headless:'画面なし',driver:'UIドライバー'}
+};
+const localeLabels={'zh-TW':{backHome:'返回首頁'},de:{backHome:'Zur Startseite'},ja:{backHome:'ホームに戻る'}};
+const labels={};document.querySelectorAll('[data-t]').forEach(e=>labels[e.dataset.t]=e.textContent);
+let lang='en';const tr=k=>localeLabels[lang]?.[k]||(lang==='zh-CN'?zh[k]:en[k])||labels[k]||k;
+function styleLabel(value){return (styleNames[lang]||styleNames.en)[value]||value}
+function translate(){document.documentElement.lang=lang;document.querySelectorAll('[data-t]').forEach(e=>e.textContent=tr(e.dataset.t));document.querySelectorAll('option[data-style-id]').forEach(e=>e.textContent=styleLabel(e.dataset.styleId))}
+async function api(path,body){const base=location.pathname.replace(/\/+$/,'');const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);try{const r=await fetch(base+'/api/'+path,{signal:controller.signal,...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});const v=await r.json();if(!r.ok||v.ok===false)throw Error(v.error||r.status);return v}finally{clearTimeout(timeout)}}
+async function action(path,body){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await api(path,body);q('#message').dataset.error='false';q('#message').textContent=tr(path==='control'?'applied':'saved');if(path==='server'){q('#token').value='';q('#clearToken').checked=false}dirty.delete(path==='repair'?'identity':path);loaded=false;setTimeout(refresh,600)}catch(e){q('#message').dataset.error='true';q('#message').textContent=tr(e.message)}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}}
+function options(id,items,value){let e=q(id);e.replaceChildren();(items||[]).forEach(v=>{let o=document.createElement('option');o.value=typeof v==='object'?v.mac:v;o.textContent=typeof v==='object'?`${v.active?'● ':''}${v.name} (${v.mac})`:v;if(typeof v==='string'&&(id==='#appStyle'||id==='#floatStyle')){o.dataset.styleId=v;o.textContent=styleLabel(v)}e.append(o)});if(value)e.value=value}
+async function refresh(){if(refreshing||document.hidden)return;refreshing=true;try{state=await api('state');lang=state.resolved_language||'en';translate();q('#status').textContent=tr(state.state||'connecting');q('#statusDetail').textContent=state.audio_error||state.activation_message||'';q('#modeBadge').dataset.error=String(!!state.audio_error);q('#pairCode').textContent=state.pairing_code?tr('pairCode')+': '+state.pairing_code:'';q('#mac').textContent=state.device_mac||'';q('#configPath').textContent=state.config_path||'';
+if(!dirty.has('volume')){q('#volume').value=state.volume==null?0:state.volume;q('#volumeValue').textContent=q('#volume').value}
+if(!loaded){if(!dirty.has('preferences')){q('#language').value=state.language||'auto';q('#wake').value=state.wake_id||'nihaoxiaozhi'}
+if(!dirty.has('server')){q('#ota').value=state.ota_url||'';q('#ws').value=state.url||'';q('#version').value=state.version||1}
+if(!dirty.has('identity')){
+options('#identities',state.identities,state.device_mac);q('#identityName').value=(state.identities||[]).find(v=>v.active)?.name||'';}
+if(!dirty.has('ui')){const u=state.ui_options||{};options('#appStyle',u.app_styles||['subtitle','wechat'],state.app_ui_type);options('#floatStyle',u.service_styles||['window','subtitle','wechat','assistant'],state.service_ui_type);options('#character',u.characters||['xiaozhi_chibi'],state.service_ui_character);
+q('#serviceOptions').hidden=!state.service_mode;q('#enabled').checked=state.wake_service_enabled;q('#mode').value=state.service_ui_mode||'floating';q('#mode option[value=app]').disabled=!state.app_installed;q('#timeout').value=state.session_idle_timeout_sec||20;
+q('#deny').replaceChildren();(state.deny_app_options||[]).forEach(v=>{let label=document.createElement('label'),c=document.createElement('input');c.type='checkbox';c.value=v.id;c.checked=!!(state.deny_apps||{})[v.id];label.append(c,document.createTextNode(' '+(v.name||v.id)));q('#deny').append(label)});}loaded=true}}
+catch(e){q('#status').textContent=tr('offline');q('#modeBadge').dataset.error='true'}finally{refreshing=false}}
+q('#savePreferences').onclick=()=>action('preferences',{language:q('#language').value,wake_id:q('#wake').value});
+q('#saveVolume').onclick=()=>action('volume',{volume:+q('#volume').value});
+q('#pair').onclick=()=>{if(confirm(tr('confirmPair')))action('repair',{new_identity:true})};q('#retryPair').onclick=()=>action('repair',{new_identity:false});
+q('#selectIdentity').onclick=()=>action('identity',{action:'select',value:q('#identities').value});q('#deleteIdentity').onclick=()=>{if(confirm(tr('confirmDelete')))action('identity',{action:'delete',value:q('#identities').value})};q('#renameIdentity').onclick=()=>action('identity',{action:'rename',value:q('#identityName').value});
+q('#saveServer').onclick=()=>action('server',{ota_url:q('#ota').value,url:q('#ws').value,token:q('#token').value,keep_token:!q('#clearToken').checked&&!q('#token').value,version:+q('#version').value});
+q('#enabled').onchange=()=>action('wake',{enabled:q('#enabled').checked});
+q('#saveUi').onclick=()=>{let deny={};q('#deny').querySelectorAll('input:checked').forEach(e=>deny[e.value]=true);action('ui',{app_ui_type:q('#appStyle').value,service_ui_mode:q('#mode').value,service_ui_type:q('#floatStyle').value,service_ui_character:q('#character').value,deny_apps:deny,session_idle_timeout_sec:+q('#timeout').value})};
+q('#volume').oninput=()=>q('#volumeValue').textContent=q('#volume').value;
+q('#startChat').onclick=()=>action('control',{action:'wake'});
+q('#stopChat').onclick=()=>action('control',{action:'stop'});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+refresh();setInterval(refresh,3000);
+</script></body></html>

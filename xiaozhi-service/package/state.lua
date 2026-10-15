@@ -14,7 +14,6 @@ M.FATAL_ERROR = "fatal_error"
 
 M.LISTEN_AUTO = "auto"
 M.LISTEN_MANUAL = "manual"
-M.LISTEN_REALTIME = "realtime"
 
 local allowed = {
   [M.UNKNOWN] = { [M.STARTING] = true },

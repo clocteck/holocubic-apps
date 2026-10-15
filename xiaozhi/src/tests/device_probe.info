@@ -1,0 +1,6 @@
+name = XiaoZhi Hardware Test
+kind = app
+entry = main.lua
+version = 1.0.0
+author = local-test
+category = tool

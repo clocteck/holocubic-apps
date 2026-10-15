@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local APP_DIR = rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi-service"
@@ -119,6 +120,8 @@ function M.new(cfg)
 
   function self:emit(event, payload)
     payload = type(payload) == "table" and payload or {}
+    if event == "notification" then payload.text = T(payload.text) end
+    if event == "status" or event == "alert" then payload.status = T(payload.status); payload.message = T(payload.message) end
     if self.suppressed and event ~= "setup" and event ~= "stop" then
       return true, "suppressed"
     end

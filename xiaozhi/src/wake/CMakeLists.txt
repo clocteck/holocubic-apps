@@ -48,6 +48,8 @@ if(_wake_extra_cmake_arg)
 endif()
 
 project(wake)
+set(WAKE_MODULE_NAME "wake" CACHE STRING "Native module identity")
+idf_build_set_property(COMPILE_DEFINITIONS "WAKE_MODULE_NAME=${WAKE_MODULE_NAME}" APPEND)
 
 execute_process(
     COMMAND ${CMAKE_C_COMPILER} -print-libgcc-file-name

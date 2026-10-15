@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local W, H = 320, 92
@@ -195,7 +196,7 @@ function M.new(cfg)
     self.message = content
     if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
     render()
-    local persistent = self.role == "system" and content:find("验证码", 1, true) ~= nil
+    local persistent = self.role == "system" and content:find(T("验证码"), 1, true) ~= nil
     if not persistent and tmr and tmr.create then
       local timer = tmr.create()
       self.hide_timer = timer
@@ -242,7 +243,7 @@ function M.new(cfg)
 
   function self:alert(status, message)
     self.state = "fatal_error"
-    show_message("system", tostring(message or status or "发生错误"))
+    show_message("system", tostring(message or status or T("发生错误")))
   end
 
   function self:setup()

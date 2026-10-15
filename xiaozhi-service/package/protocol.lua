@@ -60,7 +60,7 @@ local function u16be(value)
 end
 
 local function device_id(cfg)
-  local ok, ident = pcall(dofile, ((cfg and cfg.APP_DIR) or "/sd/apps/xiaozhi-service") .. "/identity.lua")
+  local ok, ident = pcall(dofile, ((cfg and cfg.APP_DIR) or "/sd/apps/xiaozhi") .. "/identity.lua")
   if ok and ident and ident.device_id then
     return ident.device_id(), ident.client_id()
   end
@@ -79,7 +79,15 @@ function M.new(cfg)
     server_frame_duration = 60,
     last_error = "",
     callbacks = {},
+    listening_mode = nil,
+    uploaded_packets = 0,
+    send_retries = 0,
   }
+  local send_queue, send_bytes, send_timer = {}, 0, nil
+  local function clear_send_queue()
+    if send_timer then send_timer:stop();send_timer:unregister();send_timer=nil end
+    send_queue,send_bytes={},0
+  end
 
   function self:on(name, fn)
     self.callbacks[name] = fn
@@ -108,24 +116,79 @@ function M.new(cfg)
       server_sample_rate = self.server_sample_rate,
       server_frame_duration = self.server_frame_duration,
       last_error = self.last_error,
+      listening_mode = self.listening_mode,
+      uploaded_packets = self.uploaded_packets,
+      queued_messages = #send_queue,
+      queued_bytes = send_bytes,
+      send_retries = self.send_retries,
     }
   end
 
-  local function send_text(text)
-    if not self.ws or not self.connected then
-      return false, "not connected"
+  local function transport_failure(message)
+    self:close_audio_channel(false)
+    emit("closed", -1)
+    set_error(message)
+    return false,message
+  end
+  local function write_packet(data,opcode)
+    local ok,result,err=pcall(function()return self.ws:send(data,opcode)end)
+    if not ok then return false,tostring(result) end
+    if type(result)=="string" then return false,result end
+    if result==false or (result==nil and err~=nil) then
+      return false,tostring(err or "websocket send failed")
     end
-    local ok, err = pcall(function()
-      return self.ws:send(text, websocket.TEXT)
-    end)
-    if not ok then
-      return false, tostring(err)
-    end
-    if type(err) == "string" then
-      return false, err
+    if opcode==websocket.BINARY then self.uploaded_packets=self.uploaded_packets+1 end
+    return true
+  end
+  local function drain_send_queue()
+    for _=1,4 do
+      local item=send_queue[1]
+      if not item then
+        if send_timer then send_timer:stop();send_timer:unregister();send_timer=nil end
+        return true
+      end
+      local age=millis and (millis()-item.started) or item.ticks*20
+      if age>=1500 then return transport_failure("websocket send backlog exceeded 1500ms") end
+      local ok,err=write_packet(item.data,item.opcode)
+      if not ok then
+        if err~="send queue full" then return transport_failure(err) end
+        self.send_retries=self.send_retries+1
+        return true
+      end
+      send_bytes=send_bytes-#item.data
+      table.remove(send_queue,1)
     end
     return true
   end
+  local function send_packet(data,opcode)
+    if not self.ws or not self.connected then
+      return false, "not connected"
+    end
+    if #send_queue==0 then
+      local ok,err=write_packet(data,opcode)
+      if ok then return true end
+      if err~="send queue full" then return transport_failure(err) end
+      self.send_retries=self.send_retries+1
+    end
+    -- One ordered queue for control and audio: listen/start cannot overtake
+    -- earlier messages, and transient firmware backpressure doesn't lose speech.
+    if #send_queue>=32 or send_bytes+#data>65536 then
+      return transport_failure("websocket send backlog limit exceeded")
+    end
+    send_queue[#send_queue+1]={data=data,opcode=opcode,started=millis and millis() or 0,ticks=0}
+    send_bytes=send_bytes+#data
+    if not send_timer then
+      send_timer=tmr.create()
+      local timer=send_timer
+      timer:alarm(20,tmr.ALARM_AUTO,function()
+        if send_timer~=timer then return end
+        for _,item in ipairs(send_queue)do item.ticks=item.ticks+1 end
+        drain_send_queue()
+      end)
+    end
+    return true
+  end
+  local function send_text(text) return send_packet(text,websocket.TEXT) end
 
   function self:send_text(text)
     return send_text(text)
@@ -229,6 +292,8 @@ function M.new(cfg)
     end
 
     self:close_audio_channel(false)
+    self.last_error = ""
+    self.uploaded_packets,self.send_retries=0,0
     self.connecting = true
     self.opened = false
     self.connected = false
@@ -263,6 +328,7 @@ function M.new(cfg)
     })
 
     ws:on("connection", function(client)
+      if self.ws ~= ws then return end
       self.connected = true
       self.connecting = false
       emit("connected")
@@ -273,6 +339,7 @@ function M.new(cfg)
     end)
 
     ws:on("receive", function(_, data, opcode)
+      if self.ws ~= ws then return end
       if opcode == websocket.BINARY then
         emit("audio", parse_binary(data))
       else
@@ -281,6 +348,9 @@ function M.new(cfg)
     end)
 
     ws:on("close", function(_, status)
+      if self.ws ~= ws then return end
+      clear_send_queue()
+      self.listening_mode=nil
       self.connected = false
       self.opened = false
       self.connecting = false
@@ -300,13 +370,14 @@ function M.new(cfg)
   end
 
   function self:close_audio_channel(send_goodbye)
-    if self.ws then
-      pcall(function() self.ws:close() end)
-    end
+    clear_send_queue()
+    local ws=self.ws
     self.ws = nil
+    self.listening_mode=nil
     self.connected = false
     self.opened = false
     self.connecting = false
+    if ws then pcall(function() ws:close() end) end
     if send_goodbye then
       emit("closed", 0)
     end
@@ -320,14 +391,7 @@ function M.new(cfg)
     if (cfg.websocket.version or 1) == 3 then
       packet = string.char(0, 0) .. u16be(#opus) .. opus
     end
-    local ok, err = pcall(function()
-      return self.ws:send(packet, websocket.BINARY)
-    end)
-    if not ok or type(err) == "string" then
-      set_error(tostring(err or "send audio failed"))
-      return false
-    end
-    return true
+    return send_packet(packet,websocket.BINARY)
   end
 
   function self:send_wake_word_detected(wake_word)
@@ -336,11 +400,15 @@ function M.new(cfg)
   end
 
   function self:send_start_listening(mode)
-    return send_text("{" .. json_pair("session_id", self.session_id) ..
-      ',"type":"listen","state":"start","mode":"' .. json_escape(mode or "auto") .. '"}')
+    mode=mode=="manual" and "manual" or "auto"
+    local ok,err=send_text("{" .. json_pair("session_id", self.session_id) ..
+      ',"type":"listen","state":"start","mode":"' .. json_escape(mode) .. '"}')
+    if ok then self.listening_mode=mode end
+    return ok,err
   end
 
   function self:send_stop_listening()
+    self.listening_mode=nil
     return send_text("{" .. json_pair("session_id", self.session_id) ..
       ',"type":"listen","state":"stop"}')
   end

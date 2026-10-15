@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 function M.new(cfg, load_module)
@@ -66,10 +67,10 @@ function M.new(cfg, load_module)
     temporary_wake_backoff = false,
     temporary_wake_backoff_timer = nil,
     temporary_wake_backoff_source = nil,
-    activation_status = "启动中",
+    activation_status = T("启动中"),
     activation_message = "",
     pairing_code = "",
-    ui_status = "启动中",
+    ui_status = T("启动中"),
     ui_role = "system",
     ui_text = "",
     ui_emotion = "neutral",
@@ -78,10 +79,6 @@ function M.new(cfg, load_module)
     ipc_next_id = 0,
     ipc_subscribers = {},
     ipc_endpoint_subscribers = {},
-    pending_goodbye = false,
-    tts_text_ready = false,
-    tts_audio_queue = {},
-    tts_audio_timer = nil,
     session_idle_timer = nil,
     web = nil,
     indicator = Indicator.new(),
@@ -166,7 +163,7 @@ function M.new(cfg, load_module)
   end
 
   local function service_wake_enabled()
-    return wake_service_enabled()
+    return xiaozhi_app_installed() and self.current_app_id == "xiaozhi" or wake_service_enabled()
   end
 
   local function app_denies_service(app_id)
@@ -379,6 +376,7 @@ function M.new(cfg, load_module)
   end
 
   local function set_state(to)
+    if self.state.state == State.FATAL_ERROR then return false end
     return self.state:set(to)
   end
 
@@ -399,6 +397,9 @@ function M.new(cfg, load_module)
       "  det " .. tostring(ai.detect_count or 0) ..
       "  tx " .. tostring(ai.send_frames or 0) ..
       "  rx " .. tostring(ai.play_count or 0)
+    local signature = network .. "|" .. tostring(ai.mode) .. "|" .. wake .. "|" .. counter
+    if self.last_metrics_signature == signature then return end
+    self.last_metrics_signature = signature
     self.ui:set_metrics({
       network = network,
       audio = (ai.mode or "off"),
@@ -409,14 +410,13 @@ function M.new(cfg, load_module)
 
   local notify_ipc
   local cancel_external_return
-  local cancel_tts_audio_timer
 
   local function alert(status, message, emotion)
-    self.ui_status = tostring(status or "错误")
+    self.ui_status = tostring(status or T("错误"))
     self.ui_text = tostring(message or "")
     self.ui_role = "system"
     self.ui_emotion = emotion or "circle_xmark"
-    self.ui:alert(status or "错误", message or "", emotion or "circle_xmark")
+    self.ui:alert(status or T("错误"), message or "", emotion or "circle_xmark")
     notify_ipc()
   end
 
@@ -461,21 +461,21 @@ function M.new(cfg, load_module)
     self.ui:set_emotion("thinking")
     self.ui_emotion = "thinking"
     if code ~= "" then
-      self.ui_status = "验证码 " .. code
+      self.ui_status = T("验证码 ") .. code
       self.ui_role = "system"
-      self.ui_text = "后台添加设备输入验证码 " .. code
-      self.ui_notice = "验证码 " .. code
-      self.ui:set_status("验证码 " .. code)
-      self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
-      self.ui:show_notification("验证码 " .. code, 3000)
+      self.ui_text = T("后台添加设备输入验证码 ") .. code
+      self.ui_notice = T("验证码 ") .. code
+      self.ui:set_status(T("验证码 ") .. code)
+      self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
+      self.ui:show_notification(T("验证码 ") .. code, 3000)
     else
-      self.ui_status = "获取验证码"
+      self.ui_status = T("获取验证码")
       self.ui_role = "system"
-      self.ui_text = "正在向小智服务端申请验证码"
-      self.ui_notice = "正在获取配对码"
-      self.ui:set_status("获取验证码")
-      self.ui:set_chat_message("system", "正在向小智服务端申请验证码")
-      self.ui:show_notification("正在获取配对码", 1800)
+      self.ui_text = T("正在向小智服务端申请验证码")
+      self.ui_notice = T("正在获取配对码")
+      self.ui:set_status(T("获取验证码"))
+      self.ui:set_chat_message("system", T("正在向小智服务端申请验证码"))
+      self.ui:show_notification(T("正在获取配对码"), 1800)
     end
     notify_ipc()
     return true
@@ -488,7 +488,7 @@ function M.new(cfg, load_module)
     local ok = self.protocol:open_audio_channel()
     if not ok then
       local msg = self.protocol.last_error or "server not connected"
-      alert("连接失败", msg, "cloud_slash")
+      alert(T("连接失败"), msg, "cloud_slash")
       set_state(State.IDLE)
       return false
     end
@@ -500,7 +500,7 @@ function M.new(cfg, load_module)
       return false
     end
     if not self.protocol then
-      alert("错误", "protocol missing", "circle_xmark")
+      alert(T("错误"), "protocol missing", "circle_xmark")
       set_state(State.IDLE)
       return false
     end
@@ -518,7 +518,7 @@ function M.new(cfg, load_module)
       return false
     end
     if not self.protocol then
-      alert("错误", "protocol missing", "circle_xmark")
+      alert(T("错误"), "protocol missing", "circle_xmark")
       set_state(State.IDLE)
       return false
     end
@@ -547,14 +547,13 @@ function M.new(cfg, load_module)
   end
 
   local function start_listening(mode)
-    self.listening_mode = mode or State.LISTEN_AUTO
+    self.listening_mode = mode == State.LISTEN_MANUAL and State.LISTEN_MANUAL
+      or State.LISTEN_AUTO
     local s = self.state.state
     if s == State.IDLE then
       return open_audio_channel()
     elseif s == State.SPEAKING then
-      self.protocol:send_abort_speaking("none")
-      set_state(State.LISTENING)
-      return true
+      return self.protocol:send_abort_speaking("none")
     elseif s == State.LISTENING then
       return true
     end
@@ -620,11 +619,7 @@ function M.new(cfg, load_module)
 
     if active then
       cancel_external_return()
-      cancel_tts_audio_timer()
       self.pending_wake_word = nil
-      self.pending_goodbye = false
-      self.tts_text_ready = false
-      self.tts_audio_queue = {}
       if self.protocol then
         if state == State.SPEAKING then
           pcall(function() self.protocol:send_abort_speaking("none") end)
@@ -662,7 +657,7 @@ function M.new(cfg, load_module)
     if foreground == "xiaozhi" then
       self.current_app_id = "xiaozhi"
       apply_service_ui_suppression()
-      if suspend_audio_for_app then suspend_audio_for_app("xiaozhi") end
+      -- IPC frontend does not acquire audio.
       return true
     end
     local origin_app_id = returnable_app_id(foreground)
@@ -741,24 +736,13 @@ function M.new(cfg, load_module)
       self.startup_wake_from_service = false
     end
     self.pending_wake_word = wake_word or cfg.WAKE_WORD
+    self.listening_mode = State.LISTEN_AUTO
     local foreground_xiaozhi = xiaozhi_is_foreground()
     apply_service_ui_suppression()
     if s == State.IDLE and not foreground_xiaozhi then
       local handoff_word = self.pending_wake_word
       local origin_app_id = returnable_app_id(foreground_app_id())
       if cfg.UI_MODE == "app" and xiaozhi_app_installed() then
-        self.pending_foreground_wake = handoff_word
-        self.pending_foreground_return_app_id = origin_app_id
-        local handoff_raw = encode({
-          wake_word = handoff_word,
-          return_app_id = origin_app_id,
-        })
-        if handoff_raw then write_text(FOREGROUND_HANDOFF_PATH, handoff_raw) end
-        -- The foreground app owns I2S. Release native wake capture before launch.
-        if self.audio then pcall(function() self.audio:stop_i2s() end) end
-        if launch_xiaozhi_ui("wake", handoff_word) then return true end
-        clear_foreground_handoff()
-      else
         launch_xiaozhi_ui("wake")
       end
     end
@@ -767,7 +751,7 @@ function M.new(cfg, load_module)
     end
     if s == State.IDLE then
       if not foreground_xiaozhi then
-        self.ui:show_notification("你好小智", 1200)
+        self.ui:show_notification(cfg.WAKE_WORD, 1200)
       end
       -- Make the service overlay visible before touching I2S/network state.
       -- A capture handoff failure must not swallow the wake UI notification.
@@ -780,7 +764,7 @@ function M.new(cfg, load_module)
       return open_audio_channel_deferred()
     elseif s == State.SPEAKING or s == State.LISTENING then
       if self.protocol then
-        self.protocol:send_abort_speaking("wake_word_detected")
+        if s == State.SPEAKING then return self.protocol:send_abort_speaking("wake_word_detected") end
       end
       set_state(State.LISTENING)
     elseif s == State.ACTIVATING then
@@ -797,7 +781,6 @@ function M.new(cfg, load_module)
       if self.protocol then
         self.protocol:send_abort_speaking("none")
       end
-      set_state(State.IDLE)
     elseif s == State.LISTENING or s == State.CONNECTING then
       stop_listening()
     elseif s == State.ACTIVATING then
@@ -896,13 +879,13 @@ function M.new(cfg, load_module)
   local function on_state_changed(old_state, new_state)
     self.indicator:on_state(new_state)
     local labels = {
-      starting = "正在启动",
-      activating = "正在连接服务",
-      connecting = "正在连接",
-      listening = "我在听",
-      speaking = "小智正在回答",
-      fatal_error = "启动失败",
-      idle = "小智待命中",
+      starting = T("正在启动"),
+      activating = T("正在连接服务"),
+      connecting = T("正在连接"),
+      listening = T("我在听"),
+      speaking = T("小智正在回答"),
+      fatal_error = T("启动失败"),
+      idle = T("小智待命中"),
     }
     self.ui_status = labels[new_state] or tostring(new_state or self.ui_status)
     if new_state == State.IDLE then
@@ -950,11 +933,11 @@ function M.new(cfg, load_module)
       end
     elseif new_state == State.LISTENING then
       if self.pending_wake_word and self.protocol then
-        self.protocol:send_wake_word_detected(self.pending_wake_word)
+        if not self.protocol:send_wake_word_detected(self.pending_wake_word) then return end
         self.pending_wake_word = nil
       end
       if self.protocol then
-        self.protocol:send_start_listening(self.listening_mode)
+        if not self.protocol:send_start_listening(self.listening_mode) then return end
       end
       self.audio:set_mode("listen")
     elseif new_state == State.SPEAKING then
@@ -967,13 +950,6 @@ function M.new(cfg, load_module)
     if new_state == State.IDLE and self.external_wake_active
         and (old_state == State.CONNECTING or old_state == State.LISTENING or old_state == State.SPEAKING) then
       return_to_origin()
-    end
-  end
-
-  cancel_tts_audio_timer = function()
-    if self.tts_audio_timer then
-      pcall(function() self.tts_audio_timer:unregister() end)
-      self.tts_audio_timer = nil
     end
   end
 
@@ -1070,11 +1046,7 @@ function M.new(cfg, load_module)
     self.temporary_wake_backoff = false
     self.temporary_wake_backoff_source = nil
     cancel_external_return()
-    cancel_tts_audio_timer()
     self.pending_wake_word = nil
-    self.pending_goodbye = false
-    self.tts_text_ready = false
-    self.tts_audio_queue = {}
     if self.protocol then
       pcall(function() self.protocol:send_abort_speaking("none") end)
       pcall(function() self.protocol:close_audio_channel(false) end)
@@ -1117,7 +1089,8 @@ function M.new(cfg, load_module)
     app_id = type(app_id) == "string" and app_id ~= "" and app_id or "launcher"
     if not cfg.SERVICE_MODE then return true end
     if app_id == "xiaozhi" then
-      return suspend_audio_for_app(app_id)
+      apply_service_ui_suppression()
+      return resume_audio_for_app(app_id)
     end
     if app_id == "xiaozhi-service" or app_id == "xiaozhi_wake" then
       return resume_audio_for_app(app_id)
@@ -1178,28 +1151,6 @@ function M.new(cfg, load_module)
     return true
   end
 
-  local function flush_tts_audio()
-    cancel_tts_audio_timer()
-    local queue = self.tts_audio_queue
-    self.tts_audio_queue = {}
-    if not self.audio then return end
-    for i = 1, #queue do
-      self.audio:play_opus(queue[i])
-    end
-  end
-
-  local function schedule_tts_audio_flush()
-    if self.tts_audio_timer or not tmr or not tmr.create then return end
-    local timer = tmr.create()
-    self.tts_audio_timer = timer
-    timer:alarm(tonumber(cfg.AUDIO.tts_text_lead_ms) or 180, tmr.ALARM_SINGLE, function(instance)
-      pcall(function() instance:unregister() end)
-      if self.tts_audio_timer == timer then self.tts_audio_timer = nil end
-      self.tts_text_ready = true
-      flush_tts_audio()
-    end)
-  end
-
   local function bind_protocol()
     self.protocol:on("opened", function()
       if self.audio_suspended_by_app then
@@ -1216,44 +1167,30 @@ function M.new(cfg, load_module)
       end
     end)
     self.protocol:on("error", function(message)
-      alert("错误", message, "cloud_slash")
+      alert(T("错误"), message, "cloud_slash")
       if self.state.state == State.CONNECTING then
         set_state(State.IDLE)
       end
     end)
     self.protocol:on("audio", function(opus)
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       if self.audio_suspended_by_app then return end
       if self.external_return_timer then schedule_external_return() end
       if self.state.state ~= State.SPEAKING then
         set_state(State.SPEAKING)
       end
-      if not self.tts_text_ready then
-        local max_frames = tonumber(cfg.AUDIO.tts_audio_lead_frames) or 3
-        if #self.tts_audio_queue < max_frames then
-          self.tts_audio_queue[#self.tts_audio_queue + 1] = opus
-          schedule_tts_audio_flush()
-          return
-        end
-        self.tts_text_ready = true
-        flush_tts_audio()
-      end
       self.audio:play_opus(opus)
     end)
     self.protocol:on("tts_start", function()
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       if self.audio_suspended_by_app then return end
       cancel_external_return()
-      cancel_tts_audio_timer()
-      self.tts_text_ready = false
-      self.tts_audio_queue = {}
       set_state(State.SPEAKING)
     end)
     self.protocol:on("tts_stop", function()
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       if self.audio_suspended_by_app then return end
-      flush_tts_audio()
-      if self.pending_goodbye then
-        self.pending_goodbye = false
-        set_state(State.IDLE)
-      elseif self.external_wake_active then
+      if self.external_wake_active then
         set_state(State.LISTENING)
         schedule_external_return()
       elseif self.listening_mode == State.LISTEN_MANUAL then
@@ -1269,16 +1206,6 @@ function M.new(cfg, load_module)
       self.ui_text = tostring(text or "")
       self.ui:set_chat_message(role, text)
       notify_ipc()
-      if role == "assistant" and type(text) == "string" then
-        self.tts_text_ready = true
-        flush_tts_audio()
-        local lower = text:lower()
-        if text:find("拜拜", 1, true) or text:find("再见", 1, true)
-            or text:find("下次见", 1, true) or lower:find("goodbye", 1, true)
-            or lower:find("bye bye", 1, true) then
-          self.pending_goodbye = true
-        end
-      end
     end)
     self.protocol:on("emotion", function(emotion)
       self.ui_emotion = tostring(emotion or "neutral")
@@ -1299,14 +1226,21 @@ function M.new(cfg, load_module)
     self.audio.on_wake = wake_word_invoke
     self.audio.on_send = function(opus)
       if self.protocol and self.protocol:is_audio_channel_opened() then
-        pcall(function()
-          self.protocol:send_audio(opus)
-        end)
+        return self.protocol:send_audio(opus)
       end
+      return false, "not connected"
     end
     self.audio.on_error = function(message)
+      if tostring(message):find("audio:", 1, true) then
+        if self.state.state == State.FATAL_ERROR then return end
+        set_state(State.FATAL_ERROR)
+        self.audio.last_error = message
+        if self.protocol then self.protocol:close_audio_channel(false) end
+        alert(T("音频处理失败"), message, "neutral")
+        return
+      end
       if message == "wake model missing" then
-        self.ui:show_notification("缺少唤醒模型", 2500)
+        self.ui:show_notification(T("缺少唤醒模型"), 2500)
       else
         self.ui:show_notification(message, 2500)
       end
@@ -1328,99 +1262,99 @@ function M.new(cfg, load_module)
         self.activation_message = data
       end
       if event == "need_config" then
-        self.ui_status = "未配置 OTA"
+        self.ui_status = T("未配置 OTA")
         self.ui_role = "system"
-        self.ui_text = tostring(data or "未配置 ota.url")
+        self.ui_text = tostring(data or T("未配置 ota.url"))
         self.ui_notice = self.ui_text
-        self.ui:set_chat_message("system", data or "未配置 ota.url")
+        self.ui:set_chat_message("system", data or T("未配置 ota.url"))
       elseif event == "waiting_mac" then
-        self.activation_message = "正在读取设备 MAC"
-        self.ui_status = "等待设备 MAC"
+        self.activation_message = T("正在读取设备 MAC")
+        self.ui_status = T("等待设备 MAC")
         self.ui_role = "system"
         self.ui_text = self.activation_message
         self.ui_notice = self.activation_message
         set_state(State.ACTIVATING)
-        self.ui:set_status("等待设备 MAC")
+        self.ui:set_status(T("等待设备 MAC"))
         self.ui:set_chat_message("system", self.activation_message)
       elseif event == "checking" then
-        self.ui_status = "检查 OTA"
+        self.ui_status = T("检查 OTA")
         self.ui_role = "system"
-        self.ui_text = "正在向小智服务端申请验证码"
-        self.ui_notice = "正在获取配对码"
+        self.ui_text = T("正在向小智服务端申请验证码")
+        self.ui_notice = T("正在获取配对码")
         set_state(State.ACTIVATING)
-        self.ui:set_status("检查 OTA")
-        self.ui:set_chat_message("system", "正在向小智服务端申请验证码")
+        self.ui:set_status(T("检查 OTA"))
+        self.ui:set_chat_message("system", T("正在向小智服务端申请验证码"))
       elseif event == "code" then
         set_state(State.ACTIVATING)
         local code = data and data.code or ""
         self.ui:set_emotion("thinking")
         self.ui_emotion = "thinking"
         if code ~= "" then
-          self.ui_status = "验证码 " .. code
+          self.ui_status = T("验证码 ") .. code
           self.ui_role = "system"
-          self.ui_text = "后台添加设备输入验证码 " .. code
-          self.ui_notice = "验证码 " .. code
-          self.ui:set_status("验证码 " .. code)
-          self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
-          self.ui:show_notification("验证码 " .. code, 2500)
+          self.ui_text = T("后台添加设备输入验证码 ") .. code
+          self.ui_notice = T("验证码 ") .. code
+          self.ui:set_status(T("验证码 ") .. code)
+          self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
+          self.ui:show_notification(T("验证码 ") .. code, 2500)
         else
-          self.ui_status = "等待绑定"
+          self.ui_status = T("等待绑定")
           self.ui_role = "system"
-          self.ui_text = data and data.message or "等待后台设备绑定"
+          self.ui_text = data and data.message or T("等待后台设备绑定")
           self.ui_notice = self.ui_text
-          self.ui:set_status("等待绑定")
-          self.ui:set_chat_message("system", data and data.message or "等待后台设备绑定")
+          self.ui:set_status(T("等待绑定"))
+          self.ui:set_chat_message("system", data and data.message or T("等待后台设备绑定"))
         end
       elseif event == "pending" then
         local code = data and data.code or ""
         if code ~= "" then
-          self.ui_status = "验证码 " .. code
+          self.ui_status = T("验证码 ") .. code
           self.ui_role = "system"
-          self.ui_text = "后台添加设备输入验证码 " .. code
-          self.ui_notice = "验证码 " .. code
-          self.ui:set_status("验证码 " .. code)
+          self.ui_text = T("后台添加设备输入验证码 ") .. code
+          self.ui_notice = T("验证码 ") .. code
+          self.ui:set_status(T("验证码 ") .. code)
         else
-          self.ui_status = "等待绑定"
+          self.ui_status = T("等待绑定")
           self.ui_role = "system"
-          self.ui_text = "等待后台设备绑定"
+          self.ui_text = T("等待后台设备绑定")
           self.ui_notice = self.ui_text
-          self.ui:set_status("等待绑定")
+          self.ui:set_status(T("等待绑定"))
         end
       elseif event == "retrying" then
         set_state(State.ACTIVATING)
         local code = self.activation and self.activation.code or self.pairing_code or ""
         if code ~= "" then
-          self.activation_message = "网络暂时繁忙，仍在等待后台绑定"
-          self.ui_status = "验证码 " .. code
+          self.activation_message = T("网络暂时繁忙，仍在等待后台绑定")
+          self.ui_status = T("验证码 ") .. code
           self.ui_role = "system"
-          self.ui_text = "后台添加设备输入验证码 " .. code
+          self.ui_text = T("后台添加设备输入验证码 ") .. code
           self.ui_notice = self.activation_message
-          self.ui:set_status("验证码 " .. code)
-          self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
+          self.ui:set_status(T("验证码 ") .. code)
+          self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
         else
-          self.activation_message = "网络暂时繁忙，正在重新获取配对信息"
-          self.ui_status = "正在重试"
+          self.activation_message = T("网络暂时繁忙，正在重新获取配对信息")
+          self.ui_status = T("正在重试")
           self.ui_role = "system"
           self.ui_text = self.activation_message
           self.ui_notice = self.activation_message
-          self.ui:set_status("正在重试")
+          self.ui:set_status(T("正在重试"))
           self.ui:set_chat_message("system", self.activation_message)
         end
       elseif event == "activated" then
-        self.ui_status = "绑定成功"
+        self.ui_status = T("绑定成功")
         self.ui_role = "system"
-        self.ui_text = "绑定成功，正在读取服务配置"
-        self.ui_notice = "绑定成功"
-        self.ui:show_notification("绑定成功", 1600)
-        self.ui:set_chat_message("system", "绑定成功，正在读取服务配置")
+        self.ui_text = T("绑定成功，正在读取服务配置")
+        self.ui_notice = T("绑定成功")
+        self.ui:show_notification(T("绑定成功"), 1600)
+        self.ui:set_chat_message("system", T("绑定成功，正在读取服务配置"))
       elseif event == "done" then
         self.pairing_code = ""
-        self.ui_status = "小智已就绪"
+        self.ui_status = T("小智已就绪")
         self.ui_role = "system"
         self.ui_text = ""
-        self.ui_notice = "小智已就绪"
+        self.ui_notice = T("小智已就绪")
         self.protocol:start()
-        self.ui:show_notification("小智已就绪", 1600)
+        self.ui:show_notification(T("小智已就绪"), 1600)
         set_state(State.IDLE)
         if self.startup_wake_word then
           local wake_word = self.startup_wake_word
@@ -1429,11 +1363,11 @@ function M.new(cfg, load_module)
         end
         refresh_metrics()
       elseif event == "failed" then
-        self.ui_status = "激活失败"
+        self.ui_status = T("激活失败")
         self.ui_role = "system"
         self.ui_text = tostring(data or "activation failed")
         self.ui_notice = self.ui_text
-        alert("激活失败", data or "activation failed", "cloud_slash")
+        alert(T("激活失败"), data or "activation failed", "cloud_slash")
         set_state(State.IDLE)
         refresh_metrics()
       end
@@ -1656,6 +1590,7 @@ function M.new(cfg, load_module)
     end)
     bind_audio()
     bind_protocol()
+    load_module("playback_session").bind(self)
     self.state:on_change(on_state_changed)
 
     set_state(State.STARTING)
@@ -1700,9 +1635,7 @@ function M.new(cfg, load_module)
     self.temporary_wake_backoff = false
     self.temporary_wake_backoff_source = nil
     cancel_external_return()
-    cancel_tts_audio_timer()
     cancel_session_idle_timer()
-    self.tts_audio_queue = {}
     unbind_keys()
     if self.protocol then
       self.protocol:stop()
@@ -1747,10 +1680,11 @@ function M.new(cfg, load_module)
   self.wake_word_invoke = wake_word_invoke
 
   local function update_json_config(path, mutator, label)
+    if path == "/sd/data/xiaozhi/config.json" then return load_module("store").update(mutator) end
     local codec = rawget(_G, "json") or rawget(_G, "sjson")
     if not codec or not codec.decode or not codec.encode or not file
         or not file.getcontents or not file.putcontents then
-      return false, (label or "配置") .. "存储接口不可用"
+      return false, (label or T("配置")) .. T("存储接口不可用")
     end
     local ok_read, raw = pcall(file.getcontents, path)
     local ok_decode, doc = pcall(codec.decode, ok_read and raw or "{}")
@@ -1760,30 +1694,30 @@ function M.new(cfg, load_module)
     mutator(doc)
     local ok_encode, encoded = pcall(codec.encode, doc)
     if not ok_encode or type(encoded) ~= "string" then
-      return false, (label or "配置") .. "编码失败"
+      return false, (label or T("配置")) .. T("编码失败")
     end
     local ok_write, saved = pcall(file.putcontents, path, encoded .. "\n")
     if not ok_write or not saved then
-      return false, (label or "配置") .. "保存失败"
+      return false, (label or T("配置")) .. T("保存失败")
     end
     return true
   end
 
   local function update_saved_config(mutator)
-    return update_json_config(cfg.CONFIG_PATH, mutator, "配置")
+    return update_json_config(cfg.CONFIG_PATH, mutator, T("配置"))
   end
 
   local function update_saved_app_ui_config(mutator)
     local path = cfg.APP_UI_CONFIG_PATH
     if type(path) ~= "string" or path == "" then return true end
-    return update_json_config(path, mutator, "主应用配置")
+    return update_json_config(path, mutator, T("主应用配置"))
   end
 
   local function update_saved_service_config(mutator)
     local codec = rawget(_G, "json") or rawget(_G, "sjson")
     if not codec or not codec.decode or not codec.encode or not file
         or not file.getcontents or not file.putcontents then
-      return false, "服务配置存储接口不可用"
+      return false, T("服务配置存储接口不可用")
     end
     local ok_read, raw = pcall(file.getcontents, XIAOZHI_WAKE_CONFIG_PATH)
     local ok_decode, doc = pcall(codec.decode, ok_read and raw or "{}")
@@ -1793,11 +1727,11 @@ function M.new(cfg, load_module)
     mutator(doc)
     local ok_encode, encoded = pcall(codec.encode, doc)
     if not ok_encode or type(encoded) ~= "string" then
-      return false, "服务配置编码失败"
+      return false, T("服务配置编码失败")
     end
     local ok_write, saved = pcall(file.putcontents, XIAOZHI_WAKE_CONFIG_PATH, encoded .. "\n")
     if not ok_write or not saved then
-      return false, "服务配置保存失败"
+      return false, T("服务配置保存失败")
     end
     return true
   end
@@ -2016,14 +1950,15 @@ function M.new(cfg, load_module)
     local text = self.ui_text or ""
     local notice = self.ui_notice or self.activation_message or ""
     if type(code) == "string" and code ~= "" and (text == "" or self.activation_status == "code" or self.activation_status == "pending") then
-      status = "验证码 " .. code
+      status = T("验证码 ") .. code
       role = "system"
-      text = "后台添加设备输入验证码 " .. code
-      notice = "验证码 " .. code
+      text = T("后台添加设备输入验证码 ") .. code
+      notice = T("验证码 ") .. code
     end
     return {
       ok = true,
       service = "xiaozhi-service",
+      language = cfg.LANGUAGE,
       state = self.state and self.state.state or "unknown",
       status = status,
       role = role,
@@ -2064,7 +1999,7 @@ function M.new(cfg, load_module)
   function self:set_volume(value)
     value = tonumber(value)
     if not value then
-      return false, "音量值无效"
+      return false, T("音量值无效")
     end
     value = math.max(0, math.min(100, math.floor(value)))
     local saved, save_err = update_saved_config(function(doc)
@@ -2086,14 +2021,14 @@ function M.new(cfg, load_module)
     token = type(token) == "string" and token:match("^%s*(.-)%s*$") or ""
     version = math.floor(tonumber(version) or 1)
     if not ota_url:match("^https?://") then
-      return false, "OTA 地址必须以 http:// 或 https:// 开头"
+      return false, T("OTA 地址必须以 http:// 或 https:// 开头")
     end
     if url ~= "" and not url:match("^wss?://") then
-      return false, "服务器地址必须以 ws:// 或 wss:// 开头"
+      return false, T("服务器地址必须以 ws:// 或 wss:// 开头")
     end
     if url == "" then token = "" end
     if version < 1 or version > 3 then
-      return false, "协议版本仅支持 1 到 3"
+      return false, T("协议版本仅支持 1 到 3")
     end
     local saved, save_err = update_saved_config(function(doc)
       doc.websocket = type(doc.websocket) == "table" and doc.websocket or {}
@@ -2117,11 +2052,11 @@ function M.new(cfg, load_module)
     cfg.ota.force = false
     self.pairing_code = ""
     self.activation_status = "custom"
-    self.activation_message = "已切换自定义服务"
+    self.activation_message = T("已切换自定义服务")
     set_state(State.IDLE)
-    self.ui:set_status("自定义服务")
-    self.ui:set_chat_message("system", "自定义服务已保存，唤醒后连接")
-    self.ui:show_notification("自定义服务已保存", 1800)
+    self.ui:set_status(T("自定义服务"))
+    self.ui:set_chat_message("system", T("自定义服务已保存，唤醒后连接"))
+    self.ui:show_notification(T("自定义服务已保存"), 1800)
     return true, { url = url, ota_url = ota_url, version = version, token_set = token ~= "" }
   end
 
@@ -2135,33 +2070,33 @@ function M.new(cfg, load_module)
       or tonumber(cfg.SESSION_IDLE_TIMEOUT_SEC) or 20)
     if next_session_idle_timeout ~= 10 and next_session_idle_timeout ~= 20
         and next_session_idle_timeout ~= 30 and next_session_idle_timeout ~= 60 then
-      return false, "自动休眠时间仅支持 10、20、30 或 60 秒"
+      return false, T("自动休眠时间仅支持 10、20、30 或 60 秒")
     end
     local app_ui_installed = path_exists((cfg.UI_APP_DIR or "/sd/apps/xiaozhi") .. "/app.info")
     if app_ui_installed then
       if not app_ui_type then
-        return false, "主应用 UI 类型无效"
+        return false, T("主应用 UI 类型无效")
       end
       if not ui_style_exists("app", app_ui_type) then
-        return false, "主应用 UI 文件不存在"
+        return false, T("主应用 UI 文件不存在")
       end
     else
       app_ui_type = app_ui_type or cfg.APP_UI_TYPE or (cfg.app_ui and cfg.app_ui.type) or "subtitle"
     end
     if service_ui_mode ~= "app" and service_ui_mode ~= "floating" then
-      return false, "后台 UI 模式仅支持 app 或 floating"
+      return false, T("后台 UI 模式仅支持 app 或 floating")
     end
     if service_ui_mode == "app" and not app_ui_installed then
-      return false, "未安装小智前台 App，不能选择打开 App"
+      return false, T("未安装小智前台 App，不能选择打开 App")
     end
     if not service_ui_type then
-      return false, "后台 UI 类型无效"
+      return false, T("后台 UI 类型无效")
     end
     if service_ui_mode == "floating" and not ui_style_exists("float", service_ui_type) then
-      return false, "悬浮 UI 文件不存在"
+      return false, T("悬浮 UI 文件不存在")
     end
     if service_ui_type == "assistant" and not ui_character_exists(service_ui_character) then
-      return false, "悬浮角色文件不存在"
+      return false, T("悬浮角色文件不存在")
     end
 
     if app_ui_installed then
@@ -2194,7 +2129,7 @@ function M.new(cfg, load_module)
     cfg.UI = cfg.UI or {}
     cfg.UI.type = service_ui_type
     cfg.UI.character = service_ui_character
-    self.activation_message = "UI 配置已保存，已立即生效"
+    self.activation_message = T("UI 配置已保存，已立即生效")
     unbind_keys()
     bind_keys()
     rebuild_service_ui("ui config changed", true)
@@ -2233,11 +2168,7 @@ function M.new(cfg, load_module)
       cancel_foreground_launch_timer()
       clear_foreground_handoff()
       cancel_external_return()
-      cancel_tts_audio_timer()
       self.pending_wake_word = nil
-      self.pending_goodbye = false
-      self.tts_text_ready = false
-      self.tts_audio_queue = {}
       if self.protocol then
         pcall(function() self.protocol:send_abort_speaking("none") end)
         pcall(function() self.protocol:close_audio_channel(false) end)
@@ -2284,8 +2215,8 @@ function M.new(cfg, load_module)
     end
     self.pairing_code = ""
     self.activation_status = "restarting"
-    self.activation_message = official and "设备身份已修改，正在重新获取配对码"
-      or "设备身份已修改，正在重启服务"
+    self.activation_message = official and T("设备身份已修改，正在重新获取配对码")
+      or T("设备身份已修改，正在重启服务")
     local timer = tmr and tmr.create and tmr.create() or nil
     if timer then
       timer:alarm(400, tmr.ALARM_SINGLE, function(t)
@@ -2296,6 +2227,7 @@ function M.new(cfg, load_module)
     return true, { mac = mac, restarting = timer ~= nil, pairing_required = official }
   end
 
+  load_module("settings_controller").attach(self, cfg)
   return self
 end
 

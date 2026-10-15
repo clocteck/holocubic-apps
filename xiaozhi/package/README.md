@@ -1,206 +1,71 @@
-# xiaozhi Lua App
+# XiaoZhi 1.3
 
-This foreground app keeps its own runtime and takes ownership of the microphone while open. XiaoZhi Service releases background wake capture before launching it, and the optional wake handoff is ignored safely when the service is absent.
+## Installation and ownership
 
-这是裁剪移植官方 `xiaozhi-esp32` 的 Lua 版应用层。底层动态模块只负责唤醒、Opus 编解码和音频播放；联网协议、状态机和 LVGL UI 放在 Lua。
+Deploy the complete `package/` contents to this app's directory on the SD card.
+Both packages are independently installable. With only XiaoZhi installed, its
+foreground runtime owns speech. With only XiaoZhi Service installed, the service
+owns speech and displays floating UI. With both installed, Service owns speech
+and the foreground app uses IPC only; opening the UI does not reload the model
+or establish a second server connection.
 
-## API 配置
+## Shared configuration and identities
 
-设备端不直接填写 OpenAI / DeepSeek API Key。小智协议要求设备连接“小智服务端”，由服务端配置 ASR、LLM、TTS 的 API Key。
+Both packages read and update **/sd/data/xiaozhi/config.json**. Do not deploy a
+runtime config from the source tree. On first startup, migration prefers an
+existing configured service connection, then a configured foreground connection.
+Old files are retained. Conflicting foreground configuration is archived under
+`legacy_foreground`; tokens from different servers are never merged. Subsequent
+starts use only the shared configuration. Atomic save keeps `config.json.bak`.
 
-在 SD 卡创建：
+The shared document stores `websocket`, `ota`, `audio`, `ui`, `language`,
+`wake`, the active `identity` and archived `identities`. A migrated hardware
+identity remains valid until explicitly replaced. A new identity uses a locally
+administered virtual MAC for the XiaoZhi protocol, not the Wi-Fi interface.
+Client-ID, OTA body and WebSocket headers all use that same persisted identity.
 
-```json
-{
-  "ota": {
-    "url": "https://api.tenclass.net/xiaozhi/ota/",
-    "enabled": true,
-    "force": false,
-    "interval_ms": 3000,
-    "max_polls": 80
-  },
-  "websocket": {
-    "url": "",
-    "token": "",
-    "version": 1
-  },
-  "audio": {
-    "sample_rate": 16000,
-    "channels": 1,
-    "frame_duration": 60,
-    "bitrate": 12000
-  },
-  "wake_word": "你好小智",
-  "timezone": "CST-8",
-  "ui": {
-    "gif_enabled": true,
-    "emotion_min_ms": 1000,
-    "type": "subtitle"
-  }
-}
-```
+The settings page supports new identity + pairing, retry without rotating identity,
+rename, restore and delete archived identities. Archived profiles retain their own
+server credentials. Active identities cannot be deleted. Changing identity does
+not remove old devices from the cloud console; server pairing policy still applies.
 
-路径：`/sd/apps/xiaozhi/config.json`
+Background enabled state, deny-app list and floating UI remain in
+`/sd/apps/xiaozhi-service/service.json`, since these control Service/Launcher rather
+than the shared device identity. Foreground style is in the shared `ui.type`.
 
-可通过 `ui.type` 设置启动时的前台 App UI 风格：`subtitle` 为字幕风格，`wechat` 为微信气泡风格。也可以填写自定义样式名，对应 `/sd/apps/xiaozhi/ui/<type>.lua`。`driver.lua` 和 `headless.lua` 是 UI 框架入口，不会出现在 WebUI 的样式下拉框中。
+## Settings
 
-若安装了 `xiaozhi-service`，推荐直接在它的 WebUI 中修改“主应用 UI”，会写回本文件。
-当 `xiaozhi` 以 standalone 非 IPC 模式运行时，它只发布前台 App 配置页，内容写入
-`/sd/apps/xiaozhi/config.json`；`service.json` 相关的后台唤醒、悬浮 UI 和退避 App
-仍由 `xiaozhi-service` 的 WebUI 管理。进入 IPC 模式后，`xiaozhi` 不再重复发布配置页。
+- App alone: `/xiaozhi/`.
+- Service (alone or together): `/xiaozhi-service/`; the IPC app redirects there.
+- Interface languages: system/default, Simplified Chinese and English. Chat text is
+  not translated. ASR/LLM/TTS language remains a server-side setting.
+- Wake words: **你好小智** (`wn9s_nihaoxiaozhi`) or **Hi ESP** (`wn9s_hiesp`).
+  Both models ship with each package; only one is loaded. End the session before
+  changing voice settings. Missing models reject the change without saving it.
+- Model paths are local to each package, not a cache in the other app's directory.
+- Volume uses the same master-volume adapter as other apps: firmware
+  `sys.getvolume/setvolume` when available, otherwise a one-time read of
+  `/sd/apps/settings.json`. Legacy edits are session-only, matching those apps.
+  The shared XiaoZhi `audio.volume` field is no longer the volume authority.
 
-自动会话的无交互休眠时间读取 `/sd/apps/xiaozhi-service/service.json` 中的
-`session_idle_timeout_sec`，支持 `10`、`20`、`30`、`60` 秒，默认 `20` 秒。
+## Half-duplex audio (native 0.5.0)
 
-### 前台 UI 插件
+The microphone is captured/encoded/uploaded only during listening. TTS uses a
+TX-only I2S stream and one playback worker. Spoken interruption and echo
+cancellation are not implemented; buttons/web controls can cancel playback.
 
-前台 App UI 插件放在：
+listen.start uses mode=auto (or manual for push-to-talk). tts.stop only ends
+network delivery: the local Opus queue and PCM ring drain first. The worker
+writes one DMA ring of silence and waits its duration, then the session waits
+another 80–120 ms for the acoustic tail before reopening RX.
 
-```text
-/sd/apps/xiaozhi/ui/<type>.lua
-```
+Playback retains a 16 KiB PSRAM PCM ring, 120 ms prebuffer and bounded packet
+queues. PCM is concatenated across Opus packets; only the final short block is
+padded. Playback and capture each use a 32 KiB PSRAM stack, never concurrently.
+I2S uses four 128-sample DMA blocks; Opus complexity=0 and -O2 remain enabled.
+Native failures remain visible instead of switching to another audio path.
 
-文件名即 `ui.type`，只允许字母、数字、下划线、点和横线。每个插件应返回 `{ new = function(cfg) ... end }`，`new` 返回的对象可以实现以下方法；未实现的方法会被驱动忽略：
-
-```lua
-return {
-  new = function(cfg)
-    local self = {}
-    function self:setup() end
-    function self:stop(reason) end
-    function self:on_state(state, old_state) end
-    function self:set_status(status) end
-    function self:show_notification(text, duration_ms) end
-    function self:set_emotion(emotion) end
-    function self:set_chat_message(role, content) end
-    function self:clear_chat_messages() end
-    function self:set_metrics(metrics) end
-    function self:update_status_bar(force) end
-    function self:set_view_mode(mode) end
-    function self:alert(status, message, emotion) end
-    return self
-  end,
-}
-```
-
-前台 UI 运行在小智 App 进程内，适合使用完整 LVGL 屏幕。后台悬浮 UI 不放在这里，见 `xiaozhi-service` 的 README。
-
-`audio` 控制设备上行 Opus 参数，并会原样用于 WebSocket `hello.audio_params`。自建服务端建议保持 `16000 Hz / 单声道 / 60 ms`。加载器也兼容服务端常用的 `audio_params` 名称，以及 `rate`、`frame_ms` 字段别名。
-
-若使用自建服务端（`xinnan/xiaozhi-esp32-server` 或 `xinnan-tech/xiaozhi-esp32-server`），`websocket.version` 必须设置为 `1`。这类服务端的 WebSocket 接口直接接收原始 Opus 帧；版本 `3` 会给每帧增加 4 字节协议头，仅适用于能解析 v3 二进制包头的服务端。
-
-官方控制台 `https://xiaozhi.me/console/agents` 是网页管理页，不是设备 OTA 接口。使用官方控制台时，`ota.url` 通常填官方固件默认的 `https://api.tenclass.net/xiaozhi/ota/`；使用自建 xinnan 服务端时，填自建服务端暴露的 `/xiaozhi/ota/` 地址。
-
-启动后如果 `websocket.url` 为空，Lua 会请求 `ota.url` 获取 6 位验证码，并在屏幕上显示。后台“添加设备”输入该验证码后，Lua 会轮询 `ota.url + activate`，绑定成功后再次请求 OTA，并把服务端下发的 `websocket.url/token/version` 写回 `config.json`。
-
-如果你不使用后台添加设备，也可以手动填写 `websocket.url` 和 `token`，此时会跳过 OTA 激活。
-
-## 回复流程
-
-1. `wake.so` 检测到 `你好小智`。
-2. Lua 进入 `connecting`，按官方 WebSocket 协议发送 hello。
-3. 服务端返回 `session_id` 后，Lua 发送 `listen.detect/start`。
-4. 麦克风 PCM 经 `xiaozhi.so` 编成 Opus，通过 WebSocket 发给服务端。
-5. 服务端返回 STT/LLM/TTS 文本事件和二进制 Opus。
-6. Lua 解码 Opus，写入独占 I2S 扬声器输出。
-
-## 设备控制
-
-连接建立后，小智会通过 MCP 向服务端公布默认 `device` 和 `memo` 插件里的以下工具：
-
-- `device.get_status`：查询设备、网络和内存状态。
-- `device.list_apps`：列出设备上已安装的应用。
-- `device.launch_app`：按应用 ID 启动应用；应用 ID 会先与本机安装列表校验。
-- `device.sync_time`：通过 NTP 立即同步系统时间。
-- `device.set_brightness`：设置屏幕亮度，范围 `0` 到 `100`。
-- `device.set_bluetooth`：开启或关闭蓝牙手柄服务，并返回当前蓝牙状态。
-- `memo.get`：查看备忘录 App 保存的三条内容。
-- `memo.add`：在第一条空白位置新建备忘录。
-- `memo.set`：修改指定序号的备忘录。
-- `memo.delete`：删除并清空指定序号的备忘录。
-- `memo.set_all`：一次替换全部三条备忘录。
-
-备忘录 App 未安装时工具会返回“请先安装备忘录 App”；已安装但尚无数据文件时会初始化三条空记录。
-
-服务端必须支持小智协议的 MCP 消息转发，并在智能体中启用设备工具调用。启动应用会在工具结果发回后延迟执行，避免切换应用导致应答丢失。
-
-### MCP 插件
-
-默认工具以插件形式放在 `mcp/device.lua` 和 `mcp/memo.lua`。启动时会扫描：
-
-```text
-/sd/apps/xiaozhi/mcp/*.lua
-```
-
-每个插件文件应 `return` 一个 table。文件名只允许字母、数字、下划线、点和横线，并以 `.lua` 结尾；`init.lua` 会被忽略。插件工具名不能和默认工具或其他插件重复。
-
-最小插件示例：
-
-```lua
-return {
-  tool = {
-    name = "demo.ping",
-    description = "返回一个测试响应。",
-    inputSchema = {
-      type = "object",
-      properties = {},
-      additionalProperties = false,
-    },
-  },
-  call = function(arguments, ctx)
-    return { ok = true, message = "pong" }
-  end,
-}
-```
-
-一个文件也可以注册多个工具：
-
-```lua
-return {
-  tools = {
-    {
-      name = "demo.echo",
-      description = "回显文本。",
-      inputSchema = {
-        type = "object",
-        properties = {
-          text = { type = "string", description = "要回显的文本" },
-        },
-        required = { "text" },
-        additionalProperties = false,
-      },
-    },
-  },
-  handlers = {
-    ["demo.echo"] = function(arguments, ctx)
-      return { text = tostring(arguments.text or "") }
-    end,
-  },
-}
-```
-
-插件 handler 返回普通 Lua table 时，小智会自动编码为 MCP text 结果；也可以直接返回 `{ content = ... }` 形式的 MCP 结果。返回 `false, "错误信息"` 或抛出异常会被转换成 MCP 错误结果。handler 第二个参数 `ctx` 包含 `cfg`、`text_result`、`error_result` 等辅助对象。
-
-## 本地资源布局
-
-部署时复制整个 `package/` 到 `/sd/apps/xiaozhi/`。动态模块和唤醒模型都从 app
-目录内读取：
-
-```text
-/sd/apps/xiaozhi/xiaozhi.so
-/sd/apps/xiaozhi/wake.so
-/sd/apps/xiaozhi/mcp/device.lua
-/sd/apps/xiaozhi/wake/wn9s_nihaoxiaozhi/_MODEL_INFO_
-/sd/apps/xiaozhi/wake/wn9s_nihaoxiaozhi/wn9_index
-/sd/apps/xiaozhi/wake/wn9s_nihaoxiaozhi/wn9_data
-```
-
-## 官方资源
-
-资源来自官方 `78/xiaozhi-fonts`：
-
-- `assets/emojis/gif/*.gif`：`gif/noto-emoji_64`
-- `assets/emojis/png/*.png`：`png/twemoji_64`
-- `assets/fonts/font_puhui_common_20_4.bin`：官方普惠字体，当前仅预留，不默认加载
-
-Lua UI 会优先查找 GIF，再查找 PNG，最后退回文字表情。表情文件名与官方 emotion 名保持一致，例如 `neutral.gif`、`happy.gif`、`thinking.gif`。
+Volume follows the firmware API, with the legacy settings-file compatibility
+path preserved. Shared configuration, virtual identities, pairing, language,
+wake choices and Web controls are unchanged. Old echo/full-duplex fields are
+removed during configuration loading without changing credentials.

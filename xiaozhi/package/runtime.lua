@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 function M.new(cfg, load_module)
@@ -28,6 +29,7 @@ function M.new(cfg, load_module)
   }
 
   local function set_state(to)
+    if self.state.state == State.FATAL_ERROR then return false end
     return self.state:set(to)
   end
 
@@ -48,6 +50,9 @@ function M.new(cfg, load_module)
       "  det " .. tostring(ai.detect_count or 0) ..
       "  tx " .. tostring(ai.send_frames or 0) ..
       "  rx " .. tostring(ai.play_count or 0)
+    local signature = network .. "|" .. tostring(ai.mode) .. "|" .. wake .. "|" .. counter
+    if self.last_metrics_signature == signature then return end
+    self.last_metrics_signature = signature
     self.ui:set_metrics({
       network = network,
       audio = (ai.mode or "off"),
@@ -57,7 +62,7 @@ function M.new(cfg, load_module)
   end
 
   local function alert(status, message, emotion)
-    self.ui:alert(status or "错误", message or "", emotion or "circle_xmark")
+    self.ui:alert(status or T("错误"), message or "", emotion or "circle_xmark")
   end
 
   local function open_audio_channel_now()
@@ -65,9 +70,9 @@ function M.new(cfg, load_module)
     if not ok then
       local msg = self.protocol.last_error or "server not connected"
       if msg == "websocket config missing" then
-        msg = "未配置 websocket"
+        msg = T("未配置 websocket")
       end
-      alert("连接失败", msg, "cloud_slash")
+      alert(T("连接失败"), msg, "cloud_slash")
       set_state(State.IDLE)
       return false
     end
@@ -76,7 +81,7 @@ function M.new(cfg, load_module)
 
   local function open_audio_channel()
     if not self.protocol then
-      alert("错误", "protocol missing", "circle_xmark")
+      alert(T("错误"), "protocol missing", "circle_xmark")
       set_state(State.IDLE)
       return false
     end
@@ -91,7 +96,7 @@ function M.new(cfg, load_module)
 
   local function open_audio_channel_deferred()
     if not self.protocol then
-      alert("错误", "protocol missing", "circle_xmark")
+      alert(T("错误"), "protocol missing", "circle_xmark")
       set_state(State.IDLE)
       return false
     end
@@ -120,14 +125,13 @@ function M.new(cfg, load_module)
   end
 
   local function start_listening(mode)
-    self.listening_mode = mode or State.LISTEN_AUTO
+    self.listening_mode = mode == State.LISTEN_MANUAL and State.LISTEN_MANUAL
+      or State.LISTEN_AUTO
     local s = self.state.state
     if s == State.IDLE then
       return open_audio_channel()
     elseif s == State.SPEAKING then
-      self.protocol:send_abort_speaking("none")
-      set_state(State.LISTENING)
-      return true
+      return self.protocol:send_abort_speaking("none")
     elseif s == State.LISTENING then
       return true
     end
@@ -187,15 +191,16 @@ function M.new(cfg, load_module)
     local s = self.state.state
     print("[xiaozhi] wake detected", tostring(wake_word), "state=" .. tostring(s))
     self.pending_wake_word = wake_word or cfg.WAKE_WORD
+    self.listening_mode = State.LISTEN_AUTO
     if s == State.IDLE then
       if not self.audio:begin_wake_bridge() then
         self.audio:stop_i2s()
       end
-      self.ui:show_notification("你好小智", 1200)
+      self.ui:show_notification(cfg.WAKE_WORD, 1200)
       return open_audio_channel_deferred()
     elseif s == State.SPEAKING or s == State.LISTENING then
       if self.protocol then
-        self.protocol:send_abort_speaking("wake_word_detected")
+        if s == State.SPEAKING then return self.protocol:send_abort_speaking("wake_word_detected") end
       end
       set_state(State.LISTENING)
     elseif s == State.ACTIVATING then
@@ -212,7 +217,6 @@ function M.new(cfg, load_module)
       if self.protocol then
         self.protocol:send_abort_speaking("none")
       end
-      set_state(State.IDLE)
     elseif s == State.LISTENING or s == State.CONNECTING then
       stop_listening()
     elseif s == State.ACTIVATING then
@@ -240,11 +244,11 @@ function M.new(cfg, load_module)
       end
     elseif new_state == State.LISTENING then
       if self.pending_wake_word and self.protocol then
-        self.protocol:send_wake_word_detected(self.pending_wake_word)
+        if not self.protocol:send_wake_word_detected(self.pending_wake_word) then return end
         self.pending_wake_word = nil
       end
       if self.protocol then
-        self.protocol:send_start_listening(self.listening_mode)
+        if not self.protocol:send_start_listening(self.listening_mode) then return end
       end
       self.audio:set_mode("listen")
     elseif new_state == State.SPEAKING then
@@ -267,21 +271,24 @@ function M.new(cfg, load_module)
       end
     end)
     self.protocol:on("error", function(message)
-      alert("错误", message, "cloud_slash")
+      alert(T("错误"), message, "cloud_slash")
       if self.state.state == State.CONNECTING then
         set_state(State.IDLE)
       end
     end)
     self.protocol:on("audio", function(opus)
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       if self.state.state ~= State.SPEAKING then
         set_state(State.SPEAKING)
       end
       self.audio:play_opus(opus)
     end)
     self.protocol:on("tts_start", function()
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       set_state(State.SPEAKING)
     end)
     self.protocol:on("tts_stop", function()
+      if self.stopped or self.state.state == State.FATAL_ERROR then return end
       if self.listening_mode == State.LISTEN_MANUAL then
         set_state(State.IDLE)
       else
@@ -309,14 +316,21 @@ function M.new(cfg, load_module)
     self.audio.on_wake = wake_word_invoke
     self.audio.on_send = function(opus)
       if self.protocol and self.protocol:is_audio_channel_opened() then
-        pcall(function()
-          self.protocol:send_audio(opus)
-        end)
+        return self.protocol:send_audio(opus)
       end
+      return false, "not connected"
     end
     self.audio.on_error = function(message)
+      if tostring(message):find("audio:", 1, true) then
+        if self.state.state == State.FATAL_ERROR then return end
+        set_state(State.FATAL_ERROR)
+        self.audio.last_error = message
+        if self.protocol then self.protocol:close_audio_channel(false) end
+        self.ui:alert("Error", message, "neutral")
+        return
+      end
       if message == "wake model missing" then
-        self.ui:show_notification("缺少唤醒模型", 2500)
+        self.ui:show_notification(T("缺少唤醒模型"), 2500)
       else
         self.ui:show_notification(message, 2500)
       end
@@ -331,40 +345,40 @@ function M.new(cfg, load_module)
     self.activation = Activation.new(cfg)
     local started = self.activation:start(function(event, data)
       if event == "need_config" then
-        self.ui:set_chat_message("system", data or "未配置 ota.url")
+        self.ui:set_chat_message("system", data or T("未配置 ota.url"))
       elseif event == "waiting_mac" then
         set_state(State.ACTIVATING)
-        self.ui:set_status("等待设备 MAC")
-        self.ui:set_chat_message("system", "正在读取设备 MAC")
+        self.ui:set_status(T("等待设备 MAC"))
+        self.ui:set_chat_message("system", T("正在读取设备 MAC"))
       elseif event == "checking" then
         set_state(State.ACTIVATING)
-        self.ui:set_status("检查 OTA")
-        self.ui:set_chat_message("system", "正在向小智服务端申请验证码")
+        self.ui:set_status(T("检查 OTA"))
+        self.ui:set_chat_message("system", T("正在向小智服务端申请验证码"))
       elseif event == "code" then
         set_state(State.ACTIVATING)
         local code = data and data.code or ""
         self.ui:set_emotion("thinking")
         if code ~= "" then
-          self.ui:set_status("验证码 " .. code)
-          self.ui:set_chat_message("system", "后台添加设备输入验证码 " .. code)
-          self.ui:show_notification("验证码 " .. code, 2500)
+          self.ui:set_status(T("验证码 ") .. code)
+          self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
+          self.ui:show_notification(T("验证码 ") .. code, 2500)
         else
-          self.ui:set_status("等待绑定")
-          self.ui:set_chat_message("system", data and data.message or "等待后台设备绑定")
+          self.ui:set_status(T("等待绑定"))
+          self.ui:set_chat_message("system", data and data.message or T("等待后台设备绑定"))
         end
       elseif event == "pending" then
         local code = data and data.code or ""
         if code ~= "" then
-          self.ui:set_status("验证码 " .. code)
+          self.ui:set_status(T("验证码 ") .. code)
         else
-          self.ui:set_status("等待绑定")
+          self.ui:set_status(T("等待绑定"))
         end
       elseif event == "activated" then
-        self.ui:show_notification("绑定成功", 1600)
-        self.ui:set_chat_message("system", "绑定成功，正在读取服务配置")
+        self.ui:show_notification(T("绑定成功"), 1600)
+        self.ui:set_chat_message("system", T("绑定成功，正在读取服务配置"))
       elseif event == "done" then
         self.protocol:start()
-        self.ui:show_notification("小智已就绪", 1600)
+        self.ui:show_notification(T("小智已就绪"), 1600)
         set_state(State.IDLE)
         if self.startup_wake_word then
           local wake_word = self.startup_wake_word
@@ -373,7 +387,7 @@ function M.new(cfg, load_module)
         end
         refresh_metrics()
       elseif event == "failed" then
-        alert("激活失败", data or "activation failed", "cloud_slash")
+        alert(T("激活失败"), data or "activation failed", "cloud_slash")
         set_state(State.IDLE)
         refresh_metrics()
       end
@@ -443,7 +457,7 @@ function M.new(cfg, load_module)
       return
     end
     self.timer = tmr.create()
-    self.timer:alarm(700, tmr.ALARM_AUTO, function()
+    self.timer:alarm(1500, tmr.ALARM_AUTO, function()
       if app and app.exiting and app.exiting() then
         self.stop("app.exiting")
         return
@@ -467,15 +481,10 @@ function M.new(cfg, load_module)
     end)
     bind_audio()
     bind_protocol()
+    load_module("playback_session").bind(self)
     self.state:on_change(on_state_changed)
 
     set_state(State.STARTING)
-    if not self.audio:load_modules() then
-      alert("错误", self.audio.last_error, "circle_xmark")
-      set_state(State.FATAL_ERROR)
-      return false
-    end
-
     set_state(State.ACTIVATING)
     bind_keys()
     start_timer()
@@ -565,8 +574,9 @@ function M.new(cfg, load_module)
   end
 
   local function update_json_file(path, fallback, mutator, err_prefix)
+    if path == "/sd/data/xiaozhi/config.json" then return load_module("store").update(mutator) end
     if not file or not file.getcontents or not file.putcontents then
-      return false, (err_prefix or "配置") .. "存储接口不可用"
+      return false, (err_prefix or T("配置")) .. T("存储接口不可用")
     end
     local ok_read, raw = pcall(file.getcontents, path)
     local doc = decode_json(ok_read and raw or "{}") or fallback or {}
@@ -577,7 +587,7 @@ function M.new(cfg, load_module)
       pcall(file.mkdir, "/sd/apps/xiaozhi-service")
     end
     local ok_write, saved = pcall(file.putcontents, path, encoded .. "\n")
-    if not ok_write or not saved then return false, (err_prefix or "配置") .. "保存失败" end
+    if not ok_write or not saved then return false, (err_prefix or T("配置")) .. T("保存失败") end
     return true
   end
 
@@ -772,13 +782,13 @@ function M.new(cfg, load_module)
 
   function self:set_app_ui_config(app_ui_type)
     app_ui_type = clean_name(app_ui_type)
-    if not app_ui_type then return false, "主应用 UI 类型无效" end
-    if not ui_style_exists("app", app_ui_type) then return false, "主应用 UI 文件不存在" end
+    if not app_ui_type then return false, T("主应用 UI 类型无效") end
+    if not ui_style_exists("app", app_ui_type) then return false, T("主应用 UI 文件不存在") end
     local saved, err = update_json_file(cfg.CONFIG_PATH, {}, function(doc)
       doc.ui = type(doc.ui) == "table" and doc.ui or {}
       doc.ui.type = app_ui_type
       doc.ui_type = nil
-    end, "配置")
+    end, T("配置"))
     if not saved then return false, err end
     cfg.UI_TYPE = app_ui_type
     cfg.UI = cfg.UI or {}
@@ -789,12 +799,12 @@ function M.new(cfg, load_module)
 
   function self:set_volume(value)
     value = tonumber(value)
-    if not value then return false, "音量值无效" end
+    if not value then return false, T("音量值无效") end
     value = math.max(0, math.min(100, math.floor(value)))
     local saved, err = update_json_file(cfg.CONFIG_PATH, {}, function(doc)
       doc.audio = type(doc.audio) == "table" and doc.audio or {}
       doc.audio.volume = value
-    end, "配置")
+    end, T("配置"))
     if not saved then return false, err end
     cfg.AUDIO.volume = value
     if self.audio and self.audio.set_volume then self.audio:set_volume(value) end
@@ -806,10 +816,10 @@ function M.new(cfg, load_module)
     ota_url = type(ota_url) == "string" and ota_url:match("^%s*(.-)%s*$") or ""
     token = type(token) == "string" and token:match("^%s*(.-)%s*$") or ""
     version = math.floor(tonumber(version) or 1)
-    if not ota_url:match("^https?://") then return false, "OTA 地址必须以 http:// 或 https:// 开头" end
-    if url ~= "" and not url:match("^wss?://") then return false, "服务器地址必须以 ws:// 或 wss:// 开头" end
+    if not ota_url:match("^https?://") then return false, T("OTA 地址必须以 http:// 或 https:// 开头") end
+    if url ~= "" and not url:match("^wss?://") then return false, T("服务器地址必须以 ws:// 或 wss:// 开头") end
     if url == "" then token = "" end
-    if version < 1 or version > 3 then return false, "协议版本仅支持 1 到 3" end
+    if version < 1 or version > 3 then return false, T("协议版本仅支持 1 到 3") end
     local saved, err = update_json_file(cfg.CONFIG_PATH, {}, function(doc)
       doc.websocket = type(doc.websocket) == "table" and doc.websocket or {}
       doc.websocket.url = url
@@ -819,7 +829,7 @@ function M.new(cfg, load_module)
       doc.ota.url = ota_url
       doc.ota.enabled = true
       doc.ota.force = false
-    end, "配置")
+    end, T("配置"))
     if not saved then return false, err end
     cfg.websocket.url = url
     cfg.websocket.token = token
@@ -838,16 +848,16 @@ function M.new(cfg, load_module)
     service_ui_type = clean_name(service_ui_type) or "window"
     service_ui_character = clean_name(service_ui_character) or "xiaozhi_chibi"
     service_ui_mode = tostring(service_ui_mode or ""):lower()
-    if not app_ui_type then return false, "主应用 UI 类型无效" end
-    if not ui_style_exists("app", app_ui_type) then return false, "主应用 UI 文件不存在" end
-    if service_ui_mode ~= "app" and service_ui_mode ~= "floating" then return false, "后台 UI 模式仅支持 app 或 floating" end
-    if service_ui_mode == "floating" and not ui_style_exists("float", service_ui_type) then return false, "悬浮 UI 文件不存在" end
+    if not app_ui_type then return false, T("主应用 UI 类型无效") end
+    if not ui_style_exists("app", app_ui_type) then return false, T("主应用 UI 文件不存在") end
+    if service_ui_mode ~= "app" and service_ui_mode ~= "floating" then return false, T("后台 UI 模式仅支持 app 或 floating") end
+    if service_ui_mode == "floating" and not ui_style_exists("float", service_ui_type) then return false, T("悬浮 UI 文件不存在") end
     local next_deny_apps = deny_apps ~= nil and normalize_deny_apps(deny_apps) or current_deny_apps()
     local saved, err = update_json_file(cfg.CONFIG_PATH, {}, function(doc)
       doc.ui = type(doc.ui) == "table" and doc.ui or {}
       doc.ui.type = app_ui_type
       doc.ui_type = nil
-    end, "配置")
+    end, T("配置"))
     if not saved then return false, err end
     local service_saved, service_err = update_json_file("/sd/apps/xiaozhi-service/service.json",
       default_service_config(), function(doc)
@@ -856,7 +866,7 @@ function M.new(cfg, load_module)
         doc.ui_type = service_ui_type
         doc.ui_character = service_ui_character
         doc.deny_apps = next_deny_apps
-      end, "服务配置")
+      end, T("服务配置"))
     if not service_saved then return false, service_err end
     cfg.UI_TYPE = app_ui_type
     cfg.UI = cfg.UI or {}
@@ -881,7 +891,7 @@ function M.new(cfg, load_module)
         doc.ui_type = doc.ui_type or "window"
         doc.ui_character = doc.ui_character or "xiaozhi_chibi"
         doc.deny_apps = type(doc.deny_apps) == "table" and doc.deny_apps or default_deny_apps()
-      end, "服务配置")
+      end, T("服务配置"))
     if not saved then return false, err end
     return true, { wake_service_enabled = enabled }
   end
@@ -899,7 +909,7 @@ function M.new(cfg, load_module)
       doc.ota = type(doc.ota) == "table" and doc.ota or {}
       doc.ota.enabled = true
       doc.ota.force = false
-    end, "配置")
+    end, T("配置"))
     if not saved then
       if old_mac then Identity.set_device_id(old_mac) end
       return false, err
@@ -912,6 +922,7 @@ function M.new(cfg, load_module)
     return true, { mac = mac, restarting = false, pairing_required = true }
   end
 
+  load_module("settings_controller").attach(self, cfg)
   return self
 end
 

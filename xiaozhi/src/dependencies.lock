@@ -43,7 +43,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.2
+    version: 5.5.4
 direct_dependencies:
 - 78/esp-opus
 - espressif/elf_loader

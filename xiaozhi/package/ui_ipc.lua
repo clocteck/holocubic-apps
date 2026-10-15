@@ -54,6 +54,7 @@ function M.available()
 end
 
 function M.service_installed()
+  if file and file.exists and file.exists("/sd/apps/xiaozhi-service/app.info") then return true end
   if not app or not app.list then return false end
   local ok, apps = pcall(app.list)
   if not ok or type(apps) ~= "table" then return false end
@@ -105,6 +106,14 @@ function M.new(cfg)
 
   local function apply_snapshot(snapshot)
     if type(snapshot) ~= "table" or self.stopped then return end
+    if snapshot.language and cfg.LANGUAGE ~= snapshot.language then
+      cfg.LANGUAGE = snapshot.language
+      self.ui:stop("language changed")
+      Ui = load_ui()
+      self.ui = Ui.new(cfg)
+      self.ui:setup()
+      self.last_status, self.last_state = nil, nil
+    end
     local state = tostring(snapshot.state or "idle")
     if state ~= self.last_state then
       self.last_state = state
@@ -192,13 +201,25 @@ function M.new(cfg)
 
   function self:start()
     self.stopped = false
+    if httpd and httpd.dynamic then
+      self.web_path = (_G.app and _G.app.route_base and _G.app.route_base()) or "/xiaozhi"
+      local function index()
+        return {status="302 Found", headers={["location"]="/xiaozhi-service/",["cache-control"]="no-store"}, body=""}
+      end
+      -- The host detects a control page by its trailing-slash route.
+      httpd.dynamic(httpd.GET, self.web_path, index)
+      httpd.dynamic(httpd.GET, self.web_path .. "/", index)
+      if _G.app and _G.app.set_webui then _G.app.set_webui(true) end
+    end
     self.ui:setup()
+    if ipc and ipc.send then pcall(ipc.send, SERVICE_ENDPOINT, "on_app_change", encode({app_id="xiaozhi", source="ipc-ui"})) end
     self.ui:set_metrics({ network = "IPC", audio = "", wake = "", counter = "" })
     if not subscribe() then subscribe_ipc() end
     refresh()
     if tmr and tmr.create then
       self.timer = tmr.create()
-      self.timer:alarm(500, tmr.ALARM_AUTO, function()
+      -- State/text updates are pushed immediately. Poll only for recovery.
+      self.timer:alarm(1500, tmr.ALARM_AUTO, function()
         if not self.unsubscribe then
           if not subscribe() then subscribe_ipc() end
         end
@@ -248,6 +269,13 @@ function M.new(cfg)
 
   function self:stop(reason)
     self.stopped = true
+    if self.web_path and httpd and httpd.unregister then
+      pcall(httpd.unregister, httpd.GET, self.web_path)
+      pcall(httpd.unregister, httpd.GET, self.web_path .. "/")
+    end
+    if self.controller_exit_timer then
+      self.controller_exit_timer:stop(); self.controller_exit_timer:unregister(); self.controller_exit_timer = nil
+    end
     if self.unsubscribe then pcall(self.unsubscribe); self.unsubscribe = nil end
     if ipc and ipc.send then
       pcall(function() ipc.send(SERVICE_ENDPOINT, "unsubscribe", encode({ endpoint = UI_ENDPOINT })) end)

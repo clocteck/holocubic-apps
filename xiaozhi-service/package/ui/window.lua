@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local W, H = 200, 100
@@ -28,7 +29,7 @@ function M.new(cfg)
   local self = {
     canvas = nil,
     state = "idle",
-    status = "小智待命中",
+    status = T("小智待命中"),
     emotion = "neutral",
     role = "system",
     text = "",
@@ -135,7 +136,7 @@ function M.new(cfg)
     self.text = tostring(content or "")
     render_now()
     if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
-    local persistent = self.role == "system" and self.text:find("验证码", 1, true) ~= nil
+    local persistent = self.role == "system" and self.text:find(T("验证码"), 1, true) ~= nil
     if self.text ~= "" and not persistent and tmr and tmr.create then
       local timer = tmr.create()
       self.hide_timer = timer
@@ -159,9 +160,9 @@ function M.new(cfg)
   function self:on_state(state)
     self.state = tostring(state or "idle")
     local labels = {
-      starting = "正在启动", activating = "正在连接服务", connecting = "正在连接",
-      listening = "我在听", speaking = "小智正在回答", fatal_error = "启动失败",
-      idle = "小智待命中",
+      starting = T("正在启动"), activating = T("正在连接服务"), connecting = T("正在连接"),
+      listening = T("我在听"), speaking = T("小智正在回答"), fatal_error = T("启动失败"),
+      idle = T("小智待命中"),
     }
     self.status = labels[self.state] or self.status
     if self.state == "idle" then
@@ -175,7 +176,7 @@ function M.new(cfg)
 
   function self:alert(status, message)
     self.state = "fatal_error"
-    self.status = tostring(status or "发生错误")
+    self.status = tostring(status or T("发生错误"))
     self.text = tostring(message or "")
     render()
   end

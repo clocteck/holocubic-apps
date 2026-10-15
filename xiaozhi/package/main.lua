@@ -20,47 +20,24 @@ local function load_app_module(name)
 end
 
 local Config = load_app_module("config")
-local Runtime = load_app_module("runtime")
-
 local cfg = Config.load()
-local startup_wake_word = nil
-local service = rawget(_G, "XIAOZHI_SERVICE")
-if type(service) == "table" and not service.stopped then
-  if service.take_pending_wake then
-    local ok, wake_word = pcall(function() return service:take_pending_wake() end)
-    if ok and type(wake_word) == "string" and wake_word ~= "" then startup_wake_word = wake_word end
+local Runtime = load_app_module("runtime")
+local IpcUi = load_app_module("ui_ipc")
+local service_mode = IpcUi.available() or IpcUi.service_installed()
+local app
+if service_mode then
+  if not IpcUi.available() and _G.app and _G.app.start_service then
+    pcall(_G.app.start_service, "xiaozhi-service")
   end
-  if service.suspend then pcall(function() service:suspend("foreground xiaozhi opened") end) end
+  app = IpcUi.new(cfg)
+else
+  app = Runtime.new(cfg, load_app_module)
 end
-if not startup_wake_word and file and file.getcontents then
-  local handoff_path = "/sd/apps/xiaozhi-service/pending-wake.json"
-  local ok, raw = pcall(function() return file.getcontents(handoff_path) end)
-  local codec = rawget(_G, "json") or rawget(_G, "sjson")
-  if ok and type(raw) == "string" and codec and codec.decode then
-    local decoded, doc = pcall(codec.decode, raw)
-    if decoded and type(doc) == "table" and type(doc.wake_word) == "string" then
-      startup_wake_word = doc.wake_word
-    end
-  end
-  if file.remove then pcall(function() file.remove(handoff_path) end) end
-end
-if ipc and ipc.send then
-  local codec = rawget(_G, "json") or rawget(_G, "sjson")
-  local payload = '{"app_id":"xiaozhi","source":"foreground-main"}'
-  if codec and codec.encode then
-    local ok, raw = pcall(codec.encode, { app_id = "xiaozhi", source = "foreground-main" })
-    if ok and type(raw) == "string" then payload = raw end
-  end
-  pcall(function() ipc.send("xiaozhi-service", "on_app_change", payload) end)
-end
-
-local app = Runtime.new(cfg, load_app_module)
-app.startup_wake_word = startup_wake_word
 local app_api = rawget(_G, "app")
 
 XIAOZHI_UI_APP = app
 local ok_web, Web = pcall(load_app_module, "web")
-if ok_web and Web and Web.new then
+if not service_mode and ok_web and Web and Web.new then
   app.web = Web.new(app, cfg)
   local web_ok, web_err = pcall(function() return app.web:start() end)
   if not web_ok then print("[xiaozhi] web start failed", tostring(web_err or "")) end

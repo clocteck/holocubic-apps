@@ -1,3 +1,4 @@
+local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
 local M = {}
 
 local W, H = 320, 58
@@ -126,12 +127,12 @@ function M.new(cfg)
     role = text_or(role, "assistant")
     content = text_or(content, "")
     if content == "" then return end
-    if role == "system" and content ~= "验证码" and not content:find("验证码", 1, true) then return end
+    if role == "system" and content ~= T("验证码") and not content:find(T("验证码"), 1, true) then return end
     self.role = role
     self.message = content
     if self.hide_timer then pcall(function() self.hide_timer:unregister() end); self.hide_timer = nil end
     render()
-    local persistent = role == "system" and content:find("验证码", 1, true) ~= nil
+    local persistent = role == "system" and content:find(T("验证码"), 1, true) ~= nil
     if not persistent and tmr and tmr.create then
       local timer = tmr.create()
       self.hide_timer = timer
@@ -152,7 +153,7 @@ function M.new(cfg)
 
   function self:show_notification(value)
     local text = tostring(value or "")
-    if text:find("验证码", 1, true) then show_line("system", text) end
+    if text:find(T("验证码"), 1, true) then show_line("system", text) end
   end
 
   function self:set_chat_message(role, content)
@@ -171,7 +172,7 @@ function M.new(cfg)
 
   function self:alert(status, message)
     self.state = "fatal_error"
-    show_line("system", tostring(message or status or "发生错误"))
+    show_line("system", tostring(message or status or T("发生错误")))
   end
 
   function self:setup()

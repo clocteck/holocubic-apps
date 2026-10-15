@@ -5,8 +5,13 @@
 #include "opus.h"
 
 #define XZ_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define XZ_VERSION "0.1.0"
-#define XZ_NAME "xiaozhi"
+#define XZ_VERSION "0.5.0"
+#ifndef XZ_MODULE_ID
+#define XZ_MODULE_ID xiaozhi
+#endif
+#define XZ_STRINGIFY_INNER(x) #x
+#define XZ_STRINGIFY(x) XZ_STRINGIFY_INNER(x)
+#define XZ_NAME XZ_STRINGIFY(XZ_MODULE_ID)
 #define XZ_DEFAULT_RATE 12000
 #define XZ_DEFAULT_CHANNELS 1
 #define XZ_DEFAULT_FRAME_MS 60
@@ -20,7 +25,9 @@
 #define XZ_CAPTURE_DEFAULT_CORE 0
 #define XZ_CAPTURE_DEFAULT_READ_TIMEOUT_MS 100
 
+typedef struct playback_state playback_state;
 typedef struct xz_instance_t {
+    playback_state *playback;
     const module_host_api_v2 *host;
     uint32_t created_ms;
 
@@ -34,6 +41,7 @@ typedef struct xz_instance_t {
     int tx_enabled;
     int rx_enabled;
     int hold_audio;
+    int playback_volume;
     int started;
 
     OpusEncoder *encoder;
@@ -82,6 +90,7 @@ extern char *global_stack;
 #endif
 
 static void stop_capture(xz_instance_t *inst);
+static void stop_playback(xz_instance_t *inst);
 static void free_capture_buffers(xz_instance_t *inst);
 
 static const module_manifest_t s_manifest = {
@@ -137,16 +146,7 @@ int64_t __divdi3(int64_t num, int64_t den)
  * Small libc shims for dynmod safety.  Some third-party codec objects may
  * reference these symbols, while the firmware does not promise to export them.
  */
-void *memcpy(void *dst, const void *src, size_t n)
-{
-    unsigned char *d = (unsigned char *)dst;
-    const unsigned char *s = (const unsigned char *)src;
-    size_t i = 0;
-    for (i = 0; i < n; ++i) {
-        d[i] = s[i];
-    }
-    return dst;
-}
+#include "xz_memory.inc"
 
 void *memmove(void *dst, const void *src, size_t n)
 {
@@ -170,15 +170,6 @@ void *memmove(void *dst, const void *src, size_t n)
     return dst;
 }
 
-void *memset(void *dst, int value, size_t n)
-{
-    unsigned char *d = (unsigned char *)dst;
-    size_t i = 0;
-    for (i = 0; i < n; ++i) {
-        d[i] = (unsigned char)value;
-    }
-    return dst;
-}
 
 int memcmp(const void *a, const void *b, size_t n)
 {
@@ -237,57 +228,7 @@ int strncmp(const char *a, const char *b, size_t n)
     return 0;
 }
 
-void *malloc(size_t size)
-{
-    void *ptr = NULL;
-    if (!s_host || !s_host->heap.malloc || size == 0) {
-        return NULL;
-    }
-    ptr = s_host->heap.malloc(size, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
-    if (!ptr) {
-        ptr = s_host->heap.malloc(size, MODULE_HEAP_DEFAULT);
-    }
-    return ptr;
-}
-
-void *calloc(size_t n, size_t size)
-{
-    void *ptr = NULL;
-    if (!s_host || !s_host->heap.calloc || n == 0 || size == 0) {
-        return NULL;
-    }
-    ptr = s_host->heap.calloc(n, size, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
-    if (!ptr) {
-        ptr = s_host->heap.calloc(n, size, MODULE_HEAP_DEFAULT);
-    }
-    return ptr;
-}
-
-void *realloc(void *ptr, size_t size)
-{
-    void *next = NULL;
-    if (!s_host || !s_host->heap.realloc) {
-        return NULL;
-    }
-    if (size == 0) {
-        if (ptr && s_host->heap.free) {
-            s_host->heap.free(ptr);
-        }
-        return NULL;
-    }
-    next = s_host->heap.realloc(ptr, size, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
-    if (!next) {
-        next = s_host->heap.realloc(ptr, size, MODULE_HEAP_DEFAULT);
-    }
-    return next;
-}
-
-void free(void *ptr)
-{
-    if (ptr && s_host && s_host->heap.free) {
-        s_host->heap.free(ptr);
-    }
-}
+#include "xz_alloc.inc"
 
 static void xz_set_error(xz_instance_t *inst, const char *msg)
 {
@@ -450,6 +391,7 @@ static void destroy_codecs(xz_instance_t *inst)
     if (!inst) {
         return;
     }
+    stop_playback(inst);
     stop_capture(inst);
     free_capture_buffers(inst);
     close_audio(inst);
@@ -728,7 +670,7 @@ static int convert_i2s32_frame_to_pcm16(xz_instance_t *inst,
             v -= 65536;
         }
         if (gain_shift > 0) {
-            v <<= gain_shift;
+            v *= (1 << gain_shift);
         } else if (gain_shift < 0) {
             v >>= -gain_shift;
         }
@@ -779,11 +721,11 @@ static void free_capture_buffers(xz_instance_t *inst)
     inst->capture_tail = 0;
 }
 
-static int alloc_capture_buffers(xz_instance_t *inst, uint32_t depth)
+static int alloc_capture_buffers(xz_instance_t *inst, uint32_t depth, int need_raw)
 {
     const module_host_api_v2 *host = inst ? inst->host : s_host;
-    const size_t raw_bytes = inst ? (size_t)inst->frame_pcm_bytes * 2U : 0;
-    if (!inst || !host || !host->heap.malloc || !host->heap.calloc || raw_bytes == 0) {
+    const size_t raw_bytes = inst && need_raw ? (size_t)inst->frame_pcm_bytes * 2U : 0;
+    if (!inst || !host || !host->heap.malloc || !host->heap.calloc) {
         return MODULE_ERR_INVALID_ARG;
     }
     if (depth < 2) {
@@ -794,8 +736,8 @@ static int alloc_capture_buffers(xz_instance_t *inst, uint32_t depth)
     free_capture_buffers(inst);
     /* host i2s.read() copies from the driver's DMA ring into this CPU buffer,
      * so it does not need DMA/internal capability. */
-    inst->capture_raw = (uint8_t *)host->heap.malloc(raw_bytes, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
-    if (!inst->capture_raw) {
+    inst->capture_raw = raw_bytes ? (uint8_t *)host->heap.malloc(raw_bytes, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT) : NULL;
+    if (raw_bytes && !inst->capture_raw) {
         inst->capture_raw = (uint8_t *)host->heap.malloc(raw_bytes, MODULE_HEAP_INTERNAL | MODULE_HEAP_8BIT);
     }
     inst->capture_opus = (uint8_t *)host->heap.malloc(XZ_MAX_OPUS_BYTES,
@@ -812,8 +754,8 @@ static int alloc_capture_buffers(xz_instance_t *inst, uint32_t depth)
     }
     inst->capture_lens = (uint16_t *)host->heap.calloc(depth,
                                                        sizeof(uint16_t),
-                                                       MODULE_HEAP_INTERNAL | MODULE_HEAP_8BIT);
-    if (!inst->capture_raw || !inst->capture_opus || !inst->capture_queue || !inst->capture_lens) {
+                                                       MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
+    if ((need_raw && !inst->capture_raw) || !inst->capture_opus || !inst->capture_queue || !inst->capture_lens) {
         free_capture_buffers(inst);
         xz_set_error(inst, "voice.capture_start: no memory");
         return MODULE_ERR_NO_MEMORY;
@@ -836,13 +778,13 @@ static void capture_push_opus(xz_instance_t *inst, const uint8_t *opus, int opus
     }
     head = inst->capture_head;
     next = (head + 1U) % inst->capture_depth;
-    if (next == inst->capture_tail) {
-        inst->capture_tail = (inst->capture_tail + 1U) % inst->capture_depth;
+    if (next == __atomic_load_n(&inst->capture_tail, __ATOMIC_ACQUIRE)) {
         inst->capture_dropped++;
+        return;
     }
     memcpy(inst->capture_queue + ((size_t)head * XZ_MAX_OPUS_BYTES), opus, (size_t)opus_len);
     inst->capture_lens[head] = (uint16_t)opus_len;
-    inst->capture_head = next;
+    __atomic_store_n(&inst->capture_head, next, __ATOMIC_RELEASE);
 }
 
 static int capture_queue_full(xz_instance_t *inst)
@@ -949,10 +891,10 @@ static void capture_task_entry(void *arg)
             xz_set_error(inst, "voice.capture: i2s release failed");
         }
     }
-    inst->capture_running = 0;
     if (host->serial.println) {
         host->serial.println("[xiaozhi.so] capture task stop");
     }
+    __atomic_store_n(&inst->capture_running, 0, __ATOMIC_RELEASE);
     /* Returning lets the host trampoline unregister and delete the task once.
      * Calling remove(NULL) here and then keeping an infinite fallback loop can
      * leave a suspended task behind on hosts whose self-delete is deferred. */
@@ -967,7 +909,7 @@ static void stop_capture(xz_instance_t *inst)
     }
     inst->capture_stop = 1;
     start_ms = host->time.millis ? host->time.millis() : 0;
-    while (inst->capture_running && inst->capture_task) {
+    while (__atomic_load_n(&inst->capture_running, __ATOMIC_ACQUIRE) && inst->capture_task) {
         uint32_t now = host->time.millis ? host->time.millis() : start_ms + 1000;
         if (now - start_ms > 1500U) {
             if (host->task.remove && inst->capture_task) {
@@ -997,6 +939,7 @@ static void stop_capture(xz_instance_t *inst)
     inst->capture_raw_fill = 0;
     inst->capture_head = 0;
     inst->capture_tail = 0;
+    free_capture_buffers(inst);
 }
 
 static int decode_current_frame(xz_instance_t *inst,
@@ -1038,6 +981,7 @@ static int decode_current_frame(xz_instance_t *inst,
         return MODULE_ERR_FAILED;
     }
 
+    for (int i=0;i<decoded*inst->channels;i++) pcm[i]=(int16_t)((int32_t)pcm[i]*inst->playback_volume/100);
     *out_pcm = pcm;
     *out_pcm_bytes = (size_t)decoded * (size_t)inst->channels * sizeof(int16_t);
     inst->decode_count++;
@@ -1270,6 +1214,8 @@ static int l_voice_play(lua_State *L)
     return 1;
 }
 
+#include "playback.inc"
+
 static int l_voice_capture_start(lua_State *L)
 {
     xz_instance_t *inst = instance_from_lua(L);
@@ -1302,6 +1248,9 @@ static int l_voice_capture_start(lua_State *L)
         return 1;
     }
 
+    stop_playback(inst);
+    stop_capture(inst);
+    opus_encoder_ctl(inst->encoder, OPUS_RESET_STATE);
     cfg_idx = (host->lua.gettop(L) >= 1 && host->lua.istable(L, 1)) ? 1 : 0;
     queue_depth = cfg_idx ? read_int_field(L, host, cfg_idx, "queue_depth", queue_depth) : queue_depth;
     stack_bytes = cfg_idx ? read_int_field(L, host, cfg_idx, "task_stack", stack_bytes) : stack_bytes;
@@ -1329,7 +1278,7 @@ static int l_voice_capture_start(lua_State *L)
         inst->capture_read_timeout_ms = 1;
     }
 
-    err = alloc_capture_buffers(inst, (uint32_t)queue_depth);
+    err = alloc_capture_buffers(inst, (uint32_t)queue_depth, 1);
     if (err != MODULE_OK) {
         return push_error(L, host, inst->last_error);
     }
@@ -1397,7 +1346,7 @@ static int l_voice_capture_read(lua_State *L)
     if (!host || !inst) {
         return 0;
     }
-    if (!inst->capture_queue || !inst->capture_lens || inst->capture_tail == inst->capture_head) {
+    if (!inst->capture_queue || !inst->capture_lens || inst->capture_tail == __atomic_load_n(&inst->capture_head, __ATOMIC_ACQUIRE)) {
         host->lua.pushnil(L);
         return 1;
     }
@@ -1412,7 +1361,7 @@ static int l_voice_capture_read(lua_State *L)
                           (const char *)(inst->capture_queue + ((size_t)tail * XZ_MAX_OPUS_BYTES)),
                           (size_t)len);
     inst->capture_lens[tail] = 0;
-    inst->capture_tail = (tail + 1U) % inst->capture_depth;
+    __atomic_store_n(&inst->capture_tail, (tail + 1U) % inst->capture_depth, __ATOMIC_RELEASE);
     return 1;
 }
 
@@ -1423,6 +1372,7 @@ static int l_voice_capture_stop(lua_State *L)
     if (!host || !inst) {
         return 0;
     }
+    stop_playback(inst);
     stop_capture(inst);
     host->lua.pushboolean(L, 1);
     return 1;
@@ -1489,6 +1439,12 @@ static void push_voice_table(lua_State *L, const module_host_api_v2 *host, xz_in
     set_function_field(L, host, "encode", l_voice_encode, inst);
     set_function_field(L, host, "encode_i2s", l_voice_encode_i2s, inst);
     set_function_field(L, host, "capture_start", l_voice_capture_start, inst);
+    set_function_field(L, host, "playback_start", l_playback_start, inst);
+    set_function_field(L, host, "playback_write", l_playback_write, inst);
+    set_function_field(L, host, "playback_status", l_playback_status, inst);
+    set_function_field(L, host, "playback_finish", l_playback_finish, inst);
+    set_function_field(L, host, "playback_stop", l_playback_stop, inst);
+    set_function_field(L, host, "set_volume", l_set_volume, inst);
     set_function_field(L, host, "capture_read", l_voice_capture_read, inst);
     set_function_field(L, host, "capture_stop", l_voice_capture_stop, inst);
     set_function_field(L, host, "decode", l_voice_decode, inst);
@@ -1539,7 +1495,7 @@ XZ_MODULE_EXPORT int32_t module_create_v2(module_host_resolve_v2_fn resolve,
 
     inst = (xz_instance_t *)s_host->heap.calloc(1,
                                                 sizeof(xz_instance_t),
-                                                MODULE_HEAP_INTERNAL | MODULE_HEAP_8BIT);
+                                                MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
     if (!inst) {
         inst = (xz_instance_t *)s_host->heap.calloc(1, sizeof(xz_instance_t), MODULE_HEAP_DEFAULT);
     }
@@ -1558,6 +1514,7 @@ XZ_MODULE_EXPORT int32_t module_create_v2(module_host_resolve_v2_fn resolve,
     inst->rx_enabled = 1;
     inst->hold_audio = 1;
     copy_pack_name(inst->capture_pack, "b23");
+    inst->playback_volume = 0; /* Lua supplies the current firmware volume before playback. */
     inst->capture_read_timeout_ms = XZ_CAPTURE_DEFAULT_READ_TIMEOUT_MS;
     normalize_config(inst);
     *out_instance = inst;

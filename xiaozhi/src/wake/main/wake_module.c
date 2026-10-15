@@ -14,19 +14,26 @@
 #endif
 
 #define WAKE_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define WAKE_VERSION "0.3.0"
+#define WAKE_VERSION "0.4.0"
+#ifndef WAKE_MODULE_NAME
+#define WAKE_MODULE_NAME wake
+#endif
 #define WAKE_ENGINE "WakeNet9s"
-#define WAKE_MODEL "wn9s_nihaoxiaozhi"
-#define WAKE_WORD "你好小智"
+static char selected_model[32] = "wn9s_nihaoxiaozhi";
+static const char *selected_word = "你好小智";
+#define WAKE_MODEL selected_model
+#define WAKE_WORD selected_word
 #define WAKE_STRINGIFY_INNER(value) #value
 #define WAKE_STRINGIFY(value) WAKE_STRINGIFY_INNER(value)
 #ifndef WAKE_MODEL_PATH
 #define WAKE_MODEL_PATH /sd/apps/xiaozhi/wake
 #endif
-#define WAKE_MODEL_PATH_STRING WAKE_STRINGIFY(WAKE_MODEL_PATH)
-#define WAKE_MODEL_DIR WAKE_MODEL_PATH_STRING "/" WAKE_MODEL
-#define WAKE_MODEL_INDEX_FILE WAKE_MODEL_DIR "/wn9_index"
-#define WAKE_MODEL_DATA_FILE WAKE_MODEL_DIR "/wn9_data"
+static char selected_root[128] = WAKE_STRINGIFY(WAKE_MODEL_PATH);
+static char selected_index[192] = WAKE_STRINGIFY(WAKE_MODEL_PATH) "/wn9s_nihaoxiaozhi/wn9_index";
+static char selected_data[192] = WAKE_STRINGIFY(WAKE_MODEL_PATH) "/wn9s_nihaoxiaozhi/wn9_data";
+#define WAKE_MODEL_PATH_STRING selected_root
+#define WAKE_MODEL_INDEX_FILE selected_index
+#define WAKE_MODEL_DATA_FILE selected_data
 #define WAKE_SAMPLE_RATE 16000u
 #define WAKE_BITS_PER_SAMPLE 16u
 #define WAKE_CHANNELS 1u
@@ -935,7 +942,7 @@ static const module_manifest_t s_manifest = {
     MODULE_MANIFEST_MAGIC,
     MODULE_SDK_VERSION,
     sizeof(module_manifest_t),
-    "wake",
+    WAKE_STRINGIFY(WAKE_MODULE_NAME),
     WAKE_VERSION,
     "WakeNet9s nihaoxiaozhi dynamic module",
     0,
@@ -1130,7 +1137,7 @@ static srmodel_list_t *wake_create_builtin_model_list(void)
         return NULL;
     }
     models->model_name[0] = wake_strdup_model(WAKE_MODEL);
-    models->model_info[0] = wake_strdup_model("WakeNet9s_nihaoxiaozhi");
+    models->model_info[0] = wake_strdup_model(strcmp(WAKE_MODEL, "wn9s_hiesp") == 0 ? "WakeNet9s_hiesp" : "WakeNet9s_nihaoxiaozhi");
     if (!models->model_name[0] || !models->model_info[0]) {
         free(models->model_name[0]);
         free(models->model_info[0]);
@@ -1304,7 +1311,7 @@ static int wake_init_backend(wake_instance_t *inst)
 
     model_index = wake_model_exists(inst->models, WAKE_MODEL);
     if (model_index < 0) {
-        wake_set_error(inst, "wake: wn9s_nihaoxiaozhi model missing");
+        wake_set_error(inst, "wake: selected model missing");
         wake_deinit_backend(inst);
         return MODULE_ERR_NOT_FOUND;
     }
@@ -1942,6 +1949,23 @@ static int l_start(lua_State *L)
     int err = MODULE_OK;
     if (!host || !inst) {
         return 0;
+    }
+    if (host->lua.gettop(L) >= 1 && host->lua.istable(L, 1)) {
+        const char *model = wake_read_string_field(L, host, 1, "model", "wn9s_nihaoxiaozhi");
+        const char *root = wake_read_string_field(L, host, 1, "model_root", WAKE_MODEL_PATH_STRING);
+        if (strcmp(model, "wn9s_hiesp") && strcmp(model, "wn9s_nihaoxiaozhi"))
+            return push_error(L, host, "unsupported wake model");
+        if (strlen(root) >= sizeof(selected_root) || strncmp(root, "/sd/", 4) != 0)
+            return push_error(L, host, "invalid wake model root");
+        if (inst->capture_running) return push_error(L, host, "stop wake capture before reconfigure");
+        /* The cached model list contains the previous model name. Rebuild it
+         * when reconfiguring, including after a stop/start in the same VM. */
+        wake_destroy_backend(inst);
+        snprintf(selected_model, sizeof(selected_model), "%s", model);
+        if (root != selected_root) snprintf(selected_root, sizeof(selected_root), "%s", root);
+        selected_word = strcmp(model, "wn9s_hiesp") == 0 ? "Hi ESP" : "你好小智";
+        snprintf(selected_index, sizeof(selected_index), "%s/%s/wn9_index", selected_root, selected_model);
+        snprintf(selected_data, sizeof(selected_data), "%s/%s/wn9_data", selected_root, selected_model);
     }
     err = wake_init_backend(inst);
     if (err != MODULE_OK) {

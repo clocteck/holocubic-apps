@@ -17,6 +17,9 @@
     "frame_duration": 60,
     "bitrate": 12000
   },
+  "schema_version": 2,
+  "language": "auto",
+  "wake": { "id": "nihaoxiaozhi" },
   "wake_word": "你好小智",
   "timezone": "CST-8",
   "ui": {
