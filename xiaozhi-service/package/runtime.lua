@@ -20,6 +20,7 @@ function M.new(cfg, load_module)
     local source = type(cfg.DEFAULT_DENY_APPS) == "table" and cfg.DEFAULT_DENY_APPS or {
       Spectrum = true,
       mp3_player = true,
+      mjpeg_player = true,
       ["holo-retro-go"] = true,
       FluidPendant = true,
     }
@@ -169,6 +170,8 @@ function M.new(cfg, load_module)
 
   local function app_denies_service(app_id)
     if not cfg.SERVICE_MODE then return false end
+    -- Video owns the physical audio bus, including with older saved deny lists.
+    if app_id == "mjpeg_player" then return true end
     local wake_cfg = read_wake_service_config()
     return type(app_id) == "string"
       and type(wake_cfg.deny_apps) == "table"
@@ -906,7 +909,14 @@ function M.new(cfg, load_module)
       self.ui_text = ""
       self.ui_notice = ""
     end
-    self.ui:on_state(new_state)
+    if new_state == State.FATAL_ERROR and self.audio_error_serial_only then
+      -- on_state(fatal_error) itself opens the floating window, even without
+      -- alert(). Hide it while retaining the real stopped/error runtime state.
+      self.ui:on_state(State.IDLE)
+    else
+      self.audio_error_serial_only = false
+      self.ui:on_state(new_state)
+    end
     if new_state == State.LISTENING then
       schedule_session_idle_timer()
     else
@@ -1245,11 +1255,22 @@ function M.new(cfg, load_module)
     end
     self.audio.on_error = function(message)
       if tostring(message):find("audio:", 1, true) then
+        print("[xiaozhi] audio error (serial only): " .. tostring(message))
+        local foreground = foreground_app_id()
+        if cfg.SERVICE_MODE and (self.audio_suspended_by_app or app_denies_service(foreground)) then
+          -- A worker can report its final read error before app.started arrives.
+          -- Treat foreground ownership as suspension, not a permanent fatal error.
+          self.audio.last_failure = message
+          self.audio.last_error = ""
+          suspend_audio_for_app(self.audio_suspended_app_id or foreground)
+          return
+        end
         if self.state.state == State.FATAL_ERROR then return end
+        self.audio_error_serial_only = true
         set_state(State.FATAL_ERROR)
         self.audio.last_error = message
         if self.protocol then self.protocol:close_audio_channel(false) end
-        alert(T("音频处理失败"), message, "neutral")
+        -- Keep genuine failures stopped and diagnosable, without an error popup.
         return
       end
       if message == "wake model missing" then
@@ -1895,6 +1916,7 @@ function M.new(cfg, load_module)
     end
     add("Spectrum", "Spectrum")
     add("mp3_player", "MP3 Player")
+    add("mjpeg_player", "Videos Player")
     add("holo-retro-go", "Holo Retro Go")
     add("FluidPendant", "FluidPendant")
     for id in pairs(deny_apps or {}) do add(id, id) end

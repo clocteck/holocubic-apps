@@ -19,8 +19,8 @@ local FRAME_INTERVAL_MS = 1000 / TARGET_FPS
 local SAFE_LVGL_PRESENT = true
 -- Keep decoding and I2S outside the Lua/UI task.  Synchronous JPEG decoding can
 -- starve the HTTP callback that performs the pre-exit cleanup.  The native
--- worker now follows a cooperative stop-and-join lifecycle and uses a smaller
--- internal stack so the firmware has enough memory to finish task cleanup.
+-- worker follows a cooperative stop-and-join lifecycle. JPEG and audio-fill
+-- stacks use PSRAM; the I2S consumer and DMA buffers remain in internal RAM.
 local USE_NATIVE_WORKER_TASKS = true
 local VIDEO_DIR = "/sd/videos"
 local MODULE_PATH = "/sd/apps/mjpeg_player/modules/jpg.so"
@@ -575,6 +575,7 @@ local function start_audio(name)
         timeout_ms = 80,
         stack_bytes = 4608,
         producer_stack_bytes = 5536,
+        producer_stack_psram = true,
         priority = 9,
         core = 1,
         producer_core = 1,

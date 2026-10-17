@@ -203,7 +203,7 @@ end)
 
 | Module | Usage |
 | --- | --- |
-| `sys` | Brightness, CPU frequency, RGB LED, version, and resource usage |
+| `sys` | Brightness, master volume, CPU frequency, RGB LED, version, and resource usage |
 | `time` | Local time, NTP, and time zones |
 | `sjson` | JSON encoding and decoding |
 | `zlib` | gzip, inflate, and crc32 |
@@ -211,6 +211,42 @@ end)
 | `viper` | Compile C-like functions for hot paths |
 | `i2s` | Audio input and output |
 | `nes` | NES emulator APIs |
+
+### Firmware master volume
+
+Firmware 1.213 provides a shared volume setting for participating audio apps:
+
+| API | Result |
+| --- | --- |
+| `sys.getvolume()` | Current volume, `0..100`; `0` means mute |
+| `sys.setvolume(integer)` | `true` when accepted, or `nil, err` on failure |
+| `sys.getvolumestate()` | `{volume, revision, pending, saved, error}` |
+
+```lua
+if sys and sys.getvolume and sys.setvolume then
+  print("Master volume:", sys.getvolume())
+  local ok, err = sys.setvolume(35)
+  if not ok then print("Volume update failed:", err) end
+end
+```
+
+Reads use firmware memory, not SD access. Changes are applied to the shared setting immediately
+and saved after about 500 ms without further changes. Acceptance does not mean saving has
+completed: check `saved` and `error` through `sys.getvolumestate()`.
+
+**Apps must apply this setting to their own audio gain exactly once; firmware does not
+automatically scale PCM samples.** Poll about every 200 ms, update gain only when the value
+changes, and unregister the timer on exit. App volume controls should call `sys.setvolume()`;
+do not directly overwrite `/sd/apps/settings.json` to change volume.
+
+For a reusable adapter, see [mjpeg_player/package/volume.lua](mjpeg_player/package/volume.lua)
+and its integration in [main.lua](mjpeg_player/package/main.lua). The adapter detects API
+availability rather than comparing version strings, and supports older firmware with a
+one-time settings read and session-only changes.
+
+HTTP equivalents are `GET /audio/api/settings` and
+`POST /audio/api/settings?volume=35`. See [sys Device Control](README_LUA.md#sys-device-control)
+for persistence and error details.
 
 ## Minimal App Example
 
@@ -637,7 +673,7 @@ end)
 
 | 模块 | 用法 |
 | --- | --- |
-| `sys` | 亮度、CPU 频率、RGB LED、版本/资源占用 |
+| `sys` | 亮度、统一音量、CPU 频率、RGB LED、版本/资源占用 |
 | `time` | 本地时间、NTP、时区 |
 | `sjson` | JSON 编解码 |
 | `zlib` | gzip/inflate/crc32 |
@@ -645,6 +681,38 @@ end)
 | `viper` | 热路径 C-like 函数编译 |
 | `i2s` | 音频输入输出 |
 | `nes` | NES 模拟器接口 |
+
+### 固件统一音量
+
+固件 1.213 提供共享音量设置，供音频 App 统一接入：
+
+| 接口 | 返回值 |
+| --- | --- |
+| `sys.getvolume()` | 当前音量 `0..100`，`0` 为静音 |
+| `sys.setvolume(integer)` | 接受设置返回 `true`，失败返回 `nil, err` |
+| `sys.getvolumestate()` | `{volume, revision, pending, saved, error}` |
+
+```lua
+if sys and sys.getvolume and sys.setvolume then
+  print("统一音量：", sys.getvolume())
+  local ok, err = sys.setvolume(35)
+  if not ok then print("设置音量失败：", err) end
+end
+```
+
+读取只访问固件内存，不读取 SD。设置立即更新共享值，连续变化停止约 500ms 后合并保存。
+返回 `true` 不代表已保存到 SD，保存结果应通过 `sys.getvolumestate()` 的 `saved` 和 `error` 判断。
+
+**App 仍需把统一音量映射到自己的音频增益，且只应用一次；固件不会自动缩放 PCM。**
+建议每 200ms 检查一次，仅在音量变化时更新增益，退出时注销定时器。
+App 内调节也调用 `sys.setvolume()`，不要直接覆盖 `/sd/apps/settings.json` 来修改音量。
+
+可复用 [mjpeg_player/package/volume.lua](mjpeg_player/package/volume.lua)，接入示例见
+[main.lua](mjpeg_player/package/main.lua)。适配器检测 API 是否存在，不依赖版本字符串；
+旧固件只读取一次设置，后续调整仅在本次运行生效。
+
+HTTP 等价接口为 `GET /audio/api/settings` 和 `POST /audio/api/settings?volume=35`。
+保存与错误处理细节见 [sys 设备控制](README_LUA.md#sys-设备控制)。
 
 ## 最简 app 示例
 

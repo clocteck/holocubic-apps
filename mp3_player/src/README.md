@@ -15,6 +15,10 @@
 
 `package/main.lua` 是配套的 Lua music app 入口，`package/` 内是可部署运行包。
 
+源码 `audio.so` 1.12.1 增加可选的 `i2s_play_start({producer_stack_psram=true})`：仅将 `audio_fill` 栈放入 PSRAM，`audio_i2s` 和 DMA 保持内部 RAM。默认不启用，因此现有音乐 App 行为不变。扩展任务 API 单独按过程 ID 解析，不改变 v1 宿主表布局；显式启用但固件不支持时返回错误。需要启用外部栈的固件，且生产者任务不得执行 Flash/NVS 写入。`i2s_play_state().producer_stack_psram` 表示最后成功创建的生产者使用的策略，不代表任务当前仍运行。
+
+该修改供视频播放器使用；本轮尚未重编译或替换任何发布包内的 `audio.so`。
+
 构建，在 `mp3_module/src` 目录执行：
 
 ```powershell

@@ -634,9 +634,39 @@ CPU frequency, or the LED inside a high-frequency loop.
 
 - Version and status: `sys.version()`, `sys.usage()`.
 - Screen brightness: `sys.setbrightness(level)`, `sys.getbrightness()`.
+- Master volume: `sys.getvolume() -> 0..100`, `sys.setvolume(integer) -> true | nil, err`.
+- Volume persistence: `sys.getvolumestate() -> {volume, revision, pending, saved, error}`.
 - CPU frequency: `sys.setcpufreq(mhz)`, `sys.getcpufreq()`.
 - RGB LED: `sys.setled(r, g, b)`, `sys.setled("#RRGGBB")`, `sys.setled()`,
   `sys.getled()`.
+
+#### Master-volume behavior (firmware 1.213)
+
+The getter reads cached firmware memory, without accessing SD. At startup, the firmware reads
+`volume` from `/sd/apps/settings.json` once; the default is 25, and 0 means mute.
+The setter accepts integers from 0 to 100, updates the cache immediately, and coalesces saves
+after about 500 ms without changes. It preserves other settings fields.
+
+`true` means the update was accepted, not that it was persisted. `getvolumestate()` returns:
+
+- `volume`: the current value; `revision`: the in-memory change revision.
+- `pending`: whether a save is pending; `saved`: whether the current value has been saved.
+- `error`: an empty string when no error is reported, otherwise the persistence error.
+
+On SD save failure, `pending` remains true and saving is retried after about 5 seconds.
+Malformed settings JSON is not overwritten. Do not replace the JSON file to change the active
+volume; use the setter. The firmware's `.tmp`/`.bak` files are recovery helpers, not independent
+settings sources.
+
+HTTP equivalents: `GET /audio/api/settings` and `POST /audio/api/settings?volume=35`.
+Responses include `ok`, `api_version=1`, and the state fields above. Invalid parameters return
+400; unsupported methods return 405.
+
+The firmware stores the shared setting but does not scale PCM. Each audio app must apply it
+once to its own gain. Polling every 200 ms and applying only changed values is sufficient;
+unregister the timer on exit. Feature-detect `getvolume`/`setvolume` for older firmware.
+See [the shared adapter](mjpeg_player/package/volume.lua) and the
+[README example](README.md#firmware-master-volume).
 
 ### key Input
 
@@ -1279,8 +1309,34 @@ local cleared, clear_err = device.credentials.clear()
 
 - 版本和状态：`sys.version()`、`sys.usage()`。
 - 屏幕亮度：`sys.setbrightness(level)`、`sys.getbrightness()`。
+- 统一音量：`sys.getvolume() -> 0..100`、`sys.setvolume(integer) -> true | nil, err`。
+- 音量保存状态：`sys.getvolumestate() -> {volume, revision, pending, saved, error}`。
 - CPU 频率：`sys.setcpufreq(mhz)`、`sys.getcpufreq()`。
 - RGB LED：`sys.setled(r, g, b)`、`sys.setled("#RRGGBB")`、`sys.setled()`、`sys.getled()`。
+
+#### 统一音量行为（固件 1.213）
+
+getter 只读取固件缓存，不访问 SD。启动时从 `/sd/apps/settings.json` 的 `volume`
+字段读取一次，缺省为 25；0 为静音。setter 接受 0–100 的整数，立即更新内存，
+连续变化停止约 500ms 后合并保存，保留设置文件中的其他字段。
+
+返回 `true` 表示已接受，不代表已保存。`getvolumestate()` 返回：
+
+- `volume`：当前音量；`revision`：内存中的设置修订号。
+- `pending`：是否等待保存；`saved`：当前值是否已保存。
+- `error`：无错误时为空字符串，否则为保存错误信息。
+
+SD 保存失败时 `pending=true`，约 5 秒后重试；损坏的 JSON 不会被覆盖。
+不要通过替换 JSON 文件修改运行中的音量，应调用 setter。固件的 `.tmp`/`.bak`
+文件仅用于安全提交和失败恢复，不是独立的设置源。
+
+HTTP 等价接口：`GET /audio/api/settings`、`POST /audio/api/settings?volume=35`。
+响应包含 `ok`、`api_version=1` 及上述状态字段；非法参数返回 400，不支持的方法返回 405。
+
+固件只维护共享设置，不自动缩放 PCM。音频 App 应把统一值映射到自己的增益，并且只应用一次。
+可每 200ms 检查一次、仅在变化时更新；退出时注销定时器。兼容旧固件时检测
+`getvolume`/`setvolume` 是否存在。参考[共享适配器](mjpeg_player/package/volume.lua)
+和 [README 示例](README.md#固件统一音量)。
 
 ### key 按键
 

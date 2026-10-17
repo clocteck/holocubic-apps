@@ -20,7 +20,7 @@
 #endif
 
 #define JPG_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define JPG_VERSION "1.0.2"
+#define JPG_VERSION "1.0.3"
 #define JPG_MODULE_NAME "jpg"
 #define JPG_MODULE_DESCRIPTION "JPEG to RGB565 decoder for Lua LVGL canvas"
 #define JPG_DMA_ROWS 24u
@@ -1746,7 +1746,9 @@ static int jpg_async_start(jpg_instance_t *inst)
                                     JPG_DECODE_TASK_STACK_BYTES,
                                     3u,
                                     1,
-                                    MODULE_HEAP_INTERNAL | MODULE_HEAP_8BIT,
+                                    /* Decode-only worker: no flash/NVS writes.
+                                     * Do not fall back to scarce internal RAM. */
+                                    MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT,
                                     &task);
     if (err != MODULE_OK || !task) {
         inst->async_task = NULL;

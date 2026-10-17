@@ -14,7 +14,7 @@
 #include "dsps_biquad.h"
 
 #define AUDIO_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define AUDIO_VERSION "1.12"
+#define AUDIO_VERSION "1.12.1"
 #define AUDIO_IN_CAP 2048u
 #define AUDIO_PREFETCH_CAP (2u * 1024u * 1024u)
 #define AUDIO_PREFETCH_READ_CHUNK 8192u
@@ -63,6 +63,8 @@ typedef struct audio_dsp_filter_t {
 
 typedef struct audio_instance_t {
     module_host_api_v1 host;
+    module_task_create_ex_v1_fn task_create_ex;
+    uint8_t producer_stack_psram;
     void *file;
     void *i2s_stream;
     void *play_task;
@@ -2758,6 +2760,7 @@ static int l_audio_i2s_play_start(lua_State *L)
     const module_host_api_v1 *host = inst ? &inst->host : s_host;
     uint32_t stack_bytes = AUDIO_PLAY_TASK_STACK;
     uint32_t producer_stack_bytes = AUDIO_PRODUCER_TASK_STACK;
+    int producer_stack_psram = 0;
     uint32_t priority = AUDIO_PLAY_TASK_PRIORITY;
     uint32_t producer_priority = AUDIO_PRODUCER_TASK_PRIORITY;
     int32_t core = AUDIO_PLAY_TASK_CORE;
@@ -2817,6 +2820,10 @@ static int l_audio_i2s_play_start(lua_State *L)
         }
         host->lua.settop(L, 1);
 
+        host->lua.getfield(L, 1, "producer_stack_psram");
+        producer_stack_psram = host->lua.toboolean(L, -1);
+        host->lua.settop(L, 1);
+
         host->lua.getfield(L, 1, "priority");
         if (host->lua.isnumber(L, -1)) {
             v = host->lua.tointeger(L, -1);
@@ -2854,6 +2861,9 @@ static int l_audio_i2s_play_start(lua_State *L)
         host->lua.settop(L, 1);
     }
 
+    if (producer_stack_psram && !inst->task_create_ex) {
+        return push_error(L, host, "audio: PSRAM stack requires task.create_ex firmware support");
+    }
     audio_play_task_stop_internal(inst, AUDIO_PLAY_TASK_STOP_WAIT_MS);
     inst->play_task_stop = 0;
     inst->play_task_eof = 0;
@@ -2868,13 +2878,23 @@ static int l_audio_i2s_play_start(lua_State *L)
     inst->producer_task_iterations = 0;
     inst->producer_task_decoded_bytes = 0;
     inst->play_task_buffer_events = 0;
-    err = host->task.create("audio_fill", audio_i2s_producer_task_entry, inst,
-                            producer_stack_bytes, producer_priority, producer_core, &inst->producer_task);
+    inst->producer_stack_psram = 0;
+    if (producer_stack_psram) {
+        /* SD/decoder worker only: never add flash/NVS writes to this path.
+         * Explicit PSRAM allocation; no hidden fallback to internal RAM. */
+        err = inst->task_create_ex("audio_fill", audio_i2s_producer_task_entry, inst,
+                                  producer_stack_bytes, producer_priority, producer_core,
+                                  MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT, &inst->producer_task);
+    } else {
+        err = host->task.create("audio_fill", audio_i2s_producer_task_entry, inst,
+                               producer_stack_bytes, producer_priority, producer_core, &inst->producer_task);
+    }
     if (err != MODULE_OK || !inst->producer_task) {
         inst->producer_task = NULL;
         audio_set_error(inst, "audio: producer task create failed");
         return push_error(L, host, inst->last_error);
     }
+    inst->producer_stack_psram = producer_stack_psram ? 1 : 0;
     err = host->task.create("audio_i2s", audio_i2s_play_task_entry, inst,
                             stack_bytes, priority, core, &inst->play_task);
     if (err != MODULE_OK || !inst->play_task) {
@@ -2935,6 +2955,8 @@ static int l_audio_i2s_play_state(lua_State *L)
     host->lua.setfield(L, -2, "buffering");
     host->lua.pushinteger(L, inst->producer_task_running ? 1 : 0);
     host->lua.setfield(L, -2, "producer_running");
+    host->lua.pushboolean(L, inst->producer_stack_psram);
+    host->lua.setfield(L, -2, "producer_stack_psram");
     host->lua.pushinteger(L, inst->producer_task_eof ? 1 : 0);
     host->lua.setfield(L, -2, "producer_eof");
     host->lua.pushinteger(L, inst->producer_task_error ? 1 : 0);
@@ -3152,6 +3174,12 @@ AUDIO_MODULE_EXPORT int32_t module_create_v2(module_host_resolve_v1_fn resolve,
         return MODULE_ERR_NO_MEMORY;
     }
     inst->host = host;
+    {
+        void *proc = NULL;
+        if (resolve(resolve_ctx, MODULE_PROC_TASK_CREATE_EX_V1, &proc) == MODULE_OK && proc) {
+            inst->task_create_ex = (module_task_create_ex_v1_fn)proc;
+        }
+    }
     s_host = &inst->host;
     inst->in_cap = AUDIO_IN_CAP;
     inst->prefetch_cap = AUDIO_PREFETCH_CAP;

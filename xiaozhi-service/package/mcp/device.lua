@@ -612,6 +612,7 @@ local function read_wake_service_config()
     cfg.deny_apps = {
       Spectrum = true,
       mp3_player = true,
+      mjpeg_player = true,
       ["holo-retro-go"] = true,
       FluidPendant = true,
     }
@@ -620,6 +621,7 @@ local function read_wake_service_config()
 end
 
 local function app_allows_wake_service(app_id)
+  if app_id == "mjpeg_player" then return false end
   local cfg = read_wake_service_config()
   app_id = type(app_id) == "string" and app_id or ""
   if type(cfg.deny_apps) == "table" and cfg.deny_apps[app_id] == true then

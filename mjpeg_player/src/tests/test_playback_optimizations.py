@@ -7,6 +7,8 @@ from lupa.lua54 import LuaRuntime
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = (ROOT / "package/main.lua").read_text(encoding="utf-8")
 NATIVE = (ROOT / "src/main/jpg_module.c").read_text(encoding="utf-8")
+AUDIO = (ROOT.parent / "mp3_player/src/main/audio_module.c").read_text(encoding="utf-8")
+AUDIO_ABI = (ROOT.parent / "mp3_player/src/main/module_abi.h").read_text(encoding="utf-8")
 
 
 def section(start, end):
@@ -111,6 +113,33 @@ class PlaybackTests(unittest.TestCase):
         self.assertIn("push_stats(L, inst)", helper)  # legacy callers unchanged
         self.assertNotIn("host->heap", helper)
         self.assertNotIn('collectgarbage("collect")', SOURCE)
+
+    def test_jpeg_psram_stack_no_internal_fallback(self):
+        start = NATIVE[NATIVE.rindex("static int jpg_async_start("):NATIVE.index("static int l_jpg_submit(")]
+        self.assertIn("MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT", start)
+        self.assertNotIn("MODULE_HEAP_INTERNAL", start)
+        self.assertEqual(start.count('create_ex("jpg_decode"'), 1)
+
+    def test_audio_psram_opt_in_and_internal_i2s(self):
+        self.assertIn("producer_stack_psram = true", SOURCE)
+        start = AUDIO[AUDIO.index("static int l_audio_i2s_play_start("):AUDIO.index("static int l_audio_i2s_play_stop(")]
+        self.assertIn("int producer_stack_psram = 0;", start)
+        self.assertIn("producer_stack_psram && !inst->task_create_ex", start)
+        self.assertLess(start.index("producer_stack_psram && !inst->task_create_ex"), start.index('inst->task_create_ex("audio_fill"'))
+        self.assertIn("MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT", start)
+        self.assertIn('host->task.create("audio_fill"', start)  # default unchanged
+        self.assertIn('host->task.create("audio_i2s"', start)  # internal consumer
+        self.assertNotIn('task_create_ex("audio_i2s"', start)
+        failure = start[start.index("if (err != MODULE_OK || !inst->producer_task)"):start.index('host->task.create("audio_i2s"')]
+        self.assertIn("return push_error", failure)
+        self.assertNotIn('host->task.create("audio_fill"', failure)
+
+    def test_optional_audio_abi_does_not_extend_v1_table(self):
+        table = AUDIO_ABI[AUDIO_ABI.index("typedef struct module_task_api_t"):AUDIO_ABI.index("typedef struct module_lua_api_t")]
+        self.assertNotIn("create_ex", table)
+        self.assertIn("#define MODULE_PROC_TASK_CREATE_EX_V1 0x00080005u", AUDIO_ABI)
+        self.assertIn("resolve(resolve_ctx, MODULE_PROC_TASK_CREATE_EX_V1, &proc)", AUDIO)
+        self.assertNotIn("MODULE_SDK_RESOLVE_PROC_V1(resolve, resolve_ctx, MODULE_PROC_TASK_CREATE_EX_V1", AUDIO_ABI)
 
 
 if __name__ == "__main__":

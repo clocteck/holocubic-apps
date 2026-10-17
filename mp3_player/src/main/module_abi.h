@@ -80,6 +80,13 @@ typedef int (*module_lua_cfunction_t)(lua_State *L);
 #define MODULE_PROC_TASK_REMOVE_V1 0x00080002u
 #define MODULE_PROC_TASK_YIELD_V1 0x00080003u
 #define MODULE_PROC_TASK_DELAY_V1 0x00080004u
+#define MODULE_PROC_TASK_CREATE_EX_V1 0x00080005u
+
+/* Optional capability. Resolve separately; keep the v1 host table layout intact. */
+typedef int32_t (*module_task_create_ex_v1_fn)(
+    const char *name, void (*entry)(void *), void *arg,
+    uint32_t stack_bytes, uint32_t priority, int32_t core,
+    uint32_t heap_caps, void **out_task);
 
 #define MODULE_PROC_LUA_GETTOP_V1 0x00090001u
 #define MODULE_PROC_LUA_SETTOP_V1 0x00090002u

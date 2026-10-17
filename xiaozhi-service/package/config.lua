@@ -4,6 +4,7 @@ local function default_deny_apps()
   return {
     Spectrum = true,
     mp3_player = true,
+    mjpeg_player = true,
     ["holo-retro-go"] = true,
     FluidPendant = true,
   }
