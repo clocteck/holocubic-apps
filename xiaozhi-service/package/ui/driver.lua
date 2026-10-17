@@ -116,10 +116,24 @@ function M.new(cfg)
     kind = style_kind,
     style = style_name,
     suppressed = false,
+    state = "idle",
+    pairing = nil,
   }
 
   function self:emit(event, payload)
     payload = type(payload) == "table" and payload or {}
+    if event == "state" then self.state = payload.state end
+    if self.pairing and (event == "stop" or event == "clear_chat"
+        or (event == "state" and self.state ~= "activating")) then
+      self.pairing:close()
+    end
+    -- Activation status still reaches Web/IPC snapshots. It must not reopen
+    -- floating chat styles on every OTA poll, retry or UI rebuild.
+    if cfg.SERVICE_MODE and (self.state == "starting" or self.state == "activating")
+        and (event == "status" or event == "notification" or event == "chat_message"
+          or event == "emotion") then
+      return true, "quiet activation"
+    end
     if event == "notification" then payload.text = T(payload.text) end
     if event == "status" or event == "alert" then payload.status = T(payload.status); payload.message = T(payload.message) end
     if self.suppressed and event ~= "setup" and event ~= "stop" then
@@ -143,6 +157,20 @@ function M.new(cfg)
   end
 
   function self:setup() return self:emit("setup") end
+  function self:show_pairing_code(code, manual)
+    code = tostring(code or "")
+    if code == "" then return false end
+    -- Keep the latch across configuration reloads in this service VM. A new
+    -- boot/service lifetime gets a fresh VM; never store this in paired config.
+    local seen = rawget(_G, "XIAOZHI_PAIRING_PROMPT_SHOWN") == true
+    _G.XIAOZHI_PAIRING_PROMPT_SHOWN = true
+    if self.suppressed or self.kind ~= "float" then return false end
+    if seen and not manual and not self.pairing then return false end
+    if not self.pairing then
+      self.pairing = dofile(SERVICE_DIR .. "/pairing_popup.lua").new(cfg)
+    end
+    return self.pairing:show(code, seen and not manual)
+  end
   function self:stop(reason) return self:emit("stop", { reason = reason }) end
   function self:set_view_mode(mode) return self:emit("view_mode", { mode = mode }) end
   function self:set_metrics(metrics) return self:emit("metrics", { metrics = metrics or {} }) end

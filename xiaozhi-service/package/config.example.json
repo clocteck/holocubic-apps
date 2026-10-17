@@ -3,8 +3,9 @@
     "url": "https://api.tenclass.net/xiaozhi/ota/",
     "enabled": true,
     "force": false,
-    "interval_ms": 3000,
-    "max_polls": 80
+    "poll_interval_ms": 6000,
+    "slow_poll_interval_ms": 20000,
+    "pairing_timeout_ms": 300000
   },
   "websocket": {
     "url": "",

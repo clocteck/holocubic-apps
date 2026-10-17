@@ -1,4 +1,5 @@
-local T = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi") .. "/i18n.lua").translator()
+local I18n = dofile((rawget(_G, "XIAOZHI_UI_APP_DIR") or "/sd/apps/xiaozhi-service") .. "/i18n.lua")
+local T = I18n.translator()
 local M = {}
 
 function M.new(cfg, load_module)
@@ -309,6 +310,9 @@ function M.new(cfg, load_module)
     self.ui:setup()
     apply_service_ui_suppression()
     if quiet then
+      if self.state.state == State.STARTING or self.state.state == State.ACTIVATING then
+        self.ui:on_state(self.state.state)
+      end
       refresh_metrics()
       return true
     end
@@ -449,6 +453,19 @@ function M.new(cfg, load_module)
 
   local start_activation
 
+  local function update_pairing_text(code)
+    local title, _, message = I18n.pairing_prompt(code, cfg)
+    self.ui_status, self.ui_role = title, "system"
+    self.ui_text, self.ui_notice = message, title
+  end
+
+  local function present_pairing_code(code, manual)
+    update_pairing_text(code)
+    if self.ui.show_pairing_code then
+      self.ui:show_pairing_code(code, manual)
+    end
+  end
+
   local function show_pairing_code()
     local code = self.pairing_code or ""
     if self.activation and type(self.activation.code) == "string" and self.activation.code ~= "" then
@@ -461,14 +478,10 @@ function M.new(cfg, load_module)
     self.ui:set_emotion("thinking")
     self.ui_emotion = "thinking"
     if code ~= "" then
-      self.ui_status = T("验证码 ") .. code
-      self.ui_role = "system"
-      self.ui_text = T("后台添加设备输入验证码 ") .. code
-      self.ui_notice = T("验证码 ") .. code
-      self.ui:set_status(T("验证码 ") .. code)
-      self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
-      self.ui:show_notification(T("验证码 ") .. code, 3000)
+      self.pairing_prompt_requested = false
+      present_pairing_code(code, true)
     else
+      self.pairing_prompt_requested = true
       self.ui_status = T("获取验证码")
       self.ui_role = "system"
       self.ui_text = T("正在向小智服务端申请验证码")
@@ -1290,13 +1303,8 @@ function M.new(cfg, load_module)
         self.ui:set_emotion("thinking")
         self.ui_emotion = "thinking"
         if code ~= "" then
-          self.ui_status = T("验证码 ") .. code
-          self.ui_role = "system"
-          self.ui_text = T("后台添加设备输入验证码 ") .. code
-          self.ui_notice = T("验证码 ") .. code
-          self.ui:set_status(T("验证码 ") .. code)
-          self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
-          self.ui:show_notification(T("验证码 ") .. code, 2500)
+          present_pairing_code(code, self.pairing_prompt_requested)
+          self.pairing_prompt_requested = false
         else
           self.ui_status = T("等待绑定")
           self.ui_role = "system"
@@ -1308,11 +1316,7 @@ function M.new(cfg, load_module)
       elseif event == "pending" then
         local code = data and data.code or ""
         if code ~= "" then
-          self.ui_status = T("验证码 ") .. code
-          self.ui_role = "system"
-          self.ui_text = T("后台添加设备输入验证码 ") .. code
-          self.ui_notice = T("验证码 ") .. code
-          self.ui:set_status(T("验证码 ") .. code)
+          update_pairing_text(code)
         else
           self.ui_status = T("等待绑定")
           self.ui_role = "system"
@@ -1325,12 +1329,8 @@ function M.new(cfg, load_module)
         local code = self.activation and self.activation.code or self.pairing_code or ""
         if code ~= "" then
           self.activation_message = T("网络暂时繁忙，仍在等待后台绑定")
-          self.ui_status = T("验证码 ") .. code
-          self.ui_role = "system"
-          self.ui_text = T("后台添加设备输入验证码 ") .. code
+          update_pairing_text(code)
           self.ui_notice = self.activation_message
-          self.ui:set_status(T("验证码 ") .. code)
-          self.ui:set_chat_message("system", T("后台添加设备输入验证码 ") .. code)
         else
           self.activation_message = T("网络暂时繁忙，正在重新获取配对信息")
           self.ui_status = T("正在重试")
@@ -1349,6 +1349,7 @@ function M.new(cfg, load_module)
         self.ui:set_chat_message("system", T("绑定成功，正在读取服务配置"))
       elseif event == "done" then
         self.pairing_code = ""
+        self.pairing_prompt_requested = false
         self.ui_status = T("小智已就绪")
         self.ui_role = "system"
         self.ui_text = ""
@@ -1367,7 +1368,11 @@ function M.new(cfg, load_module)
         self.ui_role = "system"
         self.ui_text = tostring(data or "activation failed")
         self.ui_notice = self.ui_text
-        alert(T("激活失败"), data or "activation failed", "cloud_slash")
+        -- Background activation failures remain visible in Web/IPC state,
+        -- without replacing a dismissed pairing card with another popup.
+        if not cfg.SERVICE_MODE then
+          alert(T("激活失败"), data or "activation failed", "cloud_slash")
+        end
         set_state(State.IDLE)
         refresh_metrics()
       end
@@ -1950,10 +1955,11 @@ function M.new(cfg, load_module)
     local text = self.ui_text or ""
     local notice = self.ui_notice or self.activation_message or ""
     if type(code) == "string" and code ~= "" and (text == "" or self.activation_status == "code" or self.activation_status == "pending") then
-      status = T("验证码 ") .. code
+      local title, _, message = I18n.pairing_prompt(code, cfg)
+      status = title
       role = "system"
-      text = T("后台添加设备输入验证码 ") .. code
-      notice = T("验证码 ") .. code
+      text = message
+      notice = title
     end
     return {
       ok = true,

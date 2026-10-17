@@ -23,6 +23,8 @@ function M.locale(cfg)
   return normalize(lang)
 end
 local en = {
+  ["配对码："]="Pairing code: ", ["请在 xiaozhi.me 输入"]="Enter in xiaozhi.me",
+  ["配对等待超时，后台继续重试"]="Pairing wait timed out; retrying in the background",
   ["未配置 ota.url"]="OTA URL not configured", ["等待设备 MAC"]="Waiting for device identity", ["正在读取设备 MAC"]="Reading device identity",
   ["检查 OTA"]="Checking OTA", ["正在向小智服务端申请验证码"]="Requesting pairing code", ["验证码 "]="Pairing code ",
   ["后台添加设备输入验证码 "]="Enter this code in the console: ", ["等待绑定"]="Waiting for pairing", ["等待后台设备绑定"]="Waiting for device pairing",
@@ -67,5 +69,17 @@ function M.translator(cfg)
     if not translated then return s end
     return extra[lang] and extra[lang][translated] or translated
   end
+end
+function M.pairing_prompt(code, cfg)
+  local T = M.translator(cfg)
+  local labels = {
+    ["zh-TW"] = { "配對碼：", "請在 xiaozhi.me 輸入" },
+    de = { "Kopplungscode: ", "Auf xiaozhi.me eingeben" },
+    ja = { "ペアリングコード：", "xiaozhi.me で入力" },
+  }
+  local localized = labels[M.locale(cfg)]
+  local title = (localized and localized[1] or T("配对码：")) .. tostring(code or "")
+  local hint = localized and localized[2] or T("请在 xiaozhi.me 输入")
+  return title, hint, title .. "\n" .. hint
 end
 return M

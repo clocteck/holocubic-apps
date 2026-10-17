@@ -56,6 +56,7 @@ def dofile(path):
 lua.globals().dofile = dofile
 saved = json.loads(fs['/sd/data/xiaozhi/config.json'])
 saved.update(language='en',wake={'id':'hi_esp'})
+saved['ota'] = {'interval_ms': 3000, 'max_polls': 80}
 saved['audio']['duplex'] = True
 saved['audio']['aec_delay_ms'] = 16
 saved['audio']['aec_nlp_level'] = 1
@@ -68,6 +69,10 @@ for app_name in ('xiaozhi','xiaozhi-service'):
     assert cfg['WAKE_MODEL'] == 'wn9s_hiesp'
     assert cfg['WAKE_ROOT'] == '/sd/apps/'+app_name+'/wake'
     assert cfg['LANGUAGE'] == 'en'
+    assert cfg['ota']['poll_interval_ms'] == 6000
+    assert cfg['ota']['slow_poll_interval_ms'] == 20000
+    assert cfg['ota']['pairing_timeout_ms'] == 300000
+    assert cfg['ota']['max_polls'] is None
     assert cfg['AUDIO']['duplex'] is None
     assert cfg['AUDIO']['aec_delay_ms'] is None
     assert cfg['AUDIO']['aec_nlp_level'] is None
@@ -101,6 +106,8 @@ print('Frontend ownership startup matrix: PASS')
 import runpy
 runpy.run_path(str(Path(__file__).with_name('test_half_duplex.py')))
 runpy.run_path(str(Path(__file__).with_name('test_transport.py')))
+runpy.run_path(str(Path(__file__).with_name('test_pairing_popup.py')))
+runpy.run_path(str(Path(__file__).with_name('test_activation_retry.py')))
 
 # A failed atomic commit must retain the previous identity and token.
 snapshot = fs['/sd/data/xiaozhi/config.json']
@@ -117,6 +124,7 @@ for app_name in ('xiaozhi', 'xiaozhi-service'):
     vm = LuaRuntime(unpack_returned_tuples=True)
     vm.execute("""
       callbacks={};events={};posted=0;saved=0
+      function millis()return 0 end
       tmr={ALARM_SINGLE=0,create=function() return {
         stop=function()end,unregister=function()end,
         alarm=function(self,ms,kind,fn) callbacks[#callbacks+1]=fn end} end}

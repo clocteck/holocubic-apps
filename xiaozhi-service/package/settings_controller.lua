@@ -49,6 +49,15 @@ function M.attach(runtime, cfg)
     s.url, s.version = s.websocket_url, s.websocket_version
     s.app_installed = s.app_ui_installed
     s.activation_message = s.message
+    local activation = self.activation
+    s.activation_retry = activation and {
+      active = activation.active, slow = activation.slow_retry,
+      next_retry_ms = activation.next_retry_ms, last_error = activation.last_error,
+      poll_count = activation.poll_count, network_retries = activation.network_retries,
+      fast_interval_ms = cfg.ota.poll_interval_ms,
+      slow_interval_ms = cfg.ota.slow_poll_interval_ms,
+      fast_window_ms = cfg.ota.pairing_timeout_ms,
+    } or nil
     s.ui_options = s.ui_options or {}
     s.ui_options.app_styles = s.ui_options.app
     s.ui_options.service_styles = s.ui_options.float

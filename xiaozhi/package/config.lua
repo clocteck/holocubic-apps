@@ -47,8 +47,9 @@ M.ota = {
   url = "https://api.tenclass.net/xiaozhi/ota/",
   enabled = true,
   force = false,
-  interval_ms = 3000,
-  max_polls = 80,
+  poll_interval_ms = 6000,
+  slow_poll_interval_ms = 20000,
+  pairing_timeout_ms = 300000,
   timeout_ms = 10000,
 }
 
@@ -161,11 +162,8 @@ local function apply_ota(ota)
   if ota.force ~= nil then
     M.ota.force = ota.force and true or false
   end
-  if tonumber(ota.interval_ms) then
-    M.ota.interval_ms = math.floor(tonumber(ota.interval_ms))
-  end
-  if tonumber(ota.max_polls) then
-    M.ota.max_polls = math.floor(tonumber(ota.max_polls))
+  for _, name in ipairs({ "poll_interval_ms", "slow_poll_interval_ms", "pairing_timeout_ms" }) do
+    if tonumber(ota[name]) then M.ota[name] = math.max(1000, math.floor(tonumber(ota[name]))) end
   end
   if tonumber(ota.timeout_ms) then
     M.ota.timeout_ms = math.floor(tonumber(ota.timeout_ms))
@@ -259,15 +257,14 @@ local function load_config()
     local ota_url = pick_string(ota_block, "url")
     local enabled = pick_bool(ota_block, "enabled")
     local force = pick_bool(ota_block, "force")
-    local interval_ms = pick_number(ota_block, "interval_ms")
-    local max_polls = pick_number(ota_block, "max_polls")
     local timeout_ms = pick_number(ota_block, "timeout_ms")
     apply_ota({
       url = ota_url,
       enabled = enabled,
       force = force,
-      interval_ms = interval_ms,
-      max_polls = max_polls,
+      poll_interval_ms = pick_number(ota_block, "poll_interval_ms"),
+      slow_poll_interval_ms = pick_number(ota_block, "slow_poll_interval_ms"),
+      pairing_timeout_ms = pick_number(ota_block, "pairing_timeout_ms"),
       timeout_ms = timeout_ms,
     })
   end
