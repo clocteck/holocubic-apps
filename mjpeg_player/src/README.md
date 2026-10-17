@@ -1,11 +1,11 @@
 # 视频播放器原生模块源码
 
-当前源码版本为 `jpg.so` 1.0.3：7376 字节 JPEG 解码栈改为 PSRAM，保留 1.0.2 的轻量帧统计。**本次仅修改源码，发布包中的原生模块尚未重新编译；不要仅凭 Lua App 版本判断模块已更新。**
+当前发布包包含已重编译的 `jpg.so` 1.0.3（114868 字节）及 `audio.so` 1.12.1（119948 字节）。7376 字节 JPEG 解码栈改为 PSRAM，保留 1.0.2 的轻量帧统计；不要仅凭 Lua App 版本判断模块已更新。
 
 ## PSRAM 任务栈
 
 - `jpg_decode`：7376 字节，使用 `MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT`，分配失败直接报错，不回退占用内部 RAM。
-- `audio_fill`：5536 字节，Lua 显式传入 `producer_stack_psram=true`。对应音频源码在 `../../mp3_player/src/main/audio_module.c`，新源码版本为 `audio.so` 1.12.1；需要重编译后复制到本 App 的 `package/modules/audio.so`。不需要替换其他音乐 App 的模块。
+- `audio_fill`：5536 字节，Lua 显式传入 `producer_stack_psram=true`。对应音频源码在 `../../mp3_player/src/main/audio_module.c`，版本为 `audio.so` 1.12.1；重编译后复制到本 App 的 `package/modules/audio.so`。不需要替换其他音乐 App 的模块。
 - `audio_i2s`：4608 字节，继续使用内部 RAM；I²S DMA 分配保持不变。
 - 与三个任务栈都在内部 RAM 相比，预计释放 12912 字节（约 12.6 KiB）的内部栈分配；TCB、宿主任务记录及删除辅助任务仍需要内部 RAM，不能保证彻底消除内存不足。
 - 固件必须启用 `CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM` 并提供 `task.create_ex`，当前 1.213 构建已具备。两条 PSRAM 工作任务链只处理 SD/内存解码，不能在其上加入 Flash 擦写、NVS 或 OTA 操作。
@@ -13,6 +13,8 @@
 - 必须一起更新 Lua、`jpg.so` 和 `audio.so`；旧音频二进制会忽略新选项，单独上传 Lua 不会迁移音频栈。
 
 实机验收：日志中 `jpg_decode` 与 `audio_fill` 应为 `caps=0x12`，`audio_i2s` 仍为 `caps=0x11`；测试连续播放、暂停恢复、循环和多次退出重进，记录内部空闲量/最大连续块和帧率。PSRAM 栈可能增加缓存访问开销，帧率及长期稳定性仍需实测。
+
+2026-10-17 在固件 1.213 上完成启动冒烟测试：状态接口确认两个新模块版本，`audio.producer_stack_psram=true`，音频生产者及 I²S 任务运行、写入字节和视频呈现帧数持续增长，错误计数为 0；小智服务保持运行并为 `mjpeg_player` 暂停音频。固件音量与播放器 `volume_applied` 同步（包括 0 静音）。这是短时验证，不代表长期泄漏/稳定性测试，也未修复固件 WithCaps 删除辅助任务创建失败时的回收问题。
 
 此目录保存 `mjpeg_player/package/modules/jpg.so` 对应的原生源码：
 
