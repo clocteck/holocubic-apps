@@ -6,7 +6,7 @@ end
 MJPEG_PLAYER_APP = {}
 local APP = MJPEG_PLAYER_APP
 local master_volume = dofile("/sd/apps/mjpeg_player/volume.lua").new()
-APP.VERSION = "1.0.1"
+APP.VERSION = "1.1.0"
 
 local SCREEN_W = 320
 local SCREEN_H = 240
@@ -47,6 +47,10 @@ APP.audio_written_bytes = 0
 APP.ui = {}
 APP.timers = {}
 APP.paused = false
+APP.pause_source = "startup"
+APP.pause_event = "INIT"
+APP.pause_changed_ms = 0
+APP.skip_payload_bytes_saved = 0
 APP.shutting_down = false
 APP.overlay = false
 APP.started_ms = 0
@@ -88,6 +92,16 @@ local function now_us()
     if ok and tonumber(value) then return tonumber(value) end
   end
   return now_ms() * 1000
+end
+
+local function set_pause_state(paused, source, event)
+  APP.paused = paused == true
+  APP.pause_source = tostring(source or "unknown")
+  APP.pause_event = tostring(event or "STATE")
+  APP.pause_changed_ms = now_ms()
+  print(string.format("[mjpeg] paused=%s source=%s event=%s video_ms=%d",
+    tostring(APP.paused), APP.pause_source, APP.pause_event,
+    math.floor(APP.timeline_frame * FRAME_INTERVAL_MS)))
 end
 
 local function sleep_ms(ms)
@@ -269,7 +283,7 @@ local function is_video_chunk(id)
   return type(id) == "string" and id:match("^%d%dd[bc]$") ~= nil
 end
 
-local function read_next_jpeg()
+local function read_next_jpeg(skip_payload)
   local fd = APP.fd
   if not fd then return nil, "video is closed" end
   local inspected = 0
@@ -298,10 +312,22 @@ local function read_next_jpeg()
           APP.scan_stack[#APP.scan_stack + 1] = { pos = data_pos + 4, limit = data_end }
         end
       elseif is_video_chunk(id) and size > 4 then
+        if skip_payload then
+          -- Normal MJPEG chunks start with SOI. Skip their payload without
+          -- allocating a full Lua string. Preserve the legacy scan for odd
+          -- chunks with a prefix before SOI, and retain all AVI bounds checks.
+          local prefix = read_at(fd, data_pos, 2)
+          if not prefix then return nil, "JPEG frame read failed" end
+          if prefix == "\255\216" then
+            APP.skip_payload_bytes_saved = APP.skip_payload_bytes_saved + size - 2
+            return true
+          end
+        end
         local jpeg = read_at(fd, data_pos, size)
         if not jpeg then return nil, "JPEG frame read failed" end
         local soi = jpeg:find(string.char(0xFF, 0xD8), 1, true)
         if soi then
+          if skip_payload then return true end
           if soi > 1 then jpeg = jpeg:sub(soi) end
           return jpeg
         end
@@ -349,6 +375,7 @@ end
 
 local function build_ui()
   local root = lv_scr_act()
+  APP.ui.root = root
   lv_obj_clean(root)
 
   local bg = lv_obj_create(root)
@@ -546,7 +573,8 @@ local function start_audio(name)
       local playing, play_error = APP.audio.i2s_play_start({
         chunk_bytes = 4096,
         timeout_ms = 80,
-        stack_bytes = 5120,
+        stack_bytes = 4608,
+        producer_stack_bytes = 5536,
         priority = 9,
         core = 1,
         producer_core = 1,
@@ -689,7 +717,7 @@ local function open_video(index)
     and meta.width == SCREEN_W
     and meta.height == SCREEN_H
     and type(APP.jpg.present_ready) == "function"
-  APP.paused = false
+  set_pause_state(false, "video.open", "OPEN")
   hide_message()
   start_timeline()
   local has_audio = start_audio(name)
@@ -721,14 +749,14 @@ local function submit_jpeg(jpeg, frame_id)
       APP.errors = APP.errors + 1
       print("[mjpeg] decode failed: " .. tostring(decoded or width))
       APP.decoder_failed = true
-      APP.paused = true
+      set_pause_state(true, "decoder.decode", "ERROR")
       stop_audio()
       show_message("DECODER FAILED", tostring(decoded or width))
       return false
     end
     if tonumber(width) ~= SCREEN_W or tonumber(height) ~= SCREEN_H then
       APP.errors = APP.errors + 1
-      APP.paused = true
+      set_pause_state(true, "decoder.size", "ERROR")
       show_message("DECODE SIZE ERROR", tostring(width) .. "x" .. tostring(height))
       return false
     end
@@ -754,13 +782,14 @@ local function submit_jpeg(jpeg, frame_id)
       frame_id = frame_id,
       swap_color_bytes = false,
       direct_present = APP.direct_present,
+      brief_stats = true,
     })
   end)
   if not ok or submitted ~= true then
     APP.errors = APP.errors + 1
     print("[mjpeg] submit failed: " .. tostring(submitted or stats))
     APP.decoder_failed = true
-    APP.paused = true
+    set_pause_state(true, "decoder.submit", "ERROR")
     stop_audio()
     show_message("DECODER START FAILED", tostring(submitted or stats))
     return false
@@ -795,7 +824,7 @@ local function present_ready()
     end
     return
   end
-  local ok, image, width, height, stats = pcall(function() return APP.jpg.read_ready_image() end)
+  local ok, image, width, height, stats = pcall(function() return APP.jpg.read_ready_image(true) end)
   if not ok then
     APP.errors = APP.errors + 1
     print("[mjpeg] read_ready_image failed: " .. tostring(image))
@@ -805,7 +834,7 @@ local function present_ready()
   local slot = type(stats) == "table" and tonumber(stats.image_pool_pending_slot) or nil
   if not slot or slot < 1 or slot > 2 then
     APP.errors = APP.errors + 1
-    APP.paused = true
+    set_pause_state(true, "display.slot", "ERROR")
     show_message("DISPLAY ERROR", "Decoder returned no pending image slot")
     return
   end
@@ -813,7 +842,7 @@ local function present_ready()
     pcall(function() APP.jpg.cancel_image(slot) end)
     APP.errors = APP.errors + 1
     show_message("DECODE SIZE ERROR", tostring(width) .. "x" .. tostring(height))
-    APP.paused = true
+    set_pause_state(true, "display.size", "ERROR")
     return
   end
   local set_started_us = now_us()
@@ -824,18 +853,41 @@ local function present_ready()
     pcall(function() APP.jpg.cancel_image(slot) end)
     APP.errors = APP.errors + 1
     show_message("DISPLAY ERROR", tostring(set_error))
-    APP.paused = true
+    set_pause_state(true, "display.set_src", "ERROR")
     return
   end
 
-  -- Only now may the old front slot become writable.  If commit unexpectedly
+  -- Userdata set_src only enqueues an asynchronous UI command. A synchronous
+  -- query on the same FIFO waits until that command has actually executed,
+  -- so the decoder cannot overwrite the old source while LVGL still reads it.
+  -- This is not a panel/DMA fence, nor an acknowledgement of set_src enqueue:
+  -- the current firmware can silently drop set_src if its queue is full.
+  -- Object dimensions may still be zero until LVGL's deferred layout pass.
+  -- Parent identity is synchronous too, but does not depend on layout.
+  local fence_ok, bound_parent = pcall(function()
+    return lv_obj_get_parent(APP.ui.image)
+  end)
+  if not fence_ok or bound_parent == nil or bound_parent ~= APP.ui.root then
+    -- The new source might already be bound. Do not cancel/free either slot.
+    APP.errors = APP.errors + 1
+    set_pause_state(true, "display.fence", "ERROR")
+    stop_audio()
+    local reason = fence_ok and ("Unexpected image parent: " .. tostring(bound_parent)) or tostring(bound_parent)
+    print("[mjpeg] image sync failed: " .. reason)
+    show_message("DISPLAY SYNC ERROR", reason)
+    return
+  end
+  set_finished_us = now_us()
+  set_src_us = set_finished_us >= set_started_us and (set_finished_us - set_started_us) or 0
+
+  -- Only after the UI fence may the old front slot become writable. If commit
   -- fails, leave the new slot pending (and therefore protected) and pause.
   local commit_ok, committed, commit_stats = pcall(function()
-    return APP.jpg.commit_image(slot, set_src_us)
+    return APP.jpg.commit_image(slot, set_src_us, true)
   end)
   if not commit_ok or committed ~= true then
     APP.errors = APP.errors + 1
-    APP.paused = true
+    set_pause_state(true, "display.commit", "ERROR")
     show_message("DISPLAY ERROR", tostring(commit_stats or committed))
     return
   end
@@ -853,8 +905,8 @@ local function present_ready()
 end
 
 local function skip_one_frame()
-  local jpeg, reason = read_next_jpeg()
-  if jpeg then
+  local skipped, reason = read_next_jpeg(true)
+  if skipped then
     APP.timeline_frame = APP.timeline_frame + 1
     APP.skipped = APP.skipped + 1
     return true
@@ -925,8 +977,8 @@ local function switch_video(delta)
   open_video(APP.index + delta)
 end
 
-local function toggle_pause()
-  APP.paused = not APP.paused
+local function toggle_pause(source, event)
+  set_pause_state(not APP.paused, source, event)
   if APP.paused then
     pause_audio(true)
     show_message("PAUSED", APP.files[APP.index] or "")
@@ -948,7 +1000,7 @@ local function register_keys()
     if event_type == key.START then switch_video(1) end
   end) end
   if key.UP then key.on(key.UP, function(event_type)
-    if event_type == key.START then toggle_pause() end
+    if event_type == key.START then toggle_pause("key.UP", "START") end
   end) end
   if key.DOWN then key.on(key.DOWN, function(event_type)
     if event_type == key.START then
@@ -1104,7 +1156,7 @@ local function register_safe_exit_api()
 
   local status_ok, status_error = pcall(function()
     return httpd.dynamic(httpd.GET, APP.status_route, function()
-      pcall(function() collectgarbage("collect") end)
+      -- A status request must not force a full collection during playback.
       local usage = {}
       local decoder = {}
       local audio_state = {}
@@ -1131,6 +1183,16 @@ local function register_safe_exit_api()
         module_version = APP.jpg and APP.jpg.VERSION or nil,
         presented = APP.presented,
         submitted = APP.submitted,
+        paused = APP.paused,
+        pause_source = APP.pause_source,
+        pause_event = APP.pause_event,
+        pause_changed_ms = APP.pause_changed_ms,
+        errors = APP.errors,
+        skip_payload_bytes_saved = APP.skip_payload_bytes_saved,
+        volume = master_volume.value,
+        volume_applied = master_volume.applied,
+        volume_firmware_supported = master_volume.supported,
+        volume_error = master_volume.error,
         usage = usage,
         decoder = decoder,
         audio = audio_state,

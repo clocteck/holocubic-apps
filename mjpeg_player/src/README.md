@@ -1,5 +1,7 @@
 # 视频播放器原生模块源码
 
+当前源码版本为 `jpg.so` 1.0.2：增加可选轻量帧统计，并按用户要求将 JPEG 任务栈缩减为 7376 字节。需重新执行构建并替换发布包中的模块，这两项才会生效；不要仅凭 Lua App 版本判断模块已更新。
+
 此目录保存 `mjpeg_player/package/modules/jpg.so` 对应的原生源码：
 
 - `main/jpg_module.c`：`esp_new_jpeg` RGB565 解码、双 LVGL 图像槽、异步任务及协作停止逻辑。

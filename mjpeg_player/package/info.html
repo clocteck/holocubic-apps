@@ -73,14 +73,14 @@
       <aside class="panel" aria-labelledby="info-title">
         <h2 id="info-title" class="zh">应用信息</h2><h2 class="en">App info</h2>
         <div class="meta">
-          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">1.0.1</span></div>
+          <div class="meta-item"><span class="label zh">版本</span><span class="label en">Version</span><span class="value">1.1.0</span></div>
           <div class="meta-item"><span class="label zh">视频格式</span><span class="label en">Video format</span><span class="value">MJPEG AVI · 320×240</span></div>
           <div class="meta-item"><span class="label zh">音频格式</span><span class="label en">Audio format</span><span class="value">WAV · 16 kHz · Mono</span></div>
           <div class="meta-item"><span class="label zh">媒体目录</span><span class="label en">Media folder</span><span class="value">/sd/videos</span></div>
           <div class="meta-item"><span class="label zh">开源协议</span><span class="label en">License</span><span class="value">GPL-3.0</span></div>
         </div>
-        <p class="notice zh"><strong>1.0.1 更新：</strong>启用 esp_new_jpeg 与双对齐图像槽；低热度 JPEG 邮箱移到 PSRAM，并缩减音频 DMA 队列，典型释放约 24 KB 内部 RAM。</p>
-        <p class="notice en"><strong>1.0.1:</strong> Adds esp_new_jpeg with two aligned image slots, moves the low-traffic JPEG mailbox to PSRAM, and trims audio DMA to free about 24 KB of internal RAM.</p>
+        <p class="notice zh"><strong>1.1.0 更新：优化播放稳定性。</strong>改进双缓冲换帧同步，修复已复现的串帧问题；减少跳帧时的无效读取和每帧统计开销，缩减任务栈占用。新增暂停原因日志，继续支持固件统一音量。</p>
+        <p class="notice en"><strong>1.1.0: Improved playback stability.</strong> Improves double-buffer synchronization to fix the reproduced mixed-frame issue, reduces unnecessary reads when skipping frames and per-frame statistics overhead, and lowers task-stack usage. Adds pause-reason logs and retains firmware master-volume support.</p>
       </aside>
     </div>
     <footer class="footer"><span class="zh">推荐搭配 Launcher 1.17 使用 · 源码与第三方许可：</span><span class="en">Recommended with Launcher 1.17 · Source and third-party licenses: </span><a href="https://github.com/clocteck/holocubic-apps/tree/main/mjpeg_player" target="_blank" rel="noopener">clocteck/holocubic-apps</a></footer>

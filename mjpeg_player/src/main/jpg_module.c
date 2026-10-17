@@ -20,7 +20,7 @@
 #endif
 
 #define JPG_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define JPG_VERSION "1.0.1"
+#define JPG_VERSION "1.0.2"
 #define JPG_MODULE_NAME "jpg"
 #define JPG_MODULE_DESCRIPTION "JPEG to RGB565 decoder for Lua LVGL canvas"
 #define JPG_DMA_ROWS 24u
@@ -36,7 +36,8 @@
 #define JPG_IMAGE_POOL_GUARD_BYTES 32u
 #define JPG_IMAGE_POOL_ALLOC_BYTES \
     (JPG_IMAGE_POOL_BYTES + (JPG_IMAGE_POOL_GUARD_BYTES * 2u) + JPG_IMAGE_POOL_ALIGNMENT - 1u)
-#define JPG_DECODE_TASK_STACK_BYTES (8u * 1024u)
+/* About 10% less than 8192, rounded up to 16 bytes. */
+#define JPG_DECODE_TASK_STACK_BYTES 7376u
 #define JPG_ENABLE_LVGL_USERDATA 1
 #define JPG_LV_IMG_CF_TRUE_COLOR 4u
 #if JPG_ASYNC_RGB_BUFFERS != JPG_IMAGE_POOL_SLOTS
@@ -1554,6 +1555,24 @@ static void push_stats(lua_State *L, jpg_instance_t *inst)
 
 static int jpg_async_start(jpg_instance_t *inst);
 
+/* Hot-path return values only. Keep heap queries and the complete diagnostic
+ * table behind explicit stats() calls or the legacy (default) API behavior. */
+static void push_frame_stats(lua_State *L, jpg_instance_t *inst, int brief)
+{
+    const module_host_api_v2 *host = &inst->host;
+    if (!brief) {
+        push_stats(L, inst);
+        return;
+    }
+    host->lua.createtable(L, 0, 5);
+    set_integer_field(L, host, "frame_id", inst->async_last_present_frame_id);
+    set_integer_field(L, host, "decode_us", inst->last_decode_us);
+    set_integer_field(L, host, "push_us", inst->last_push_us);
+    set_integer_field(L, host, "image_pool_pending_slot",
+                      inst->async_presenting_index >= 0 ? inst->async_presenting_index + 1 : 0);
+    set_integer_field(L, host, "async_pending_overwrites", inst->async_pending_overwrites);
+}
+
 static void jpg_async_decode_task(void *arg)
 {
     jpg_instance_t *inst = (jpg_instance_t *)arg;
@@ -1745,6 +1764,7 @@ static int l_jpg_submit(lua_State *L)
     const uint8_t *jpeg = NULL;
     size_t jpeg_len = 0;
     int swap = 0;
+    int brief = 0;
     uint32_t frame_id = 0;
 
     if (!inst || !host) {
@@ -1760,6 +1780,7 @@ static int l_jpg_submit(lua_State *L)
     if (host->lua.gettop(L) >= 2 && host->lua.istable(L, 2)) {
         swap = read_bool_field(L, host, 2, "swap_color_bytes", inst->swap_color_bytes);
         frame_id = (uint32_t)read_int_field(L, host, 2, "frame_id", 0);
+        brief = read_bool_field(L, host, 2, "brief_stats", 0);
     }
     if (!jpg_init_image_pool(L, inst)) {
         return push_error(L, host, "jpg.submit: image pool init failed");
@@ -1798,7 +1819,7 @@ static int l_jpg_submit(lua_State *L)
     jpg_async_unlock(inst);
 
     host->lua.pushboolean(L, 1);
-    push_stats(L, inst);
+    push_frame_stats(L, inst, brief);
     return 2;
 }
 
@@ -1873,10 +1894,12 @@ static int l_jpg_read_ready_image(lua_State *L)
     uint32_t frame_id = 0;
     uint32_t input_bytes = 0;
     uint32_t output_bytes = 0;
+    int brief = 0;
 
     if (!inst || !host) {
         return push_error(L, host, "jpg.read_ready_image: instance missing");
     }
+    brief = host->lua.gettop(L) >= 1 && host->lua.toboolean(L, 1);
 
     if (!jpg_take_ready_image_slot(inst, &idx, &frame_id, &input_bytes, &output_bytes)) {
         host->lua.pushnil(L);
@@ -1895,7 +1918,7 @@ static int l_jpg_read_ready_image(lua_State *L)
     inst->host.lua.registry_rawgeti(L, inst->image_pool_ref[idx]);
     host->lua.pushinteger(L, 320);
     host->lua.pushinteger(L, 240);
-    push_stats(L, inst);
+    push_frame_stats(L, inst, brief);
     return 4;
 }
 
@@ -1906,6 +1929,7 @@ static int l_jpg_commit_image(lua_State *L)
     int64_t slot_arg = 0;
     int64_t push_us_arg = 0;
     int committed = 0;
+    int brief = 0;
 
     if (!inst || !host || !host->lua.checkinteger) {
         return push_error(L, host, "jpg.commit_image: instance missing");
@@ -1920,9 +1944,10 @@ static int l_jpg_commit_image(lua_State *L)
             push_us_arg = 0;
         }
     }
+    brief = host->lua.gettop(L) >= 3 && host->lua.toboolean(L, 3);
     committed = jpg_commit_image_slot(inst, (int)slot_arg - 1, (uint32_t)push_us_arg);
     host->lua.pushboolean(L, committed);
-    push_stats(L, inst);
+    push_frame_stats(L, inst, brief);
     return 2;
 }
 
