@@ -2361,6 +2361,10 @@ function APP.stop(reason)
     pcall(httpd.stop)
     APP.web_started = false
   end
+  -- Font users must be deleted before the font handles are released.
+  if lv_obj_clean and APP.ui.root then
+    pcall(function() lv_obj_clean(APP.ui.root) end)
+  end
   if APP._ui_release_fonts then
     APP._ui_release_fonts()
   end

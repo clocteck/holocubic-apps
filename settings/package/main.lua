@@ -1541,13 +1541,12 @@ function APP.stop(_reason)
       ipc.listen(SETTINGS_HIDPAD_ENDPOINT, nil)
     end)
   end
-  release_fonts()
-
   if lv_obj_clean and lv_scr_act then
     pcall(function()
       lv_obj_clean(lv_scr_act())
     end)
   end
+  release_fonts()
 
   if rawget(_G, "SETTINGS_APP") == APP then
     _G.SETTINGS_APP = nil

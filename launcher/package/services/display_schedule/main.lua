@@ -160,7 +160,7 @@ local function write_settings(settings)
 
   if file.rename and file.remove then
     local temp_ok, temp_result = pcall(function() return file.putcontents(APP.SETTINGS_TEMP_PATH, raw) end)
-    if not temp_ok or temp_result == false then return false, tostring(temp_result or "temp write failed") end
+    if not temp_ok or temp_result ~= true then return false, tostring(temp_result or "temp write failed") end
     local verify_ok, verify_raw = pcall(function() return file.getcontents(APP.SETTINGS_TEMP_PATH) end)
     if not verify_ok or verify_raw ~= raw then
       pcall(function() file.remove(APP.SETTINGS_TEMP_PATH) end)
@@ -193,7 +193,7 @@ local function write_settings(settings)
   end
 
   local wrote, result = pcall(function() return file.putcontents(APP.SETTINGS_PATH, raw) end)
-  if not wrote or result == false then return false, tostring(result or "write failed") end
+  if not wrote or result ~= true then return false, tostring(result or "write failed") end
   return true
 end
 
@@ -246,7 +246,8 @@ local function apply_firmware_display_settings(force)
       max_redirects = 0,
     }, "")
   end)
-  if ok and result ~= false then
+  local code = tonumber(result)
+  if ok and code and code >= 200 and code < 300 then
     APP.display_settings_signature = signature
     return true
   end

@@ -102,6 +102,10 @@ local function write_file(path, data)
 end
 
 local function now_ms()
+  if millis then
+    local ok, v = pcall(millis)
+    if ok and tonumber(v) then return tonumber(v) end
+  end
   if tmr and tmr.now then
     local ok, v = pcall(function() return tmr.now() end)
     if ok and v then
@@ -148,18 +152,29 @@ local function countdown(name)
   end
 end
 
+local READ_DEADLINE_MS = 15000
+local MAX_EMPTY_READS = 200
+
 local function read_i2s_bytes(target, keep)
   local chunks = {}
   local got = 0
+  local empty_reads = 0
+  local started_ms = now_ms()
   while got < target do
     local need = math.min(READ_BYTES, target - got)
-    local chunk = i2s.read(0, need, 160)
-    if chunk and #chunk > 0 then
+    local ok, chunk = pcall(i2s.read, 0, need, 160)
+    if ok and type(chunk) == "string" and #chunk > 0 then
+      empty_reads = 0
       if keep then
         chunks[#chunks + 1] = chunk
       end
       got = got + #chunk
+    else
+      empty_reads = empty_reads + 1
+      if empty_reads >= MAX_EMPTY_READS then break end
     end
+    -- Unsigned elapsed time also handles the millis() counter wrapping.
+    if (now_ms() - started_ms) % 4294967296 >= READ_DEADLINE_MS then break end
   end
   if keep then
     return table_concat(chunks), got
