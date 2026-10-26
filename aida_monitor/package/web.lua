@@ -160,7 +160,7 @@ local function write_config(path, config)
   local raw = config_text(config)
   if file and file.putcontents then
     local ok, result = pcall(file.putcontents, path, raw)
-    if ok and result ~= false then return true end
+    if ok and result == true then return true end
     return false, tostring(result)
   end
   return false, "file.putcontents unavailable"

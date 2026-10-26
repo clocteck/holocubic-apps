@@ -285,7 +285,7 @@ local function write_config(path, config)
     local ok, ret = pcall(function()
       return file.putcontents(path, raw)
     end)
-    if ok and ret ~= false then
+    if ok and ret == true then
       return true
     end
     return false, tostring(ret)

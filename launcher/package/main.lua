@@ -111,7 +111,7 @@ local function copy_file(src, dst)
   local ok, data = pcall(function() return file.getcontents(src) end)
   if not ok or type(data) ~= "string" then return false end
   local wrote, result = pcall(function() return file.putcontents(dst, data) end)
-  return wrote and result ~= false
+  return wrote and result == true
 end
 
 local function ensure_display_schedule_service()

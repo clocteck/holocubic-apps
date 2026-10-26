@@ -2288,8 +2288,10 @@ end
     APP.state.forecast.request_inflight = false
     unbind_input()
     stop_timers()
-    if stop_reason ~= "reload" then
-        release_startup_page()
+    release_startup_page()
+    -- The main screen can be inactive while the startup screen is visible.
+    if lv_obj_clean and APP.ui.root then
+        pcall_fn(function() lv_obj_clean(APP.ui.root) end)
     end
     release_glass_snapshot()
     release_forecast_glass_snapshot()
