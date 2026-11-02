@@ -1,4 +1,5 @@
 local Temperature = dofile("/sd/apps/NixieClock/temperature.lua")
+local ClockFormat = dofile("/sd/apps/NixieClock/clock_format.lua")
 -- Fireworks Clock 烟花时钟
 -- Integrated as NixieClock face 9. Original app by community member sk:
 -- https://github.com/yizhengzhang1/holocubic-apps/tree/main/fireworks_clock
@@ -317,10 +318,13 @@ local function refresh_clock()
     return
   end
   local sec = tonumber(t.sec) or 0
-  if sec ~= st.last_sec then
+  local clock_format = ClockFormat.mode()
+  if sec ~= st.last_sec or clock_format ~= st.clock_format then
+    st.clock_format = clock_format
     st.last_sec = sec
     st.clock_sec = sec
-    st.clock_hhmm = string_format("%02d:%02d", tonumber(t.hour) or 0, tonumber(t.min) or 0)
+    st.clock_hhmm = ClockFormat.text(tonumber(t.hour) or 0, tonumber(t.min) or 0, clock_format)
+    st.clock_period = ClockFormat.period(tonumber(t.hour) or 0, clock_format)
     local wday = tonumber(t.wday)
     if not wday or wday < 1 or wday > 7 then
       wday = weekday_of(tonumber(t.year) or 2026, tonumber(t.mon) or 1, tonumber(t.day) or 1)
@@ -1402,6 +1406,7 @@ local function draw_clock()
   draw_text(0, clock_y - 2, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
   draw_text(0, clock_y + 2, SCREEN_W, st.clock_hhmm, APP.font_time, C.bg, 255)
   draw_text(0, clock_y, SCREEN_W, st.clock_hhmm, APP.font_time, C.clock, st.clock_valid and 255 or 140)
+  draw_text(142, 128, 36, st.clock_valid and (st.clock_period or "") or "", APP.font_date, C.date, 220)
   -- 秒进度条
   local bar_x, bar_y, bar_w = 70, 154, 180
   draw_rect(bar_x, bar_y, bar_w, 3, C.bar_track, 255, 1)

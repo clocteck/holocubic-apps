@@ -1,4 +1,5 @@
 local Temperature = dofile("/sd/apps/NixieClock/temperature.lua")
+local ClockFormat = dofile("/sd/apps/NixieClock/clock_format.lua")
 local previous = rawget(_G, "HOLO_TIME_APP")
 if previous and previous.stop then
   pcall(function() previous.stop("reload") end)
@@ -761,7 +762,7 @@ end
 
 local function draw_modular(t)
   fill(C.black)
-  text(8, 5, 184, format("%02d", t.hour), APP.font.n72, C.white)
+  text(8, 5, 184, format("%02d", ClockFormat.hour(t.hour)), APP.font.n72, C.white)
   text(8, 92, 184, format("%02d", t.min), APP.font.n72, C.lime)
   local day, month, date = date_parts(t)
   rect(202, 14, 106, 80, 0x14131C, 255, 13, 0x2A273C, 1)
@@ -799,7 +800,7 @@ local function draw_mono(t)
   local day, month, date = date_parts(t)
   text(14, 13, 136, day .. " " .. string.char(194, 183) .. " " .. month .. " " .. date, APP.font.en12, C.muted)
   text(160, 13, 146, safe_city_label(APP.state.city) .. "  " .. temp_text(), APP.font.en12, C.soft, ALIGN_RIGHT)
-  local hh = format("%02d", t.hour)
+  local hh = format("%02d", ClockFormat.hour(t.hour))
   local mm = format("%02d", t.min)
   draw_dot_digit(37, 56, hh:sub(1, 1), 0xFF607A, 0x0A0103)
   draw_dot_digit(98, 56, hh:sub(2, 2), 0xFFB13D, 0x0B0501)
@@ -835,7 +836,7 @@ local function draw_neon_girl(t)
   local date_label = (FULL_DAY_NAMES[day] or day) .. ", " .. (FULL_MONTH_NAMES[month] or month) .. " " .. date
   if ui_language() ~= "en" then date_label = day .. " · " .. month .. " " .. date end
   text(20, 31, 190, date_label, APP.font.en9, 0xA8D8EE, nil, nil, 4)
-  local hh = format("%02d", t.hour)
+  local hh = format("%02d", ClockFormat.hour(t.hour))
   local mm = format("%02d", t.min)
   -- Draw each digit in its own slot. A single 84 px clip box can truncate
   -- wide pairs such as "00", while narrower pairs such as "15" look fine.
@@ -882,7 +883,7 @@ local function draw_solar_weather(t)
   disc(197, 59, 10, 0xFFC24D, 48)
   disc(197, 59, 8, 0xFFC24D, 255)
 
-  text(14, 59, 150, format("%02d:%02d", t.hour, t.min), APP.font.n52, C.white, nil, nil, -5)
+  text(14, 59, 150, ClockFormat.text(t.hour, t.min), APP.font.n52, C.white, nil, nil, -5)
   text(141, 97, 28, format("%02d", t.sec), APP.font.en15, 0xFFC24D)
   text(224, 67, 82, temp_text(), APP.font.n34, C.white, ALIGN_RIGHT)
 
@@ -898,6 +899,7 @@ local function draw_solar_weather(t)
 
   line(13, 158, 307, 158, 0x443720, 255, 1)
   local labels = { "NOW", "11:00", "13:00", "15:00" }
+  if ClockFormat.mode() == "12" then labels = { "NOW", "11 AM", "01 PM", "03 PM" } end
   local values = {
     current,
     current and current + 2,
@@ -923,7 +925,7 @@ local function draw_terminal(t)
   text(17, 14, 150, "HOLO_TIME / LOCAL", APP.font.mono11, green)
   text(170, 14, 132, "[ NTP SYNC ]", APP.font.mono11, 0x6EF27A, ALIGN_RIGHT)
   text(14, 42, 160, "> CLOCK.RUN", APP.font.mono11, 0x36773C)
-  text(12, 61, 216, format("%02d:%02d", t.hour, t.min), APP.font.mono56, green)
+  text(12, 61, 216, ClockFormat.text(t.hour, t.min), APP.font.mono56, green)
   text(237, 72, 68, ":" .. format("%02d", t.sec), APP.font.mono24, 0xB8FFAC, ALIGN_RIGHT)
 
   local day, month, date = date_parts(t)
@@ -965,7 +967,7 @@ local function draw_lunar(t)
     draw_moon_phase(79, 110, 40, moon_phase(t))
   end
 
-  text(164, 63, 142, format("%02d:%02d", t.hour, t.min), APP.font.n40, C.white, ALIGN_RIGHT)
+  text(164, 63, 142, ClockFormat.text(t.hour, t.min), APP.font.n40, C.white, ALIGN_RIGHT)
   text(164, 121, 142, temp_text() .. " · " .. face_label(weather_kind(APP.state.weather_code, APP.state.weather_text):upper()), APP.font.en11, 0xC5BAA0, ALIGN_RIGHT)
   line(14, 198, 306, 198, 0x302D25, 255, 1)
 
@@ -979,7 +981,7 @@ local function draw_focus_memo(t)
   fill(C.black)
   line(108, 14, 108, 226, 0x20252B, 255, 1)
 
-  local hh = format("%02d", t.hour)
+  local hh = format("%02d", ClockFormat.hour(t.hour))
   local mm = format("%02d", t.min)
   local function focus_digit(x, y, digit)
     text(x + (digit == "1" and 2 or 0), y, 40, digit, APP.font.n42, C.white)
@@ -1013,6 +1015,7 @@ local function draw_focus_memo(t)
   local row_colors = { C.violet, C.cyan, 0xFF8A3D }
   local row_y = { 32, 95, 158 }
   local row_time = { "10:00", "11:30", "14:00" }
+  if ClockFormat.mode() == "12" then row_time = { "10:00 AM", "11:30 AM", "02:00 PM" } end
   local row_duration = { "19 MIN", "50 MIN", "2 HOURS" }
   for i = 1, 3 do
     local y = row_y[i]
@@ -1029,7 +1032,7 @@ end
 
 local function draw_nixie(t)
   fill(C.black)
-  local hh = format("%02d", t.hour)
+  local hh = format("%02d", ClockFormat.hour(t.hour))
   local mm = format("%02d", t.min)
   local digits = { hh:sub(1, 1), hh:sub(2, 2), mm:sub(1, 1), mm:sub(2, 2) }
   local positions = { 0, 67, 201, 268 }
@@ -1058,7 +1061,7 @@ local function draw_calendar(t)
   text(16, 207, 80, "WEEK 29", APP.font.ui12, C.muted)
   line(143, 18, 143, 36, C.orange, 255, 3)
   line(143, 36, 143, 56, C.violet, 255, 3)
-  text(145, 22, 160, format("%02d:%02d", t.hour, t.min), APP.font.n40, C.white)
+  text(145, 22, 160, ClockFormat.text(t.hour, t.min), APP.font.n40, C.white)
   draw_sun(158, 98, 7, C.orange)
   text(177, 86, 72, temp_text(), APP.font.n28, C.white)
   text(177, 119, 125, english_safe(APP.state.weather_valid and APP.state.weather_text or tr("晴", "CLEAR"), "WEATHER") .. " · " .. tr("体感", "FEELS"), APP.font.ui12, C.muted)
@@ -1086,7 +1089,7 @@ local function draw_flip(t)
   text(245, 20, 50, temp_text() .. Temperature.unit(), APP.font.ui12, C.muted, ALIGN_RIGHT)
   text(35, 48, 75, "HOUR", APP.font.ui12, C.muted, ALIGN_CENTER)
   text(210, 48, 75, "MINUTE", APP.font.ui12, C.muted, ALIGN_CENTER)
-  local hh = format("%02d", t.hour)
+  local hh = format("%02d", ClockFormat.hour(t.hour))
   local mm = format("%02d", t.min)
   draw_flip_card(15, hh:sub(1, 1), C.orange)
   draw_flip_card(81, hh:sub(2, 2), C.orange)
@@ -1106,7 +1109,7 @@ local function draw_glow(t)
   end
   local day, month, date = date_parts(t)
   text(20, 22, 150, day .. "  " .. month .. " " .. date, APP.font.ui12, 0x79D5DF)
-  local value = format("%02d:%02d", t.hour, t.min)
+  local value = ClockFormat.text(t.hour, t.min)
   text(23, 76, 275, value, APP.font.n56, 0x164D55, ALIGN_CENTER, 200)
   text(21, 74, 275, value, APP.font.n56, 0x2DA9B4, ALIGN_CENTER, 220)
   text(20, 73, 275, value, APP.font.n56, 0xA9FBFF, ALIGN_CENTER, 255)
@@ -1146,6 +1149,22 @@ local function render()
   frame_begin()
   local fn = DRAW_FACE[APP.state.face] or draw_meridian
   fn(t)
+  local period = ClockFormat.period(t.hour)
+  -- Align the secondary indicator with each face's clock, not the screen edge.
+  -- Face 8 (Nixie) intentionally remains digits-only in both time formats.
+  if period ~= "" and APP.state.face ~= 8 then
+    local positions = {
+      {197,164,ALIGN_CENTER,0xBFC7D0}, -- Meridian: centered inside the dial
+      {254,134,ALIGN_RIGHT,0x8995A1}, -- Pulse WX: under the last minute digit
+      {18,126,ALIGN_LEFT,0x8EB9CA}, -- Neon Girl: aligned with the clock's left edge
+      {18,112,ALIGN_LEFT,0xC39A56}, -- Solar Weather: warm secondary caption
+      {269,42,ALIGN_RIGHT,0x65C970}, -- Terminal: alongside CLOCK.RUN
+      {276,105,ALIGN_RIGHT,0xC5BAA0}, -- Lunar: right-aligned below the time
+      {50,132,ALIGN_RIGHT,0x8995A1}, -- Focus Memo: inside the stacked clock column
+    }
+    local pos = positions[APP.state.face]
+    if pos then text(pos[1], pos[2], 30, period, APP.font.en11, pos[4], pos[3]) end
+  end
   APP.state.hud_was_visible = draw_hud()
   frame_end()
   APP.state.last_second = t.sec
@@ -1560,6 +1579,11 @@ local init_ui
 local function tick()
   if not APP.running or maybe_stop_for_exit() then return end
   local now = now_ms()
+  local clock_format = ClockFormat.mode()
+  if clock_format ~= APP.state.clock_format then
+    APP.state.clock_format = clock_format
+    APP.state.last_render_face = 0
+  end
   if APP.state.auto_switch_ms > 0 and now - APP.state.last_auto_switch_ms >= APP.state.auto_switch_ms then
     switch_face(1, "auto")
     return

@@ -1,4 +1,5 @@
 local Temperature = dofile("/sd/apps/weather/temperature.lua")
+local ClockFormat = dofile("/sd/apps/weather/clock_format.lua")
     if _G.WEATHER_APP and _G.WEATHER_APP.stop then
     pcall(function() _G.WEATHER_APP.stop("reload") end)
     end
@@ -973,7 +974,7 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     if not t then
         return "--:--"
     end
-    return two(t.hour) .. ":" .. two(t.min)
+    return ClockFormat.text(t.hour, t.min), ClockFormat.period(t.hour)
     end
 
     local function format_date_text()
@@ -1563,6 +1564,7 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     call(lv_obj_set_size, now_page, APP.SCREEN_W, APP.SCREEN_H)
 
     APP.ui.time_label = create_label(now_page, "--:--", FONT_34, C.text, 14, 23, 150, ALIGN_LEFT)
+    APP.ui.period_label = ClockFormat.badge(now_page, 158, 40, C.text_soft)
     APP.ui.city_label = create_label(now_page, display_city_name(), FONT_16, C.text, 16, 68, 166, ALIGN_LEFT)
     local ellipsis = rawget(_G, "LV_LABEL_LONG_DOT") or rawget(_G, "LABEL_LONG_DOT")
     if ellipsis and lv_label_set_long_mode then call(lv_label_set_long_mode, APP.ui.city_label, ellipsis) end
@@ -1612,7 +1614,9 @@ local Temperature = dofile("/sd/apps/weather/temperature.lua")
     end
 
     local function render_clock()
-    set_label_text(APP.ui.time_label, format_clock_text())
+    local clock_text, period = format_clock_text()
+    set_label_text(APP.ui.time_label, clock_text)
+    set_label_text(APP.ui.period_label, period or "")
     set_label_text(APP.ui.city_label, display_city_name())
     set_label_text(APP.ui.startup_city_label, display_city_name())
     set_label_text(APP.ui.date_label, format_date_text())

@@ -334,9 +334,11 @@ local function get_local_tm()
   return tm_from_uptime()
 end
 
+local ClockFormat = dofile("/sd/apps/Spectrum/clock_format.lua")
+local center_time_period_label
 local function format_time_text()
   local t = get_local_tm()
-  return two(t.hour) .. ":" .. two(t.min)
+  return ClockFormat.text(t.hour, t.min), ClockFormat.period(t.hour)
 end
 
 local function palette_cycle_color(palette, t)
@@ -732,6 +734,7 @@ local function position_center_time_labels()
   if not lv_obj_set_pos_fn then
     return
   end
+  if center_time_period_label then lv_obj_set_pos_fn(center_time_period_label, 145, center_time_y + 32) end
 
   if center_time_d1_label then
     lv_obj_set_pos_fn(center_time_d1_label, CENTER_TIME_X, center_time_y)
@@ -795,6 +798,7 @@ local function create_center_time_label()
     CENTER_TIME_ALIGN
   )
 
+  center_time_period_label = ClockFormat.badge(root, 145, center_time_y + 32, 0xFFFFFF)
   set_center_time_text("--:--", true)
 end
 
@@ -817,7 +821,8 @@ local function update_center_time(force)
   end
   center_time_poll_ms = 0
 
-  local text = format_time_text()
+  local text, period = format_time_text()
+  set_label_text(center_time_period_label, period)
   if force or text ~= center_time_text then
     center_time_text = text
   end
@@ -850,6 +855,7 @@ APP_STATE.set_center_time_visible = function(visible)
   apply(center_time_colon_label)
   apply(center_time_d3_label)
   apply(center_time_d4_label)
+  apply(center_time_period_label)
 
   if visible then
     update_center_time(true)

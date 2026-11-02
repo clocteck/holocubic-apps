@@ -1,6 +1,7 @@
 -- Afterglow 1.0.1 - retro instrument clock for HoloCubic
 
 local APP_KEY = "APP_AFTERGLOW"
+local ClockFormat = dofile("/sd/apps/afterglow/clock_format.lua")
 local old = rawget(_G, APP_KEY)
 if old and old.stop then pcall(function() old.stop("reload") end) end
 
@@ -190,6 +191,7 @@ local function build_ui()
   -- 统一为 TC-00:00:00:00 样式，使用 IBM 3270 字体渲染
   ui.clock = label(root, "TC-00:00:00:00", 13, 26, FONT_BIG)
   clock_style(ui.clock)
+  ui.period = label(root, "", 172, 68, FONT_SMALL)
 
   -- OK 状态标识（实心填充，黑字，绝对垂直居中于 24x20 框）
   ui.status_box = lv_obj_create(root)
@@ -263,7 +265,7 @@ apply_theme = function()
   if not ui.root then return end
 
   -- 1. 普通文本颜色
-  local normal_texts = {ui.mode, ui.clock, ui.date, ui.sys, ui.hud_left, ui.hud_right, ui.hud_input, ui.db, ui.comp}
+  local normal_texts = {ui.mode, ui.clock, ui.period, ui.date, ui.sys, ui.hud_left, ui.hud_right, ui.hud_input, ui.db, ui.comp}
   for _, o in ipairs(normal_texts) do style_text(o, c.color) end
 
   -- 2. Afterglow 徽标反显 (实心背景 + 黑色字)
@@ -353,7 +355,8 @@ local function update_clock()
   
   local ff = math.floor(((tmr and tmr.now and tmr.now() or 0) % 1000) / 10)
 
-  set_clock_text(string.format("TC-%02d:%02d:%02d:%02d", h, mi, s, ff))
+  set_clock_text(string.format("TC-%02d:%02d:%02d:%02d", ClockFormat.hour(h), mi, s, ff))
+  set_text(ui.period, ClockFormat.period(h))
   set_text(ui.date, string.format("%04d/%02d/%02d", y, mo, d))
 end
 

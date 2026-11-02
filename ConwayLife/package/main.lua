@@ -7,6 +7,8 @@ local APP = CONWAY_LIFE_APP
 APP.font_handles = {}
 
 local root = lv_scr_act()
+local ClockFormat = dofile("/sd/apps/ConwayLife/clock_format.lua")
+local time_period_label
 lv_obj_clean(lv_scr_act())
 
 local SCREEN_W = 320
@@ -887,7 +889,8 @@ local function update_time_label()
   end
 
   local hour, minute = get_time_parts()
-  pcall_fn(lv_label_set_text_fn, time_hour_label, string_format("%02d", hour))
+  pcall_fn(lv_label_set_text_fn, time_hour_label, string_format("%02d", ClockFormat.hour(hour)))
+  if time_period_label then pcall_fn(lv_label_set_text_fn, time_period_label, ClockFormat.period(hour)) end
   pcall_fn(lv_label_set_text_fn, time_minute_label, string_format("%02d", minute))
 
   if lv_obj_set_style_text_opa_fn then
@@ -912,6 +915,7 @@ local function init_time_label()
   time_hour_label = lv_label_create_fn(root)
   time_colon_label = lv_label_create_fn(root)
   time_minute_label = lv_label_create_fn(root)
+  time_period_label = ClockFormat.badge(root, 145, 121, C.time)
   if not time_hour_label or not time_colon_label or not time_minute_label then
     return
   end
