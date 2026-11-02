@@ -68,7 +68,7 @@ class ClockFormatTests(unittest.TestCase):
             self.assertEqual(body(old,start,end),body(new,start,end),relative)
 
     def test_release_metadata_and_nixie_digits_only(self):
-        for app,version in [("launcher","1.33"),("weather","1.16"),("NixieClock","1.2.2")]:
+        for app,version in [("launcher","1.35"),("weather","1.16"),("NixieClock","1.2.2")]:
             self.assertIn("version = "+version, (ROOT/app/"package/app.info").read_text(encoding="utf-8"))
             self.assertIn('class="value">'+version+'</span>', (ROOT/app/"package/info.html").read_text(encoding="utf-8"))
         self.assertFalse((ROOT/"PipBoy").exists())
