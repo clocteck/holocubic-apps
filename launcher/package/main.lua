@@ -162,6 +162,26 @@ local AP_PREFERRED_ENABLED = setting_bool(SETTINGS.ap_enabled, true)
 local AUTOSTART_ENABLED = setting_bool(SETTINGS.autostart_enabled, true)
 local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART_APP_ID)
 
+local function restore_saved_brightness()
+  local value = tonumber(SETTINGS.brightness)
+  if not value or value ~= value or not http or not http.post then return end
+  local running = rawget(_G, "DISPLAY_SCHEDULE_SERVICE")
+  if type(running) == "table" and running.scheduled_sleeping then return end
+  value = math.max(1, math.min(100, math.floor(value)))
+  -- Update both the backlight and the firmware's wake brightness. Finish before
+  -- autostart/service startup so a late retry cannot wake a scheduled sleep.
+  for attempt = 1, 3 do
+    local ok, code = pcall(function()
+      return http.post("http://127.0.0.1/display/api/settings?brightness=" .. value, {
+        timeout = 500, bufsz = 256, max_redirects = 0,
+      }, "")
+    end)
+    code = tonumber(code)
+    if ok and code and code >= 200 and code < 300 then return end
+  end
+  print("[launcher] could not restore saved brightness")
+end
+
 local UI_TEXT = {
   ["zh-CN"] = { no_apps = "暂无应用" },
   en = { no_apps = "NO APPS" },
@@ -955,6 +975,7 @@ start_app_list_watch()
 apply_timezone()
 sync_ntp_once()
 start_ap_policy()
+restore_saved_brightness()
 schedule_autostart()
 
 key.on(key.LEFT, function(evt_type, ts_ms)

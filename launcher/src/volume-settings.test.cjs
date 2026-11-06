@@ -71,4 +71,40 @@ async function test(label,source){
   assert.equal(old.file().volume,17,"old firmware volume is read-only on dashboard");
   console.log("PASS "+label+": memory API, pending/save status, mute, queue, shared fields, failure recovery, legacy and stale response");
 }
-(async()=>{for(const [name,source] of sources)await test(name,source)})().catch(e=>{console.error(e);process.exitCode=1});
+async function testBrightness(label,source){
+  const h=setup(source),{c,q}=h;
+  c.bindBrightnessSettings();
+  assert.ok(source.includes("bindVolumeSettings();bindBrightnessSettings();"));
+  const slider=q("#brightnessPreview");
+  q("#timezonePreview").value="unsaved timezone";
+  for(const value of [12,24,48]){
+    slider.value=String(value);slider.listeners.input();
+  }
+  assert.equal(h.writes.length,0,"input only schedules the SD save");
+  assert.equal(h.timers.size,1,"rapid changes are debounced");
+  await [...h.timers.values()][0]();
+  assert.equal(h.file().brightness,48);
+  assert.equal(h.file().volume,17);
+  assert.equal(h.file().custom.keep,true);
+  assert.equal(h.file().temperature_unit,"F");
+  assert.equal(h.file().timezone,undefined,"brightness does not save other form edits");
+  assert.equal(h.toasts.at(-1).text,"savedOnDevice");
+  slider.value="31";slider.listeners.input();await slider.listeners.change();
+  assert.equal(h.timers.size,0,"release cancels debounce and saves immediately");
+  assert.equal(h.file().brightness,31);
+  slider.value="13";const first=c.saveBrightness();
+  slider.value="76";const second=c.saveBrightness();await Promise.all([first,second]);
+  assert.deepEqual(h.writes.slice(-2).map(x=>x.brightness),[13,76]);
+  const upload=c.api;c.api=async()=>{throw new Error("SD write failed")};
+  slider.value="55";await c.saveBrightness();
+  assert.equal(h.file().brightness,76);
+  assert.equal(h.toasts.at(-1).error,true,"failed writes are not reported as saved");
+  c.api=upload;await c.saveBrightness();assert.equal(h.file().brightness,55);
+  slider.value="22";slider.listeners.input();
+  q("#apModePreview").value="true";q("#autostartPreview").value="";
+  await c.saveSettings();
+  assert.equal(h.timers.size,0,"manual save cancels redundant auto-save");
+  assert.equal(h.file().brightness,22);
+  console.log("PASS "+label+": brightness debounce, release, field preservation, queue and save errors");
+}
+(async()=>{for(const [name,source] of sources){await test(name,source);await testBrightness(name,source)}})().catch(e=>{console.error(e);process.exitCode=1});

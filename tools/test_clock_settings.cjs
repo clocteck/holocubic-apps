@@ -11,7 +11,7 @@ let disk={time_format:'24',timezone:'CST-8',temperature_unit:'F',weather_address
   volume:37,alarms:[{hour:13,minute:5}],weather_location_id:'123',unknown_future_field:{keep:true}};
 let uploads=0;
 const c=vm.createContext({console,Promise,Number,String,Object,Array,JSON,SETTINGS_PATH:'/sd/apps/settings.json',state:{language:'ja'},
-  q,localStorage:{getItem:()=>'',setItem:()=>{}},LANGUAGE_KEY:'lang',navigator:{language:'en'},
+  q,window:{clearTimeout(){}},localStorage:{getItem:()=>'',setItem:()=>{}},LANGUAGE_KEY:'lang',navigator:{language:'en'},
   applyLanguage:l=>c.state.language=l,loadVolume:async()=>{},renderAppsAndServices:()=>{},syncWeatherLocation:()=>{},
   showToast:(m,e)=>{if(e)throw Error(m)},renderVolume:()=>{},saveVolume:()=>{},
   fetch:async(url)=>({ok:true,status:200,json:async()=>structuredClone(disk)}),
@@ -38,7 +38,9 @@ vm.runInContext(persist+'\n'+['normalizeTimeFormat','readSettings','loadSettings
   // Every unrelated source line must stay byte-for-byte unchanged (ignoring CRLF).
   const old=cp.execFileSync('git',['show','bb89ab2:launcher/package/main.html'],{cwd:root,encoding:'utf8'}).replace(/\r/g,'');
   const strip=s=>s.replace(/\r/g,'').split('\n').filter(l=>!['function loadSettings(','function saveSettings(','function restoreSettings(','id="timeFormatPreview"'].some(k=>l.includes(k))).join('\n');
-  const withoutNew=html.replace(/  function normalizeTimeFormat\(value\)[\s\S]*?(?=  var WEATHER_EDITOR_COPY=)/,'');
+  const withoutNew=html.replace(/  function normalizeTimeFormat\(value\)[\s\S]*?(?=  var WEATHER_EDITOR_COPY=)/,'')
+    .replace(/  var brightnessSaveTimer=0;[\s\S]*?(?=  var volumeTimer=)/,'')
+    .replace('bindVolumeSettings();bindBrightnessSettings();','bindVolumeSettings();');
   assert.equal(strip(withoutNew),strip(old));
   console.log('PASS: JS syntax, load/save/reset, numeric/default/invalid values, preservation, queued writes, failed JSON; unrelated HTML/JS unchanged');
 })().catch(e=>{console.error(e);process.exitCode=1});

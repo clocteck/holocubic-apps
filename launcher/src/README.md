@@ -1,6 +1,13 @@
-# Launcher 1.32
+# Launcher 1.36
 
 部署文件位于 `launcher/package/`，安装到设备的 `/sd/apps/launcher/`。
+
+## 1.36 更新内容：亮度自动保存与启动恢复
+
+- 亮度滑块保留即时预览，停止滑动约 500ms 或松手后自动保存到 `/sd/apps/settings.json`，无需点击“保存”。仅更新亮度，保留音量及其他配置，不提交表单中其他未保存的设置。
+- Launcher 启动时读取已保存的亮度，通过固件 `/display/api/settings` 同时恢复屏幕及息屏唤醒亮度；在自启动应用和启动显示服务前完成，最多尝试三次。已有定时休眠状态时不强制唤醒。
+- 本次仅更新 Launcher；进入 Launcher 之前的开机亮度由固件决定。页面显示“已保存到设备”后再断电或重启。
+- 验证：`node launcher/src/volume-settings.test.cjs`、`python -X utf8 -B launcher/src/brightness-restore.test.py`。
 
 ## 设备音量设置
 
