@@ -164,11 +164,22 @@ local AUTOSTART_APP_ID = tostring(SETTINGS.autostart_app_id or DEFAULT_AUTOSTART
 
 local function restore_saved_brightness()
   local value = tonumber(SETTINGS.brightness)
-  if not value or value ~= value or not http or not http.post then return end
+  if not value or value ~= value then return end
   local running = rawget(_G, "DISPLAY_SCHEDULE_SERVICE")
   if type(running) == "table" and running.scheduled_sleeping then return end
   value = math.max(1, math.min(100, math.floor(value)))
-  -- Update both the backlight and the firmware's wake brightness. Finish before
+  -- Old firmware rejects even loopback HTTP before Wi-Fi is connected.
+  -- Restore the physical backlight first without depending on the network.
+  local applied = false
+  if sys and type(sys.setbrightness) == "function" then
+    local ok, result = pcall(sys.setbrightness, value)
+    applied = ok and result == true
+  end
+  if not http or type(http.post) ~= "function" then
+    if not applied then print("[launcher] could not restore saved brightness") end
+    return
+  end
+  -- Best-effort sync of the firmware's wake brightness. Finish before
   -- autostart/service startup so a late retry cannot wake a scheduled sleep.
   for attempt = 1, 3 do
     local ok, code = pcall(function()
@@ -179,7 +190,8 @@ local function restore_saved_brightness()
     code = tonumber(code)
     if ok and code and code >= 200 and code < 300 then return end
   end
-  print("[launcher] could not restore saved brightness")
+  print(applied and "[launcher] brightness restored; wake brightness sync unavailable"
+    or "[launcher] could not restore saved brightness")
 end
 
 local UI_TEXT = {
