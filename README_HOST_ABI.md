@@ -145,7 +145,7 @@ if (!instance->host.socket.open || !instance->host.socket.poll) {
 | `serial` | `write/print/println/flush` | Serial logging and binary output |
 | `sd` | `begin/mounted/mount_point/exists/mkdir/remove/rename/open` | SD filesystem entry points |
 | `file` | `close/available/read/write/seek/position/size_bytes/flush/is_directory` | Opaque file handles |
-| `display` | `width/height/get_caps/acquire/release/startWrite/pushImageDMA/endWrite/fillScreen/setAddrWindow/pushPixelsDMA` | Exclusive direct RGB565 output; not LVGL |
+| `display` | `width/height/get_caps/acquire/release/startWrite/pushImageDMA/endWrite/fillScreen/setAddrWindow/pushPixelsDMA/tryPushPixelsDMA/dmaBusy` | Exclusive direct RGB565 output; try-DMA/busy queries are optional |
 | `audio` | `begin/write/available/end` | Reserved; a real PCM bridge is not connected yet |
 | `time` | `millis/micros/delay/yield` | Time and task yielding |
 | `heap` | `malloc/calloc/realloc/free/free_size/largest_free_block` | Allocation with Internal, PSRAM, DMA, and other capabilities |
@@ -159,6 +159,8 @@ if (!instance->host.socket.open || !instance->host.socket.poll) {
 | `socket` | `open/bind/listen/accept/connect/recv/recvfrom/send/sendto/poll/setsockopt/getsockname/shutdown/close` | Optional IPv4 TCP/UDP |
 | `netif` | `get_snapshot/wait_event` | Optional network-interface snapshots and race-free event waiting |
 | `mdns` | `service_register/service_update_txt/service_unregister` | Optional service publication |
+| `runtime` | `event_post/event_cancel` | Optional worker-to-Lua callback notification |
+| `imu` | `readRaw` | Optional cached raw six-axis sample |
 
 Use the `module_abi.h` synchronized into the module project as the authority for exact
 prototypes, structures, and constants. The following sections focus on the newer networking
@@ -405,12 +407,84 @@ MODULE_HEAP_32BIT
   remove tasks, and finally release sockets, files, mDNS, BLE, synchronization objects, and
   instance memory.
 
-## BLE and Display Restrictions
+## Runtime Callbacks, IMU, and try-DMA
+
+These functions are optional; check each function pointer after resolving with the current SDK.
+
+- `runtime.event_post(L, lua_ref) -> int32_t`: enqueue a no-argument registry callback on
+  `L`'s owning Lua task and wake it. Repeated pending posts for the same `(L, lua_ref)` coalesce;
+  `MODULE_ERR_BUSY` means the pending queue is full. This is a notification, not a lossless
+  report queue. Keep shared data in module-owned storage protected by synchronization; the
+  worker must not directly call Lua APIs. Stop/join the worker, call `event_cancel(L, lua_ref)`,
+  then unref on the Lua task before destroying the instance. Cancellation removes pending
+  work; it does not interrupt a callback already executing.
+- `imu.readRaw(module_imu_raw_v1 *out) -> int32_t`: initialize `out->size = sizeof(*out)`.
+  Returns cached `ax/ay/az/gx/gy/gz` (int16 raw counts), `timestamp_ms`, and `seq` (uint32).
+  No I2C access or allocation; no sample returns `MODULE_ERR_NOT_FOUND`, invalid pointer/size
+  returns `MODULE_ERR_INVALID_ARG`, and failures leave output unchanged. V1 is 24 bytes.
+  Old samples remain during failed/paused sampling; see [Lua IMU](README_LUA.md#imu-raw-samples)
+  for units and freshness checks.
+- `display.tryPushPixelsDMA(surface, pixels, pixel_count) -> int32_t` and
+  `display.dmaBusy(surface, int32_t *out_busy) -> int32_t`: use one task for
+  `acquire → startWrite → setAddrWindow → submit/query → endWrite → release`.
+  Pixels must be RGB565, 4-byte aligned, in internal DMA RAM; count must be even and in
+  `2..16384` (pixels, not bytes). No PSRAM/Flash buffer conversion or automatic splitting.
+  `MODULE_OK` from submit means queued, not completed; `MODULE_ERR_BUSY` means this block was
+  not queued. Do not modify/free submitted buffers until a successful busy query reports 0,
+  or the owning task successfully finishes `endWrite`. Query failure/BUSY is not permission
+  to reuse buffers. Only try-submit and busy-query avoid DMA/queue waits; other calls may block.
+  Yield when busy; do not use from an ISR or concurrently across tasks.
+
+There is no Host ABI master-volume getter/setter group. Use the Lua
+[`sys` volume APIs](README_LUA.md#sys-device-control) and pass gain to the audio module.
+Neither the reserved `audio` group nor I2S automatically applies the shared volume.
+
+## BLE ABI Quick Reference
 
 BLE resources are authorized by owner. `module_open_info_t.owner_token` may be nonzero only when
 a module is loaded by a background Service; a regular foreground app module cannot open a BLE
-session. BLE callback data reaches the module through its fixed `event_poll()` queue. Do not let
-the host retain module function pointers as asynchronous callbacks.
+session. Only one Lua BLE owner or Host session can own the transport, even within one Service.
+BLE is an optional central/GATT-client API, not a HID decoder or a GATT-server API.
+
+| Group | Host calls |
+| --- | --- |
+| Session | `open(owner_token, cfg, &session)`, `close(session)` |
+| GAP | `gap_scan/gap_scan_stop/gap_connect/gap_disconnect/gap_pair` |
+| GATT client | `gattc_discover_services/characteristics/descriptors`, `gattc_read/write`, `gattc_exchange_mtu` |
+| Host-only extensions (not Lua `ble`) | `gap_set_connection_params`, `gap_forget_device`, `gap_clear_bonds`, `gattc_read_long`, `gattc_write_long`, `gap_get_rssi` |
+| Events | `event_poll(session, &event)` |
+
+Initialize the `size` field on configuration, scan and event structures; check every required
+pointer, even though SDK resolution succeeds. `open(..., NULL, ...)` uses all defaults;
+a supplied zeroed config does not mean all defaults (set security/IO fields explicitly).
+Scanning uses milliseconds for duration and microseconds for interval/window; connection
+intervals use 1.25 ms units and supervision timeout uses 10 ms units. Addresses and UUIDs in
+the Host API use text. See `module_abi.h` for complete prototypes and constants.
+
+NimBLE callbacks copy POD events; modules drain `event_poll()` from their worker/poll loop.
+Set `event.size = sizeof(event)` before polling. `MODULE_OK` returns one event;
+`MODULE_ERR_NOT_FOUND` means no event currently queued. Invalid sessions return
+`MODULE_ERR_BAD_STATE`. For asynchronous GAP/GATT operations, initial success means the request
+was started: inspect the completion IRQ and its `status` (BLE status, not a `MODULE_ERR_*` code).
+Important IRQs include scan 5/6, connect/disconnect 7/8, service 9/10, characteristic 11/12,
+descriptor 13/14, read 15/16, write 17, notify 18, MTU 21 and encryption 28.
+
+Discover CCCD UUID `0x2902`; never assume `value_handle + 1`. Write `01 00` for Notify or
+`02 00` for Indicate, usually with `MODULE_BLE_WRITE_WITH_RESPONSE` and wait for WRITE_DONE.
+No-response writes do not emit WRITE_DONE. Both notification types use IRQ 18 with `indication`.
+`gattc_read_long` emits ordered READ_RESULT chunks then READ_DONE; accumulate them for Report Map
+parsing. `gattc_write_long` accepts 1..512 bytes. Current events hold at most 244 data bytes;
+check `data_len/data_truncated`. The 32-entry queue drops its oldest event when full, so drain it
+promptly and use operation timeouts. `rxbuf` does not resize these fixed capacities.
+
+hidpad illustrates the split: Host BLE → `.so` HID state machine/decoder → Lua calibration and
+mapping → `controller.publish("ble-main", ...)` → foreground apps. Its `start/poll/on_event`
+and Web/IPC commands are application interfaces, not firmware BLE calls. `runtime.event_post`
+can wake Lua to read module state; do not register a raw module callback with NimBLE. Stop
+workers and close the session before unload; the loader also releases resources by owner.
+See the [Lua BLE overview](README_LUA.md#ble-services-controllers-and-ipc) for Lua differences.
+
+## Display Restrictions
 
 `display` is an exclusive, high-frequency RGB565 output interface that bypasses LVGL. Use it only
 when a module explicitly takes over the display. It currently does not support general pixel
@@ -579,7 +653,7 @@ if (!instance->host.socket.open || !instance->host.socket.poll) {
 | `serial` | `write/print/println/flush` | 串口日志和二进制输出 |
 | `sd` | `begin/mounted/mount_point/exists/mkdir/remove/rename/open` | SD 文件系统入口 |
 | `file` | `close/available/read/write/seek/position/size_bytes/flush/is_directory` | opaque 文件句柄 |
-| `display` | `width/height/get_caps/acquire/release/startWrite/pushImageDMA/endWrite/fillScreen/setAddrWindow/pushPixelsDMA` | 独占式 RGB565 直出，不是 LVGL |
+| `display` | `width/height/get_caps/acquire/release/startWrite/pushImageDMA/endWrite/fillScreen/setAddrWindow/pushPixelsDMA/tryPushPixelsDMA/dmaBusy` | 独占式 RGB565 直出；try-DMA/busy 查询为 optional |
 | `audio` | `begin/write/available/end` | 已预留，当前真实 PCM bridge 未接通 |
 | `time` | `millis/micros/delay/yield` | 时间和任务让出 |
 | `heap` | `malloc/calloc/realloc/free/free_size/largest_free_block` | 可指定 Internal、PSRAM、DMA 等能力 |
@@ -593,6 +667,8 @@ if (!instance->host.socket.open || !instance->host.socket.poll) {
 | `socket` | `open/bind/listen/accept/connect/recv/recvfrom/send/sendto/poll/setsockopt/getsockname/shutdown/close` | optional IPv4 TCP/UDP |
 | `netif` | `get_snapshot/wait_event` | optional 网卡快照和无竞态事件等待 |
 | `mdns` | `service_register/service_update_txt/service_unregister` | optional 服务发布 |
+| `runtime` | `event_post/event_cancel` | optional，worker 向 Lua 投递回调通知 |
+| `imu` | `readRaw` | optional，原始六轴缓存 |
 
 具体原型、结构和常量以同步到模块工程的 `module_abi.h` 为准。以下重点说明新增的网络
 接口及容易出错的生命周期规则。
@@ -823,11 +899,77 @@ MODULE_HEAP_32BIT
 - 后台任务必须由 `host->task` 创建并登记归属。模块代码还在任务中执行时，宿主不会安全卸载 `.so`。
 - `module_destroy_v1()` 先置停止标志并唤醒阻塞调用，再等待/删除任务，最后释放 socket、文件、mDNS、BLE、同步对象和实例内存。
 
-## BLE 和 Display 限制
+## Runtime 回调、IMU 和 try-DMA
+
+以下均为 optional；使用当前 SDK 解析后，逐项检查函数指针。
+
+- `runtime.event_post(L, lua_ref) -> int32_t`：将无参数 registry 回调投递给 `L` 所属
+  Lua 任务并唤醒它。同一 `(L, lua_ref)` 的 pending 通知会合并，队列满返回
+  `MODULE_ERR_BUSY`；这不是逐报告无损队列。共享数据保存在模块内并用同步对象保护，
+  worker 不直接调用 Lua API。销毁前停止并等待 worker 退出，调用
+  `event_cancel(L, lua_ref)`，再在 Lua 任务中 unref，最后释放实例。
+  cancel 只移除 pending 通知，不会中断已执行的回调。
+- `imu.readRaw(module_imu_raw_v1 *out) -> int32_t`：先填 `out->size = sizeof(*out)`。
+  返回缓存的 `ax/ay/az/gx/gy/gz`（int16 原始计数）、`timestamp_ms` 和 `seq`（uint32）。
+  不访问 I2C、不分配内存；无样本返回 `MODULE_ERR_NOT_FOUND`，指针/size 无效返回
+  `MODULE_ERR_INVALID_ARG`，失败不修改输出。V1 为 24 字节。采样失败/暂停会保留旧值，
+  单位和新鲜度判断见 [Lua IMU](README_LUA.md#imu-原始采样)。
+- `display.tryPushPixelsDMA(surface, pixels, pixel_count) -> int32_t` 和
+  `display.dmaBusy(surface, int32_t *out_busy) -> int32_t`：同一任务内按
+  `acquire → startWrite → setAddrWindow → 提交/查询 → endWrite → release` 调用。
+  RGB565 缓冲须为内部 DMA RAM、4 字节对齐，数量为 `2..16384` 的偶数，单位是像素
+  而非字节；不转换 PSRAM/Flash 缓冲，不自动拆块。提交 `MODULE_OK` 只表示已入队，
+  `MODULE_ERR_BUSY` 表示本块完全未入队。只有 busy 查询成功且返回 0，或所属任务
+  `endWrite` 成功后，才能修改/释放已提交缓冲；查询失败/BUSY 都不是复用许可。
+  只有 try 提交和 busy 查询不等待 DMA/队列，其余操作仍可能阻塞。忙时让出 CPU，
+  不用于 ISR，不跨任务并发操作。
+
+Host ABI 没有独立的统一音量 getter/setter 分组。通过 Lua
+[`sys` 音量接口](README_LUA.md#sys-设备控制) 读取后向音频模块传入增益；预留的
+`audio` 分组和 I2S 都不会自动应用共享音量。
+
+## BLE ABI 速查
 
 BLE 资源按 owner 授权。只有后台 Service 加载模块时，`module_open_info_t.owner_token`
-才可能非零；普通前台 app 的模块不能打开 BLE session。BLE 回调数据通过固定事件队列
-交给模块自己的 `event_poll()`，不要让宿主保存模块函数指针作为异步回调。
+才可能非零；普通前台 app 的模块不能打开 BLE session。全系统只有一个 Lua BLE owner
+或 Host session 可占用传输层，同一 Service 内也不能同时占用。
+BLE 是 optional 的 central/GATT client 接口，不是 HID 解码器，也不提供 GATT server。
+
+| 分组 | Host 接口 |
+| --- | --- |
+| Session | `open(owner_token, cfg, &session)`、`close(session)` |
+| GAP | `gap_scan/gap_scan_stop/gap_connect/gap_disconnect/gap_pair` |
+| GATT client | `gattc_discover_services/characteristics/descriptors`、`gattc_read/write`、`gattc_exchange_mtu` |
+| Host 独有扩展（不是 Lua `ble`） | `gap_set_connection_params`、`gap_forget_device`、`gap_clear_bonds`、`gattc_read_long`、`gattc_write_long`、`gap_get_rssi` |
+| 事件 | `event_poll(session, &event)` |
+
+配置、扫描和事件结构必须初始化 `size`；SDK 解析成功后仍要检查所需函数指针。
+`open(..., NULL, ...)` 使用全部默认值；传入清零配置不等于全部默认值，应显式设置安全和
+IO 字段。扫描 duration 单位为毫秒、interval/window 为微秒；连接 interval 单位为
+1.25ms，supervision timeout 为 10ms。Host 的地址和 UUID 使用文本。
+完整原型和常量以 `module_abi.h` 为准。
+
+NimBLE 回调只复制 POD 事件，模块在 worker/poll 中消费 `event_poll()`。轮询前设置
+`event.size = sizeof(event)`；`MODULE_OK` 表示取出一条事件，`MODULE_ERR_NOT_FOUND`
+表示当前队列为空，无效 session 返回 `MODULE_ERR_BAD_STATE`。异步 GAP/GATT 操作初始成功
+只表示已发起，要检查完成 IRQ 及 `status`（BLE 状态码，不是 `MODULE_ERR_*`）。
+常用 IRQ：扫描 5/6、连接/断开 7/8、服务 9/10、特征 11/12、描述符 13/14、
+读取 15/16、写入 17、通知 18、MTU 21、加密 28。
+
+必须发现 CCCD UUID `0x2902`，不能猜 `value_handle + 1`。Notify 写 `01 00`，Indicate
+写 `02 00`，通常使用 `MODULE_BLE_WRITE_WITH_RESPONSE` 并等 WRITE_DONE；无响应写不产生
+WRITE_DONE。两类通知均使用 IRQ 18，以 `indication` 区分。`gattc_read_long` 按顺序输出
+多个 READ_RESULT，最后 READ_DONE，可拼接后解析 Report Map；`gattc_write_long` 接受
+1..512 字节。目前单事件最多携带 244 字节，检查 `data_len/data_truncated`。
+队列容量 32，满时丢最旧事件，应及时消费并设置操作超时；`rxbuf` 不会改变这些固定容量。
+
+hidpad 的分工是：Host BLE → `.so` HID 状态机/解码 → Lua 校准映射 →
+`controller.publish("ble-main", ...)` → 前台 App。其 `start/poll/on_event` 和 Web/IPC
+命令属于应用接口，不是固件 BLE API。可用 `runtime.event_post` 唤醒 Lua 读取模块状态，
+不要向 NimBLE 注册裸模块回调。卸载前停止 worker 并 close session；加载器另有按 owner
+释放资源的兜底。Lua 差异见 [Lua BLE 概述](README_LUA.md#ble-servicecontroller-与-ipc)。
+
+## Display 限制
 
 `display` 是绕开 LVGL 的独占式高频 RGB565 输出接口，只适合明确接管显示的模块。
 当前不支持通用像素格式、带 stride 的任意图像和完整的 `fillScreen` 颜色能力。普通 app

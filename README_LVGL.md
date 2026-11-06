@@ -13,6 +13,11 @@ Notes:
 
 ## Official APIs / Compatibility Layer
 
+The widget APIs below target foreground apps. Background Services use an owned
+[Service Canvas](README_LUA.md#service-canvas): acquire it through `service_ui.acquire`,
+then use the restricted Canvas drawing subset. Services cannot create widgets, access the
+foreground object tree, or assume that every Canvas API listed below is registered.
+
 ### Screen
 
 - `lv_scr_act() -> screen_id`
@@ -813,6 +818,11 @@ lv_canvas_frame_end(cvs)
 - table、handle、回调等 Lua 写法见各接口说明。
 
 ## 官方接口 / 官方兼容区
+
+下方 widget API 面向前台 App。后台 Service 使用所属的
+[Service Canvas](README_LUA.md#service-canvas-服务画布)：由 `service_ui.acquire` 创建，
+再使用受限 Canvas 绘图子集。Service 不能创建 widget、访问前台对象树，也不能假设
+下方列出的全部 Canvas API 都已注册。
 
 ### Screen
 - `lv_scr_act() -> screen_id`

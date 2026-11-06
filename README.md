@@ -10,6 +10,10 @@ See [README_LUA.md](README_LUA.md) for the underlying Lua module APIs and
 [README_LVGL.md](README_LVGL.md) for the LVGL UI bindings. This document focuses on the
 project structure, common API entry points, and debugging workflow most useful for DIY apps.
 
+C/C++ extensions use [Host ABI](README_HOST_ABI.md), including optional runtime callbacks,
+IMU raw samples, try-DMA, and [BLE ABI](README_HOST_ABI.md#ble-abi-quick-reference).
+Background overlays use [Service Canvas](README_LUA.md#service-canvas), not the foreground widget tree.
+
 A typical app directory looks like this:
 
 ```text
@@ -210,7 +214,9 @@ end)
 | `np` | Arrays, matrices, and FFT |
 | `viper` | Compile C-like functions for hot paths |
 | `i2s` | Audio input and output |
-| `nes` | NES emulator APIs |
+| `imu.raw` | Cached raw six-axis samples, timestamp, and sequence number |
+| `controller` / `ipc` | Normalized controller input and cross-runtime messaging |
+| `ble` / `service_ui` | Service-only BLE transport / Canvas overlay |
 
 ### Firmware master volume
 
@@ -247,6 +253,10 @@ one-time settings read and session-only changes.
 HTTP equivalents are `GET /audio/api/settings` and
 `POST /audio/api/settings?volume=35`. See [sys Device Control](README_LUA.md#sys-device-control)
 for persistence and error details.
+
+These are firmware-owned APIs available to both apps and Services; the HTTP route does not
+depend on DevTools. There is no separate Host ABI master-volume group: a `.so` audio driver
+should receive gain updates from its Lua wrapper, rather than assume `host->audio` applies them.
 
 ## Minimal App Example
 
@@ -401,7 +411,26 @@ Main features:
 DevRun is suitable for quickly testing code. Once the code is ready, organize it into a separate
 app directory with its own `app.info`.
 
-### 3. DevTools HTTP API
+### 3. Firmware File API
+
+Prefer the built-in `/api/system/fs` endpoints for deployment; they do not depend on the
+DevTools service being available. URL-encode query parameter values and use `/sd/...` paths.
+
+| Method | Path | Usage |
+| --- | --- | --- |
+| `GET` | `/api/system/fs/list?path=/sd/apps` | List directory entries |
+| `GET` | `/api/system/fs/stat?path=...` | Check file/directory metadata |
+| `PUT` | `/api/system/fs/upload?path=...` | Upload the raw binary request body |
+| `POST` | `/api/system/fs/mkdir?path=...` | Create a directory |
+| `POST` | `/api/system/fs/rename?from=...&to=...` | Rename/move |
+| `DELETE` | `/api/system/fs/remove?path=...` | Remove a file |
+| `DELETE` | `/api/system/fs/rmdir?path=...` | Remove an empty directory; no recursive option |
+
+After upload, check the response's `entry.size` or use `stat/list`. Do not download the whole
+file just to verify an upload. Use the legacy DevTools file APIs below only as a fallback;
+DevRun and service reload still use DevTools.
+
+### 4. DevTools HTTP API
 
 Base prefix: `/devtools/api`
 
@@ -479,6 +508,10 @@ To upload a complete app, first create `/sd/apps/hello` from the DevTools page, 
 
 底层 Lua 模块接口见 [README_LUA.md](README_LUA.md)，LVGL UI 绑定见
 [README_LVGL.md](README_LVGL.md)。本文只写 DIY app 最常用的结构、接口入口和调试方式。
+
+C/C++ 扩展见 [Host ABI](README_HOST_ABI.md)，包括可选 runtime 回调、IMU raw、try-DMA
+和 [BLE ABI](README_HOST_ABI.md#ble-abi-速查)。后台浮层使用
+[Service Canvas](README_LUA.md#service-canvas-服务画布)，不操作前台对象树。
 
 
 常见 app 目录：
@@ -680,7 +713,9 @@ end)
 | `np` | 数组、矩阵、FFT |
 | `viper` | 热路径 C-like 函数编译 |
 | `i2s` | 音频输入输出 |
-| `nes` | NES 模拟器接口 |
+| `imu.raw` | 原始六轴缓存、时间戳和采样序号 |
+| `controller` / `ipc` | 标准化手柄输入、跨 runtime 消息 |
+| `ble` / `service_ui` | Service 专用 BLE 传输层 / Canvas 浮层 |
 
 ### 固件统一音量
 
@@ -713,6 +748,10 @@ App 内调节也调用 `sys.setvolume()`，不要直接覆盖 `/sd/apps/settings
 
 HTTP 等价接口为 `GET /audio/api/settings` 和 `POST /audio/api/settings?volume=35`。
 保存与错误处理细节见 [sys 设备控制](README_LUA.md#sys-设备控制)。
+
+这些接口由固件提供，前台 App 和后台 Service 均可调用；HTTP 路由不依赖 DevTools。
+目前没有独立的 Host ABI 统一音量分组：`.so` 音频驱动应由 Lua 包装层传入增益，
+不能假设 `host->audio` 会自动应用统一音量。
 
 ## 最简 app 示例
 
@@ -864,7 +903,25 @@ http://192.168.0.140/devtools/
 
 DevRun 适合快速试代码；确认后再整理成独立 app 目录和 `app.info`。
 
-### 3. DevTools HTTP API
+### 3. 固件文件 API
+
+部署优先使用内置 `/api/system/fs`，不依赖 DevTools 服务是否可用。
+查询参数值需 URL 编码，文件路径使用 `/sd/...`。
+
+| 方法 | 路径 | 用法 |
+| --- | --- | --- |
+| `GET` | `/api/system/fs/list?path=/sd/apps` | 列目录 |
+| `GET` | `/api/system/fs/stat?path=...` | 查询文件/目录元信息 |
+| `PUT` | `/api/system/fs/upload?path=...` | 请求 body 为原始文件二进制 |
+| `POST` | `/api/system/fs/mkdir?path=...` | 创建目录 |
+| `POST` | `/api/system/fs/rename?from=...&to=...` | 重命名/移动 |
+| `DELETE` | `/api/system/fs/remove?path=...` | 删除文件 |
+| `DELETE` | `/api/system/fs/rmdir?path=...` | 删除空目录，不支持递归参数 |
+
+上传后通过响应中的 `entry.size` 或 `stat/list` 核对大小，不为校验上传而回读完整文件。
+下方 DevTools 文件接口仅作为备选；DevRun 和服务重载仍使用 DevTools。
+
+### 4. DevTools HTTP API
 
 基础前缀：`/devtools/api`
 

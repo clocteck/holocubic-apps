@@ -24,7 +24,7 @@ The APIs are divided into two groups to make them easier to learn:
 
 - Fully compatible: `tmr`, `sjson`, `time`, `wifi`, `net`, `httpd`, `i2s`, `mqtt`
 - Extended: `file`, `http`, `websocket`, `zlib`, `np`, `viper`, `app`, `sys`,
-  `key`, `nes`
+  `key`, `imu`, `device`, `controller`, `ipc`; `ble` and `service_ui` are Service-only.
 
 ## Basic Conventions
 
@@ -445,6 +445,9 @@ request an exit, launch another app, and register app-level events.
 - `app.exit() -> true|nil, err`: Request that the current app exit.
 - `app.on(name, callback_or_nil)`: Register or unregister an app event.
 - `app.list() -> array`: Get the app list.
+  - `app.list({icons=false})` skips icon-file probes and returns an empty `icon` field;
+    other app fields remain available. The default retains icon paths and BMP fallback.
+    Rescanning invalidates the icon cache.
 - `app.current() -> table|nil`: Get information about the current app.
 - `app.launch(id) -> true|nil, err`: Launch a specific app.
 - `app.last_error() -> string|nil`: Read the most recent app error.
@@ -477,6 +480,26 @@ end)
 app.on("imu", nil)
 ```
 
+### imu Raw Samples
+
+Apps and Services can read the latest successful sample without `require` or a new I2C read:
+
+```lua
+local ax, ay, az, gx, gy, gz, timestamp_ms, seq = imu.raw()
+if ax == nil then
+  print(ay) -- "not_ready"
+else
+  print(ax, ay, az, gx, gy, gz, timestamp_ms, seq)
+end
+```
+
+The six axes are signed 16-bit register counts, not calibrated orientation values.
+At the current ranges, divide acceleration by 4096 for g and gyro by 64 for degrees/second.
+The existing task attempts sampling about every 60 ms. Failed/paused sampling retains the old
+sample: use changes in `seq` and sample age to detect freshness. Timestamp and sequence are
+32-bit wrapping counters, exposed as signed Lua integers; do not compare sequence magnitude.
+On older firmware, check `imu and imu.raw` before calling it.
+
 ## BLE Services, Controllers, and IPC
 
 The low-level `ble` module is registered only for background Services. API names and IRQ numbers
@@ -484,10 +507,44 @@ follow MicroPython, including `ble.gap_scan()`, `ble.gap_connect()`, `ble.gattc_
 `ble.irq()`. A foreground app does not scan for or connect to BLE directly; it consumes the
 normalized controller state published by a Service.
 
+Only one Lua BLE owner or Host BLE session may own the transport system-wide, including within
+the same Service. This is a central/GATT-client subset inspired by MicroPython, not its complete
+Bluetooth API; it does not expose advertising or GATT-server APIs.
+
+| Lua API | Purpose |
+| --- | --- |
+| `ble.active([enabled])`, `ble.config(table_or_key)` | Controller activation / configuration |
+| `ble.irq(fn_or_nil)` | Register/remove `fn(irq, data)`; data has named fields and array entries |
+| `ble.gap_scan(ms[, interval_us[, window_us[, active]]])` | Start scanning; `ble.gap_scan(nil)` stops it |
+| `ble.gap_connect(addr_type, addr[, timeout_ms])` | Start connecting; default timeout 5000 ms |
+| `ble.gap_disconnect(conn)`, `ble.gap_pair(conn[, async])` | Disconnect / pair (asynchronous by default) |
+| `ble.gattc_discover_services(conn[, uuid])` | Discover services |
+| `ble.gattc_discover_characteristics(conn, start_handle, end_handle[, uuid])` | Discover characteristics |
+| `ble.gattc_discover_descriptors(conn, start_handle, end_handle)` | Discover descriptors |
+| `ble.gattc_read(conn, value_handle)` | Start reading; receive data through IRQ |
+| `ble.gattc_write(conn, value_handle, data[, mode])` | Binary-string write; mode 0=no response, 1=with response |
+| `ble.gattc_exchange_mtu(conn)` | Request MTU exchange |
+
+Most operations return `true` when accepted or `nil, err` on failure; completion is reported by
+IRQ, not by the initial return. Invalid argument types/ranges may raise Lua errors. `active()`
+returns a Boolean; successful `irq()` registration/removal returns no values. Callbacks run on
+the owning Lua task, not in an ISR. Configuration keys include `mtu`, `rxbuf`, `bond`, `mitm`,
+`le_secure`, `io`, `addr_mode`, and `gap_name`; `mac` is a read-only query.
+Addresses returned in events are text such as `AA:BB:CC:DD:EE:FF`; connection input also accepts
+a six-byte binary string. UUID input accepts integers or short/full UUID strings.
+
+Long read/write, connection-parameter updates, bond removal and connected RSSI are currently
+Host-only, not Lua `ble` functions. See [BLE ABI](README_HOST_ABI.md#ble-abi-quick-reference).
+
 When subscribing to notifications, use `ble.gattc_discover_descriptors()` to find UUID `0x2902`.
 After receiving `IRQ_GATTC_DESCRIPTOR_RESULT=13`, write the CCCD through
 `ble.gattc_write()`. Do not assume the descriptor handle is the characteristic value handle
 plus one.
+
+Write `string.char(1, 0)` for Notify or `string.char(2, 0)` for Indicate, normally with mode 1
+so `IRQ_GATTC_WRITE_DONE` confirms completion. Mode 0 does not produce that completion event.
+Notify and Indicate both arrive as `IRQ_GATTC_NOTIFY=18`; `data.indication` distinguishes them.
+Read/Notify data is a binary string in `data.data`; check `data.truncated` before decoding.
 
 A Service publishes state through `controller.publish`, which exists only in a Service:
 
@@ -524,6 +581,11 @@ controller.on("ble-main", nil)
 State fields include `seq/timestamp_ms/connected/buttons/pressed/released`, dual sticks
 `lx/ly/rx/ry`, triggers `lt/rt`, and `name/device_id/source`. `controller.sources()` returns
 the list of currently published sources.
+
+Stick values are `-32768..32767`; triggers are `0..65535`. Button-bit meaning is defined by the
+publishing Service, not by BLE. For example, hidpad uses `ble-main` and publishes calibrated,
+mapped input; its `.so` handles BLE/HID while Lua handles Web/IPC and `controller.publish`.
+Those module commands and Web routes are application APIs, not built-in `ble` functions.
 
 The mapping page and Service communicate through binary-safe IPC. Endpoints are globally unique
 and each payload is limited to 1024 bytes. A mapping can be transferred with
@@ -571,6 +633,41 @@ instance. A Service whose manifest sets `autostart_service=true` is considered p
 exits or is stopped, the application manager starts it again after about two seconds. To disable
 it for an extended period, turn off that manifest option or uninstall the corresponding Service.
 
+### Service Canvas
+
+Only a background Service has `service_ui`. It owns at most one RGB565 chroma-key Canvas on
+the system overlay layer; it cannot use the foreground widget tree.
+
+| API | Result / behavior |
+| --- | --- |
+| `service_ui.acquire(x, y, w, h)` | `canvas_id` or `nil, err`; initially hidden and transparent |
+| `service_ui.show(id)` | Boolean; show and bring the Canvas to the front |
+| `service_ui.hide(id)` | Boolean; hide without releasing its buffer |
+| `service_ui.clear(id)` | No return values; fill with the transparent color, without hiding |
+| `service_ui.is_visible(id)` | Boolean visibility state |
+| `service_ui.release(id)` | Boolean; release the Canvas and invalidate its ID |
+
+The area must fit the 320x240 display (`x/y >= 0`, `w/h > 0`). Reacquiring the same area returns
+the existing ID; to move/resize, release it first. Non-owned/stale IDs raise Lua errors.
+`service_ui.TRANSPARENT_COLOR` (also `SERVICE_UI_TRANSPARENT_COLOR`) is the color key, not alpha.
+Service teardown releases its Canvas automatically; explicitly release it when no longer needed.
+
+After successful acquisition, the Service gets a restricted drawing set: `lv_canvas_frame_begin/end`,
+`fill_bg`, `set_px_color`, `blit_rgb565`, `draw_rect/line/arc/text` (all with the `lv_canvas_` prefix).
+It does not get `lv_canvas_create`, widget-tree APIs, image-handle drawing, transform or blur.
+Only draw into the owned ID; bracket each frame and stop timers before releasing it.
+
+```lua
+local canvas, err = service_ui.acquire(0, 0, 320, 40)
+if not canvas then print(err); return end
+lv_canvas_frame_begin(canvas)
+service_ui.clear(canvas)
+lv_canvas_draw_text(canvas, 8, 8, 304, "Service ready", {color=0xFFFFFF, font_size=14})
+lv_canvas_frame_end(canvas)
+service_ui.show(canvas)
+-- When finished: stop drawing timers, then service_ui.release(canvas).
+```
+
 ### Service UI and HOME
 
 HOME is routed only to the owner of the topmost visible Service Canvas. If that Service registered
@@ -579,13 +676,14 @@ delivered to the Service; its Canvas remains visible and the foreground app does
 the gesture. If there is no listener, the firmware hides the Canvas.
 
 ```lua
-local canvas = service_ui.acquire(0, 0, 320, 240)
+local canvas, err = service_ui.acquire(0, 0, 320, 240)
+if not canvas then print(err); return end
 service_ui.show(canvas)
 
 key.on(key.HOME, function(evt_type, timestamp_ms)
   if evt_type == key.SHORT then
     -- The Service handles it. Call service_ui.hide(canvas) explicitly when appropriate.
-    do_something()
+    service_ui.hide(canvas)
   end
 end)
 
@@ -647,6 +745,10 @@ The getter reads cached firmware memory, without accessing SD. At startup, the f
 The setter accepts integers from 0 to 100, updates the cache immediately, and coalesces saves
 after about 500 ms without changes. It preserves other settings fields.
 
+Available in both foreground apps and Services. An out-of-range integer returns `nil, err`;
+an argument that cannot be checked as a Lua integer raises a Lua argument error. Check
+`getvolumestate()` after a successful setter rather than treating acceptance as durable saving.
+
 `true` means the update was accepted, not that it was persisted. `getvolumestate()` returns:
 
 - `volume`: the current value; `revision`: the in-memory change revision.
@@ -661,6 +763,9 @@ settings sources.
 HTTP equivalents: `GET /audio/api/settings` and `POST /audio/api/settings?volume=35`.
 Responses include `ok`, `api_version=1`, and the state fields above. Invalid parameters return
 400; unsupported methods return 405.
+
+POST takes `volume` from the query string, not a JSON body. `HEAD` is also supported for reads.
+The route is firmware-owned and does not require the DevTools service.
 
 The firmware stores the shared setting but does not scale PCM. Each audio app must apply it
 once to its own gain. Polling every 200 ms and applying only changed values is sufficient;
@@ -744,8 +849,9 @@ events, animations, GIFs, canvas, and related APIs.
 ## 兼容速查
 
 
- 完全兼容 :`tmr`、`sjson`、`time`、`wifi`、`net`、`httpd`、`i2s`、`mqtt`
-|扩展接口 : `file`、`http`、`websocket`、`zlib`、`np`、`viper`、`app`、`sys`、`key`、`nes`
+- 完全兼容：`tmr`、`sjson`、`time`、`wifi`、`net`、`httpd`、`i2s`、`mqtt`。
+- 扩展接口：`file`、`http`、`websocket`、`zlib`、`np`、`viper`、`app`、`sys`、`key`、`imu`、`device`、`controller`、`ipc`；`ble` 和 `service_ui` 仅供 Service 使用。
+
 ## 基本约定
 
 - 内置模块已经注册为全局表，不需要 `require`，例如 `tmr`、`file`、`wifi`、`http`。
@@ -1145,6 +1251,8 @@ print(fn(buf, buf:len()))
 - `app.exit() -> true|nil, err`：请求退出当前 app。
 - `app.on(name, callback_or_nil)`：注册或取消 app 事件。
 - `app.list() -> array`：获取 app 列表。
+  - `app.list({icons=false})` 跳过图标文件探测，返回空 `icon`，其余应用字段仍保留。
+    默认调用保留图标路径和 BMP 回退；重扫会使图标缓存失效。
 - `app.current() -> table|nil`：获取当前 app 信息。
 - `app.launch(id) -> true|nil, err`：启动指定 app。
 - `app.last_error() -> string|nil`：读取最近一次 app 错误。
@@ -1168,15 +1276,66 @@ end)
 app.on("imu", nil)
 ```
 
+### imu 原始采样
+
+前台 App 和后台 Service 均可直接读取最后一次成功采样，无需 `require`，不触发 I2C：
+
+```lua
+local ax, ay, az, gx, gy, gz, timestamp_ms, seq = imu.raw()
+if ax == nil then
+  print(ay) -- "not_ready"
+else
+  print(ax, ay, az, gx, gy, gz, timestamp_ms, seq)
+end
+```
+
+六轴为有符号 16 位寄存器计数，不是校准后的姿态值。当前量程下，加速度除以 4096
+得到 g，角速度除以 64 得到度/秒。现有任务约每 60ms 尝试采样，失败或暂停时保留旧值；
+用 `seq` 是否变化及样本年龄判断新鲜度。时间戳和序号均为 32 位回绕计数，在 Lua 中
+按有符号整数返回，不要用序号大小比较先后。兼容旧固件时先检查 `imu and imu.raw`。
+
 ## BLE Service、controller 与 IPC
 
 低层 `ble` 只在后台 Service 运行时注册。API 命名和 IRQ 编号参考 MicroPython：
 `ble.gap_scan()`、`ble.gap_connect()`、`ble.gattc_*()`、`ble.irq()`。前台 app 不直接
 扫描或连接 BLE，而是读取 Service 发布的标准化手柄状态。
 
+全系统只允许一个 Lua BLE owner 或一个 Host BLE session 占用传输层，同一 Service 内
+也不能同时占用。这里只是参考 MicroPython 的 central/GATT client 子集，不是完整的
+Bluetooth API；未暴露广播和 GATT server 接口。
+
+| Lua API | 用途 |
+| --- | --- |
+| `ble.active([enabled])`、`ble.config(table_or_key)` | 控制器启停 / 配置 |
+| `ble.irq(fn_or_nil)` | 注册/移除 `fn(irq, data)`；data 同时有命名字段和数组项 |
+| `ble.gap_scan(ms[, interval_us[, window_us[, active]]])` | 启动扫描；`ble.gap_scan(nil)` 停止 |
+| `ble.gap_connect(addr_type, addr[, timeout_ms])` | 发起连接，默认超时 5000ms |
+| `ble.gap_disconnect(conn)`、`ble.gap_pair(conn[, async])` | 断开 / 配对，配对默认异步 |
+| `ble.gattc_discover_services(conn[, uuid])` | 发现服务 |
+| `ble.gattc_discover_characteristics(conn, start_handle, end_handle[, uuid])` | 发现特征 |
+| `ble.gattc_discover_descriptors(conn, start_handle, end_handle)` | 发现描述符 |
+| `ble.gattc_read(conn, value_handle)` | 发起读取，数据由 IRQ 返回 |
+| `ble.gattc_write(conn, value_handle, data[, mode])` | 二进制字符串写入，mode 0=无响应、1=有响应 |
+| `ble.gattc_exchange_mtu(conn)` | 请求 MTU 交换 |
+
+多数操作接受请求后返回 `true`，失败返回 `nil, err`；完成结果由 IRQ 报告，不由初始返回值
+代表。参数类型/范围错误可能抛出 Lua 异常。`active()` 返回布尔值，`irq()` 成功注册/移除
+不返回值。回调在所属 Lua 任务执行，不在 ISR 中执行。配置键包括 `mtu`、`rxbuf`、`bond`、
+`mitm`、`le_secure`、`io`、`addr_mode`、`gap_name`；`mac` 为只读查询。
+事件地址为 `AA:BB:CC:DD:EE:FF` 形式文本；连接参数也接受 6 字节二进制字符串。
+UUID 输入接受整数、短 UUID 文本或完整 UUID 文本。
+
+长读写、连接参数调整、删除配对和连接 RSSI 目前仅由 Host 提供，不是 Lua `ble` 函数。
+见 [BLE ABI](README_HOST_ABI.md#ble-abi-速查)。
+
 订阅通知时可用 `ble.gattc_discover_descriptors()` 查找 UUID `0x2902`，收到
 `IRQ_GATTC_DESCRIPTOR_RESULT=13` 后再通过 `ble.gattc_write()` 写 CCCD；不要固定假设
 descriptor 句柄等于特征 value handle 加一。
+
+Notify 写 `string.char(1, 0)`，Indicate 写 `string.char(2, 0)`，通常使用 mode 1 并等待
+`IRQ_GATTC_WRITE_DONE` 确认；mode 0 不产生该完成事件。Notify/Indicate 都通过
+`IRQ_GATTC_NOTIFY=18` 返回，由 `data.indication` 区分。Read/Notify 的二进制内容位于
+`data.data`，解码前检查 `data.truncated`。
 
 Service 发布状态（`controller.publish` 只在 Service 中存在）：
 
@@ -1212,6 +1371,10 @@ controller.on("ble-main", nil)
 状态字段包括 `seq/timestamp_ms/connected/buttons/pressed/released`、双摇杆
 `lx/ly/rx/ry`、扳机 `lt/rt`、`name/device_id/source`。`controller.sources()` 返回当前
 已发布 source 列表。
+
+摇杆范围为 `-32768..32767`，扳机为 `0..65535`。按钮位含义由发布 Service 定义，
+不是 BLE 协议规定。例如 hidpad 使用 `ble-main` 发布校准、映射后的输入：`.so` 处理
+BLE/HID，Lua 处理 Web/IPC 和 `controller.publish`；模块命令和 Web 路由不是内置 `ble` API。
 
 映射页面与 Service 之间使用二进制安全 IPC。endpoint 全局唯一，单条 payload 最大
 1024 字节；映射可用 `json.encode/decode` 传输：
@@ -1252,6 +1415,41 @@ end)
 `app.start_service(id)` 遇到同 id service 已运行时会重启旧实例。
 manifest 设置 `autostart_service=true` 的 Service 会被视为常驻服务；退出或停止后，应用管理器会在约 2 秒内再次拉起。需要长期停用时应关闭该 manifest 配置或卸载对应 Service。
 
+### Service Canvas 服务画布
+
+只有后台 Service 有 `service_ui`，每个 Service 最多持有一张系统浮层上的 RGB565
+色键透明 Canvas，不能操作前台 widget 对象树。
+
+| 接口 | 返回值 / 行为 |
+| --- | --- |
+| `service_ui.acquire(x, y, w, h)` | `canvas_id` 或 `nil, err`；初始隐藏且透明 |
+| `service_ui.show(id)` | 布尔值；显示并置于 Canvas 浮层前端 |
+| `service_ui.hide(id)` | 布尔值；隐藏但不释放缓冲 |
+| `service_ui.clear(id)` | 无返回值；填充透明色，不隐藏 |
+| `service_ui.is_visible(id)` | 可见状态布尔值 |
+| `service_ui.release(id)` | 布尔值；释放画布，原 ID 失效 |
+
+区域须位于 320x240 屏幕内（`x/y >= 0`、`w/h > 0`）。相同区域再次 acquire 返回原 ID；
+移动或改变尺寸须先 release。非所属/失效 ID 会抛出 Lua 异常。
+`service_ui.TRANSPARENT_COLOR`（别名 `SERVICE_UI_TRANSPARENT_COLOR`）为色键，不是 alpha。
+Service 退出时自动释放画布；不再使用时也应主动释放。
+
+acquire 成功后才注册受限绘图子集：`lv_canvas_frame_begin/end`、`fill_bg`、`set_px_color`、
+`blit_rgb565`、`draw_rect/line/arc/text`（均以 `lv_canvas_` 为前缀）。不提供
+`lv_canvas_create`、对象树、图片 handle 绘制、transform 或 blur。
+只向所属 ID 绘图，每帧配对 begin/end，释放前先停止绘图定时器。
+
+```lua
+local canvas, err = service_ui.acquire(0, 0, 320, 40)
+if not canvas then print(err); return end
+lv_canvas_frame_begin(canvas)
+service_ui.clear(canvas)
+lv_canvas_draw_text(canvas, 8, 8, 304, "Service ready", {color=0xFFFFFF, font_size=14})
+lv_canvas_frame_end(canvas)
+service_ui.show(canvas)
+-- 用完后：先停绘图定时器，再 service_ui.release(canvas)。
+```
+
 ### Service UI 与 HOME
 
 HOME 只交给最上层可见 Service Canvas 的 owner。该 Service 注册了匹配的
@@ -1259,13 +1457,14 @@ HOME 只交给最上层可见 Service Canvas 的 owner。该 Service 注册了�
 Service，Canvas 保持显示且前台 App 不会同时收到；没有监听时由固件隐藏 Canvas。
 
 ```lua
-local canvas = service_ui.acquire(0, 0, 320, 240)
+local canvas, err = service_ui.acquire(0, 0, 320, 240)
+if not canvas then print(err); return end
 service_ui.show(canvas)
 
 key.on(key.HOME, function(evt_type, timestamp_ms)
   if evt_type == key.SHORT then
     -- Service 自己处理；需要关闭时主动调用 service_ui.hide(canvas)。
-    do_something()
+    service_ui.hide(canvas)
   end
 end)
 
@@ -1320,6 +1519,9 @@ getter 只读取固件缓存，不访问 SD。启动时从 `/sd/apps/settings.js
 字段读取一次，缺省为 25；0 为静音。setter 接受 0–100 的整数，立即更新内存，
 连续变化停止约 500ms 后合并保存，保留设置文件中的其他字段。
 
+前台 App 和后台 Service 均可使用。整数越界返回 `nil, err`，无法按 Lua 整数检查的参数
+会抛出参数异常；setter 成功后应查询 `getvolumestate()`，不要把接受请求视为持久化完成。
+
 返回 `true` 表示已接受，不代表已保存。`getvolumestate()` 返回：
 
 - `volume`：当前音量；`revision`：内存中的设置修订号。
@@ -1332,6 +1534,9 @@ SD 保存失败时 `pending=true`，约 5 秒后重试；损坏的 JSON 不会�
 
 HTTP 等价接口：`GET /audio/api/settings`、`POST /audio/api/settings?volume=35`。
 响应包含 `ok`、`api_version=1` 及上述状态字段；非法参数返回 400，不支持的方法返回 405。
+
+POST 从查询字符串读取 `volume`，不解析 JSON body；读取也支持 `HEAD`。
+该路由由固件提供，不需要 DevTools 服务。
 
 固件只维护共享设置，不自动缩放 PCM。音频 App 应把统一值映射到自己的增益，并且只应用一次。
 可每 200ms 检查一次、仅在变化时更新；退出时注销定时器。兼容旧固件时检测
