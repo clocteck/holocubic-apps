@@ -17,4 +17,4 @@ description_zh_tw = 播放 /sd/mp3 中的 MP3/WAV，支援歌詞、Web 管理與
 description_zh_hant = 播放 /sd/mp3 中的 MP3/WAV，支援歌詞、Web 管理與 EQ 調音
 description_en = Plays MP3 and WAV files from /sd/mp3 with lyrics, Web management, and EQ tuning
 description_ja = /sd/mp3 内の MP3/WAV を再生し、歌詞、Web 管理、EQ 調整に対応します
-version = 1.13
+version = 1.14

@@ -12,9 +12,10 @@
 #include "esp_audio_simple_dec_default.h"
 #include "esp_audio_types.h"
 #include "dsps_biquad.h"
+#include "audio_peak.h"
 
 #define AUDIO_MODULE_EXPORT __attribute__((visibility("default"), used))
-#define AUDIO_VERSION "1.12.1"
+#define AUDIO_VERSION "1.14"
 #define AUDIO_IN_CAP 2048u
 #define AUDIO_PREFETCH_CAP (2u * 1024u * 1024u)
 #define AUDIO_PREFETCH_READ_CHUNK 8192u
@@ -61,7 +62,34 @@ typedef struct audio_dsp_filter_t {
     uint8_t enabled;
 } audio_dsp_filter_t;
 
+typedef struct audio_effect_settings {
+    int32_t volume_q15;
+    uint8_t loudness_enabled;
+    uint32_t loudness_target_rms;
+    int32_t loudness_min_gain_q15;
+    int32_t loudness_max_gain_q15;
+    uint8_t eq_enabled;
+    uint8_t hpf_enabled;
+    uint8_t limiter_enabled;
+    int32_t limiter_threshold;
+    float hpf_freq;
+    float hpf_q;
+    float eq_freq[AUDIO_EQ_MAX_BANDS];
+    float eq_gain[AUDIO_EQ_MAX_BANDS];
+    float eq_q[AUDIO_EQ_MAX_BANDS];
+    uint8_t vbass_enabled;
+    float vbass_low_hpf;
+    float vbass_low_lpf;
+    float vbass_out_hpf;
+    float vbass_out_lpf;
+    float vbass_drive;
+    float vbass_mix;
+    float vbass_even;
+    float vbass_odd;
+} audio_effect_settings;
+
 typedef struct audio_instance_t {
+    audio_effect_settings effects;
     module_host_api_v1 host;
     module_task_create_ex_v1_fn task_create_ex;
     uint8_t producer_stack_psram;
@@ -109,35 +137,18 @@ typedef struct audio_instance_t {
     uint32_t sample_rate;
     uint32_t bitrate;
     uint64_t file_size;
-    int32_t volume_q15;
-    uint8_t loudness_enabled;
     uint8_t loudness_ready;
     uint8_t loudness_segments;
-    uint32_t loudness_target_rms;
     uint32_t loudness_rms;
     uint32_t loudness_peak;
     int32_t loudness_gain_q15;
-    int32_t loudness_min_gain_q15;
-    int32_t loudness_max_gain_q15;
-    uint8_t eq_enabled;
     uint8_t eq_active;
-    uint8_t hpf_enabled;
-    uint8_t limiter_enabled;
-    int32_t limiter_threshold;
-    float hpf_freq;
-    float hpf_q;
-    float eq_freq[AUDIO_EQ_MAX_BANDS];
-    float eq_gain[AUDIO_EQ_MAX_BANDS];
-    float eq_q[AUDIO_EQ_MAX_BANDS];
-    uint8_t vbass_enabled;
-    float vbass_low_hpf;
-    float vbass_low_lpf;
-    float vbass_out_hpf;
-    float vbass_out_lpf;
-    float vbass_drive;
-    float vbass_mix;
-    float vbass_even;
-    float vbass_odd;
+    float vbass_mix_current;
+    float vbass_mix_slew;
+    audio_peak peak;
+    uint32_t peak_rate;
+    uint32_t peak_tail;
+    volatile uint32_t dsp_busy;
     uint32_t limiter_active_samples;
     uint32_t limiter_total_samples;
     uint32_t i2s_short_writes;
@@ -164,6 +175,8 @@ typedef struct audio_instance_t {
     audio_dsp_filter_t eq[AUDIO_EQ_MAX_BANDS];
     audio_dsp_filter_t vbass_low_hpf_filter;
     audio_dsp_filter_t vbass_low_lpf_filter;
+    audio_dsp_filter_t vbass_low_lpf_filter2;
+    audio_dsp_filter_t vbass_low_lpf_filter3;
     audio_dsp_filter_t vbass_out_hpf_filter;
     audio_dsp_filter_t vbass_out_lpf_filter;
     char type_name[8];
@@ -185,6 +198,22 @@ static const module_manifest_t s_manifest = {
     0,
     MODULE_BOOTSTRAP_ABI_VERSION,
 };
+
+static void audio_default_effects(audio_effect_settings *s)
+{
+    memset(s,0,sizeof(*s));
+    s->volume_q15=32768;s->loudness_enabled=1;
+    s->loudness_target_rms=AUDIO_LOUDNESS_DEFAULT_TARGET_RMS;
+    s->loudness_min_gain_q15=AUDIO_LOUDNESS_DEFAULT_MIN_Q15;
+    s->loudness_max_gain_q15=AUDIO_LOUDNESS_DEFAULT_MAX_Q15;
+    s->hpf_enabled=s->eq_enabled=s->vbass_enabled=s->limiter_enabled=1;
+    s->hpf_freq=150;s->hpf_q=0.707f;s->limiter_threshold=AUDIO_LIMITER_DEFAULT_PEAK;
+    s->vbass_low_hpf=75;s->vbass_low_lpf=200;s->vbass_out_hpf=150;s->vbass_out_lpf=495;
+    s->vbass_drive=3;s->vbass_mix=0.20f;s->vbass_even=1.6f;s->vbass_odd=0.8f;
+    static const float hz[7]={180,250,420,1000,1250,2500,4300};
+    static const float db[7]={6,0,4.2f,-3.5f,0,-2.5f,-0.8f};
+    for(unsigned i=0;i<7;i++){s->eq_freq[i]=hz[i];s->eq_gain[i]=db[i];s->eq_q[i]=1;}
+}
 
 static int32_t audio_parse_q1000(const char *s, int32_t fallback)
 {
@@ -321,14 +350,14 @@ static void audio_recompute_loudness_gain(audio_instance_t *inst)
     if (!inst) {
         return;
     }
-    if (!inst->loudness_enabled || !inst->loudness_ready || inst->loudness_rms < 16u) {
+    if (!inst->effects.loudness_enabled || !inst->loudness_ready || inst->loudness_rms < 16u) {
         inst->loudness_gain_q15 = 32768;
         return;
     }
-    gain = (float)inst->loudness_target_rms / (float)inst->loudness_rms;
+    gain = (float)inst->effects.loudness_target_rms / (float)inst->loudness_rms;
     inst->loudness_gain_q15 = audio_gain_to_q15(gain,
-                                                inst->loudness_min_gain_q15,
-                                                inst->loudness_max_gain_q15);
+                                                inst->effects.loudness_min_gain_q15,
+                                                inst->effects.loudness_max_gain_q15);
 }
 
 /* 合并用户音量与曲目响度增益，避免每个 sample 重复算乘积。 */
@@ -338,7 +367,7 @@ static int32_t audio_combined_gain_q15(const audio_instance_t *inst)
     if (!inst) {
         return 32768;
     }
-    gain = ((int64_t)inst->volume_q15 * (int64_t)inst->loudness_gain_q15) >> 15;
+    gain = ((int64_t)inst->effects.volume_q15 * (int64_t)inst->loudness_gain_q15) >> 15;
     if (gain < 0) {
         gain = 0;
     } else if (gain > 196608) {
@@ -353,7 +382,7 @@ static void audio_note_limiter(audio_instance_t *inst, uint32_t active, uint32_t
     if (!inst || total == 0u) {
         return;
     }
-    if (!inst->limiter_enabled) {
+    if (!inst->effects.limiter_enabled) {
         inst->limiter_active_samples = 0;
         inst->limiter_total_samples = 0;
         return;
@@ -423,6 +452,11 @@ static void audio_filter_set(audio_dsp_filter_t *f,
     if (!f) {
         return;
     }
+    if (f->enabled == (enabled ? 1 : 0) && f->coeff[0] == b0 &&
+        f->coeff[1] == b1 && f->coeff[2] == b2 &&
+        f->coeff[3] == a1 && f->coeff[4] == a2) {
+        return; /* Same coefficients: preserve history on a bass toggle. */
+    }
     f->coeff[0] = b0;
     f->coeff[1] = b1;
     f->coeff[2] = b2;
@@ -445,6 +479,8 @@ static void audio_reset_filter_state(audio_instance_t *inst)
     }
     audio_filter_reset(&inst->vbass_low_hpf_filter);
     audio_filter_reset(&inst->vbass_low_lpf_filter);
+    audio_filter_reset(&inst->vbass_low_lpf_filter2);
+    audio_filter_reset(&inst->vbass_low_lpf_filter3);
     audio_filter_reset(&inst->vbass_out_hpf_filter);
     audio_filter_reset(&inst->vbass_out_lpf_filter);
 }
@@ -563,46 +599,50 @@ static void audio_rebuild_filters(audio_instance_t *inst)
     }
     sr = (inst->sample_rate >= 8000u) ? (float)inst->sample_rate : 44100.0f;
     inst->eq_active = 0;
-    if (inst->hpf_enabled) {
-        if (!audio_config_hpf(&inst->hpf, sr, inst->hpf_freq, inst->hpf_q)) {
+    if (inst->effects.hpf_enabled) {
+        if (!audio_config_hpf(&inst->hpf, sr, inst->effects.hpf_freq, inst->effects.hpf_q)) {
             inst->hpf.enabled = 0;
         }
     } else {
         inst->hpf.enabled = 0;
         audio_filter_reset(&inst->hpf);
     }
-    if (!inst->eq_enabled) {
+    if (!inst->effects.eq_enabled) {
         for (i = 0; i < AUDIO_EQ_MAX_BANDS; ++i) {
             inst->eq[i].enabled = 0;
             audio_filter_reset(&inst->eq[i]);
         }
     } else {
         for (i = 0; i < AUDIO_EQ_MAX_BANDS; ++i) {
-            if (audio_config_peak(&inst->eq[i], sr, inst->eq_freq[i], inst->eq_gain[i], inst->eq_q[i])) {
+            if (audio_config_peak(&inst->eq[i], sr, inst->effects.eq_freq[i], inst->effects.eq_gain[i], inst->effects.eq_q[i])) {
                 inst->eq_active++;
             }
         }
     }
-    if (!inst->vbass_enabled) {
-        inst->vbass_low_hpf_filter.enabled = 0;
-        inst->vbass_low_lpf_filter.enabled = 0;
-        inst->vbass_out_hpf_filter.enabled = 0;
-        inst->vbass_out_lpf_filter.enabled = 0;
-        audio_filter_reset(&inst->vbass_low_hpf_filter);
-        audio_filter_reset(&inst->vbass_low_lpf_filter);
-        audio_filter_reset(&inst->vbass_out_hpf_filter);
-        audio_filter_reset(&inst->vbass_out_lpf_filter);
-        return;
-    }
-    if (!audio_config_hpf(&inst->vbass_low_hpf_filter, sr, inst->vbass_low_hpf, 0.707f) ||
-        !audio_config_lpf(&inst->vbass_low_lpf_filter, sr, inst->vbass_low_lpf, 0.707f) ||
-        !audio_config_hpf(&inst->vbass_out_hpf_filter, sr, inst->vbass_out_hpf, 0.707f) ||
-        !audio_config_lpf(&inst->vbass_out_lpf_filter, sr, inst->vbass_out_lpf, 0.707f)) {
+    inst->vbass_mix_slew = 1.0f - powf(2.0f, -1.442695041f / (0.010f * sr));
+    if (!audio_config_hpf(&inst->vbass_low_hpf_filter, sr, inst->effects.vbass_low_hpf, 0.707f) ||
+        !audio_config_lpf(&inst->vbass_low_lpf_filter, sr, inst->effects.vbass_low_lpf, 0.707f) ||
+        !audio_config_lpf(&inst->vbass_low_lpf_filter2, sr, inst->effects.vbass_low_lpf, 0.707f) ||
+        !audio_config_lpf(&inst->vbass_low_lpf_filter3, sr, inst->effects.vbass_low_lpf, 0.707f) ||
+        !audio_config_hpf(&inst->vbass_out_hpf_filter, sr, inst->effects.vbass_out_hpf, 0.707f) ||
+        !audio_config_lpf(&inst->vbass_out_lpf_filter, sr, inst->effects.vbass_out_lpf, 0.707f)) {
         inst->vbass_low_hpf_filter.enabled = 0;
         inst->vbass_low_lpf_filter.enabled = 0;
         inst->vbass_out_hpf_filter.enabled = 0;
         inst->vbass_out_lpf_filter.enabled = 0;
     }
+}
+
+/* Serialize UI effect changes with the producer's short PCM/filter section. */
+static void audio_dsp_lock(audio_instance_t *inst)
+{
+    while (__atomic_exchange_n(&inst->dsp_busy, 1, __ATOMIC_ACQUIRE)) {
+        inst->host.task.delay(1);
+    }
+}
+static void audio_dsp_unlock(audio_instance_t *inst)
+{
+    __atomic_store_n(&inst->dsp_busy, 0, __ATOMIC_RELEASE);
 }
 
 /* 写入最后错误，Lua 层按 NodeMCU 风格返回 nil, err。 */
@@ -1018,6 +1058,8 @@ static void audio_close_internal(audio_instance_t *inst)
     inst->limiter_active_samples = 0;
     inst->limiter_total_samples = 0;
     inst->i2s_short_writes = 0;
+    inst->peak_rate = inst->peak_tail = 0;
+    inst->vbass_mix_current = 0;
     inst->play_task_stop = 0;
     inst->play_task_eof = 0;
     inst->play_task_error = 0;
@@ -1372,6 +1414,9 @@ static void audio_reset_stream_state(audio_instance_t *inst)
     inst->bitrate = 0;
     inst->file_size = 0;
     inst->sample_rate = 0;
+    inst->peak_rate = inst->peak_tail = 0;
+    inst->vbass_mix_current = 0;
+    audio_reset_filter_state(inst);
 }
 
 /* 读取更多压缩数据到 pending buffer 尾部。 */
@@ -1433,8 +1478,8 @@ static void audio_consume_input(audio_instance_t *inst, size_t consumed)
 /* 判断虚拟低音滤波链路是否可用。 */
 static int audio_vbass_active(const audio_instance_t *inst)
 {
-    return inst && inst->vbass_enabled && inst->vbass_buf && inst->vbass_cap > 0 &&
-           inst->vbass_mix > 0.0001f &&
+    return inst && inst->vbass_buf && inst->vbass_cap > 0 &&
+           ((inst->effects.vbass_enabled && inst->effects.vbass_mix > 0.000001f) || inst->vbass_mix_current > 0.000001f) &&
            inst->vbass_low_hpf_filter.enabled &&
            inst->vbass_low_lpf_filter.enabled &&
            inst->vbass_out_hpf_filter.enabled &&
@@ -1444,8 +1489,8 @@ static int audio_vbass_active(const audio_instance_t *inst)
 /* 判断是否需要走 esp-dsp 后处理。 */
 static int audio_dsp_active(const audio_instance_t *inst)
 {
-    return inst && inst->output_channels == 1 &&
-           (inst->hpf.enabled || inst->eq_active > 0 || audio_vbass_active(inst));
+    /* Always keep the mono output delay/protection, even with all effects off. */
+    return inst && inst->output_channels == 1;
 }
 
 /* 对一段 mono s16le PCM 运行 esp-dsp EQ/HPF，并合并音量/限幅。 */
@@ -1461,9 +1506,14 @@ static void audio_apply_dsp_mono(audio_instance_t *inst, int16_t *s16, size_t fr
         return;
     }
     vbass_on = audio_vbass_active(inst);
+    if (inst->peak_rate != inst->sample_rate || !inst->peak_rate) {
+        inst->peak_rate = inst->sample_rate ? inst->sample_rate : 44100;
+        audio_peak_init(&inst->peak, inst->peak_rate);
+    }
+    inst->peak_tail = AUDIO_PEAK_OUTPUT_DELAY;
     vol = (float)audio_combined_gain_q15(inst) / 32768.0f;
-    if (inst->limiter_enabled && inst->limiter_threshold > 0) {
-        limit = (float)inst->limiter_threshold / 32768.0f;
+    if (inst->effects.limiter_enabled && inst->effects.limiter_threshold > 0) {
+        limit = (float)inst->effects.limiter_threshold / 32768.0f;
     }
     while (pos < frames) {
         size_t n = frames - pos;
@@ -1486,11 +1536,15 @@ static void audio_apply_dsp_mono(audio_instance_t *inst, int16_t *s16, size_t fr
                                   inst->vbass_low_hpf_filter.coeff, inst->vbass_low_hpf_filter.w);
             AUDIO_DSPS_BIQUAD_F32(inst->vbass_buf, inst->vbass_buf, (int)n,
                                   inst->vbass_low_lpf_filter.coeff, inst->vbass_low_lpf_filter.w);
+            AUDIO_DSPS_BIQUAD_F32(inst->vbass_buf, inst->vbass_buf, (int)n,
+                                  inst->vbass_low_lpf_filter2.coeff, inst->vbass_low_lpf_filter2.w);
+            AUDIO_DSPS_BIQUAD_F32(inst->vbass_buf, inst->vbass_buf, (int)n,
+                                  inst->vbass_low_lpf_filter3.coeff, inst->vbass_low_lpf_filter3.w);
             for (i = 0; i < n; ++i) {
-                float low = audio_clipf(inst->vbass_buf[i] * inst->vbass_drive, -1.0f, 1.0f);
-                float even = fabsf(low) * inst->vbass_even;
-                float odd = low * low * low * 4.0f * inst->vbass_odd;
-                inst->vbass_buf[i] = even + odd;
+                float low = inst->vbass_buf[i] * inst->effects.vbass_drive;
+                float soft = low / (1.0f + audio_peak_abs(low));
+                inst->vbass_buf[i] = audio_peak_abs(soft) * inst->effects.vbass_even +
+                                     (soft - low) * inst->effects.vbass_odd;
             }
             AUDIO_DSPS_BIQUAD_F32(inst->vbass_buf, inst->vbass_buf, (int)n,
                                   inst->vbass_out_hpf_filter.coeff, inst->vbass_out_hpf_filter.w);
@@ -1506,28 +1560,13 @@ static void audio_apply_dsp_mono(audio_instance_t *inst, int16_t *s16, size_t fr
             }
         }
         for (i = 0; i < n; ++i) {
-            float v = inst->dsp_buf[i] * vol;
-            float clipped = 0.0f;
-            int32_t out = 0;
-            if (vbass_on) {
-                v += inst->vbass_buf[i] * inst->vbass_mix * vol;
-            }
-            clipped = audio_clipf(v, -limit, limit);
-            if (inst->limiter_enabled && clipped != v) {
-                limited++;
-            }
-            v = clipped;
-            if (v >= 0.0f) {
-                out = (int32_t)(v * 32767.0f + 0.5f);
-            } else {
-                out = (int32_t)(v * 32768.0f - 0.5f);
-            }
-            if (out > 32767) {
-                out = 32767;
-            } else if (out < -32768) {
-                out = -32768;
-            }
-            s16[pos + i] = (int16_t)out;
+            float target = inst->effects.vbass_enabled ? inst->effects.vbass_mix : 0;
+            inst->vbass_mix_current += (target-inst->vbass_mix_current)*inst->vbass_mix_slew;
+            if (target == 0 && inst->vbass_mix_current < 0.000001f) inst->vbass_mix_current=0;
+            float wet = vbass_on ? inst->vbass_buf[i]*inst->vbass_mix_current : 0;
+            uint32_t before = inst->peak.limited;
+            s16[pos + i] = audio_peak_sample(&inst->peak, inst->dsp_buf[i], wet, vol, limit);
+            limited += inst->peak.limited != before;
         }
         audio_note_limiter(inst, limited, (uint32_t)n);
         pos += n;
@@ -1546,8 +1585,8 @@ static void audio_postprocess_pcm(audio_instance_t *inst, uint8_t *buf, size_t *
         return;
     }
     vol = audio_combined_gain_q15(inst);
-    if (inst->limiter_enabled && inst->limiter_threshold > 0) {
-        limit = inst->limiter_threshold;
+    if (inst->effects.limiter_enabled && inst->effects.limiter_threshold > 0) {
+        limit = inst->effects.limiter_threshold;
     }
     if (inst->source_channels == 2 && inst->output_channels == 1) {
         frames = *bytes / 4u;
@@ -1561,11 +1600,13 @@ static void audio_postprocess_pcm(audio_instance_t *inst, uint8_t *buf, size_t *
     }
 
     if (audio_dsp_active(inst)) {
+        audio_dsp_lock(inst);
         audio_apply_dsp_mono(inst, s16, frames);
+        audio_dsp_unlock(inst);
         return;
     }
 
-    if (vol != 32768 || inst->limiter_enabled) {
+    if (vol != 32768 || inst->effects.limiter_enabled) {
         uint32_t limited = 0;
         for (i = 0; i < frames; ++i) {
             int64_t scaled = ((int64_t)s16[i] * (int64_t)vol) >> 15;
@@ -1641,7 +1682,9 @@ static int audio_decode_next(audio_instance_t *inst, size_t *out_bytes, int post
                     inst->bits_per_sample = info.bits_per_sample;
                     inst->bitrate = info.bitrate;
                     inst->info_ready = 1;
+                    audio_dsp_lock(inst);
                     audio_rebuild_filters(inst);
+                    audio_dsp_unlock(inst);
                 }
             }
             if (inst->source_channels == 0) {
@@ -1731,7 +1774,7 @@ static void audio_analyze_loudness(audio_instance_t *inst, esp_audio_simple_dec_
     uint32_t peak_max = 0;
     uint8_t ok_segments = 0;
     uint8_t seg = 0;
-    if (!inst || !inst->loudness_enabled || !inst->file || !inst->host.file.seek || file_size < 8192u) {
+    if (!inst || !inst->effects.loudness_enabled || !inst->file || !inst->host.file.seek || file_size < 8192u) {
         return;
     }
     for (seg = 0; seg < AUDIO_LOUDNESS_SEGMENTS; ++seg) {
@@ -1824,23 +1867,24 @@ static int l_audio_set_effects(lua_State *L)
         return push_error(L, host, "audio: missing instance");
     }
     if (host->lua.istable(L, 1)) {
+        audio_effect_settings next=inst->effects;
         volume_q = audio_lua_q1000_field(host, L, 1, "volume", 1000);
         if (volume_q < 0) {
             volume_q = 0;
         } else if (volume_q > 2000) {
             volume_q = 2000;
         }
-        inst->volume_q15 = (int32_t)(((int64_t)volume_q * 32768) / 1000);
+        next.volume_q15 = (int32_t)(((int64_t)volume_q * 32768) / 1000);
 
-        inst->loudness_enabled = audio_lua_bool_field(host, L, 1, "loudness", inst->loudness_enabled);
+        next.loudness_enabled = audio_lua_bool_field(host, L, 1, "loudness", next.loudness_enabled);
         target_rms_q = audio_lua_q1000_field(host, L, 1, "loudness_target_rms",
-                                             (int32_t)inst->loudness_target_rms * 1000);
+                                             (int32_t)next.loudness_target_rms * 1000);
         if (target_rms_q < 512000) {
             target_rms_q = 512000;
         } else if (target_rms_q > 12000000) {
             target_rms_q = 12000000;
         }
-        inst->loudness_target_rms = (uint32_t)(target_rms_q / 1000);
+        next.loudness_target_rms = (uint32_t)(target_rms_q / 1000);
         min_gain_q = audio_lua_q1000_field(host, L, 1, "loudness_min_gain", 450);
         max_gain_q = audio_lua_q1000_field(host, L, 1, "loudness_max_gain", 2500);
         if (min_gain_q < 100) {
@@ -1856,48 +1900,47 @@ static int l_audio_set_effects(lua_State *L)
         if (max_gain_q < min_gain_q) {
             max_gain_q = min_gain_q;
         }
-        inst->loudness_min_gain_q15 = (int32_t)(((int64_t)min_gain_q * 32768) / 1000);
-        inst->loudness_max_gain_q15 = (int32_t)(((int64_t)max_gain_q * 32768) / 1000);
-        audio_recompute_loudness_gain(inst);
+        next.loudness_min_gain_q15 = (int32_t)(((int64_t)min_gain_q * 32768) / 1000);
+        next.loudness_max_gain_q15 = (int32_t)(((int64_t)max_gain_q * 32768) / 1000);
 
-        inst->hpf_enabled = audio_lua_bool_field(host, L, 1, "hpf", inst->hpf_enabled);
-        inst->hpf_freq = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "hpf_freq", 150000));
-        inst->hpf_q = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "hpf_q", 707));
+        next.hpf_enabled = audio_lua_bool_field(host, L, 1, "hpf", next.hpf_enabled);
+        next.hpf_freq = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "hpf_freq", 150000));
+        next.hpf_q = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "hpf_q", 707));
 
-        inst->eq_enabled = audio_lua_bool_field(host, L, 1, "eq", inst->eq_enabled);
+        next.eq_enabled = audio_lua_bool_field(host, L, 1, "eq", next.eq_enabled);
         for (i = 0; i < AUDIO_EQ_MAX_BANDS; ++i) {
-            static const int32_t default_freq_q[AUDIO_EQ_MAX_BANDS] = {160000, 250000, 420000, 780000, 1250000, 2800000, 4300000};
-            static const int32_t default_gain_q[AUDIO_EQ_MAX_BANDS] = {2500, 5000, 2800, 0, -3800, -2500, 500};
+            static const int32_t default_freq_q[AUDIO_EQ_MAX_BANDS] = {180000, 250000, 420000, 1000000, 1250000, 2500000, 4300000};
+            static const int32_t default_gain_q[AUDIO_EQ_MAX_BANDS] = {6000, 0, 4200, -3500, 0, -2500, -800};
             qv = audio_lua_q1000_field(host, L, 1, freq_keys[i], default_freq_q[i]);
-            inst->eq_freq[i] = audio_q1000_to_float(qv);
+            next.eq_freq[i] = audio_q1000_to_float(qv);
             qv = audio_lua_q1000_field(host, L, 1, gain_keys[i], default_gain_q[i]);
-            inst->eq_gain[i] = audio_q1000_to_float(qv);
-            qv = audio_lua_q1000_field(host, L, 1, q_keys[i], 800);
-            inst->eq_q[i] = audio_q1000_to_float(qv);
+            next.eq_gain[i] = audio_q1000_to_float(qv);
+            qv = audio_lua_q1000_field(host, L, 1, q_keys[i], 1000);
+            next.eq_q[i] = audio_q1000_to_float(qv);
         }
 
-        inst->vbass_enabled = audio_lua_bool_field(host, L, 1, "vbass", inst->vbass_enabled);
-        inst->vbass_low_hpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_low_hpf", 50000));
-        inst->vbass_low_lpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_low_lpf", 180000));
-        inst->vbass_out_hpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_out_hpf", 180000));
-        inst->vbass_out_lpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_out_lpf", 650000));
-        inst->vbass_low_hpf = audio_clampf(inst->vbass_low_hpf, 40.0f, 220.0f);
-        inst->vbass_low_lpf = audio_clampf(inst->vbass_low_lpf, inst->vbass_low_hpf + 20.0f, 260.0f);
-        inst->vbass_out_hpf = audio_clampf(inst->vbass_out_hpf, 120.0f, 420.0f);
-        inst->vbass_out_lpf = audio_clampf(inst->vbass_out_lpf, inst->vbass_out_hpf + 80.0f, 900.0f);
+        next.vbass_enabled = audio_lua_bool_field(host, L, 1, "vbass", next.vbass_enabled);
+        next.vbass_low_hpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_low_hpf", 75000));
+        next.vbass_low_lpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_low_lpf", 200000));
+        next.vbass_out_hpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_out_hpf", 150000));
+        next.vbass_out_lpf = audio_q1000_to_float(audio_lua_q1000_field(host, L, 1, "vbass_out_lpf", 495000));
+        next.vbass_low_hpf = audio_clampf(next.vbass_low_hpf, 40.0f, 220.0f);
+        next.vbass_low_lpf = audio_clampf(next.vbass_low_lpf, next.vbass_low_hpf + 20.0f, 260.0f);
+        next.vbass_out_hpf = audio_clampf(next.vbass_out_hpf, 120.0f, 420.0f);
+        next.vbass_out_lpf = audio_clampf(next.vbass_out_lpf, next.vbass_out_hpf + 80.0f, 900.0f);
         vbass_drive_q = audio_lua_q1000_field(host, L, 1, "vbass_drive", 3000);
-        vbass_mix_q = audio_lua_q1000_field(host, L, 1, "vbass_mix", 160);
-        vbass_even_q = audio_lua_q1000_field(host, L, 1, "vbass_even", 1200);
+        vbass_mix_q = audio_lua_q1000_field(host, L, 1, "vbass_mix", 200);
+        vbass_even_q = audio_lua_q1000_field(host, L, 1, "vbass_even", 1600);
         vbass_odd_q = audio_lua_q1000_field(host, L, 1, "vbass_odd", 800);
-        inst->vbass_drive = audio_clampf(audio_q1000_to_float(vbass_drive_q), 0.1f, 4.0f);
-        inst->vbass_mix = audio_clampf(audio_q1000_to_float(vbass_mix_q), 0.0f, 0.25f);
-        inst->vbass_even = audio_clampf(audio_q1000_to_float(vbass_even_q), 0.0f, 2.0f);
-        inst->vbass_odd = audio_clampf(audio_q1000_to_float(vbass_odd_q), 0.0f, 2.0f);
+        next.vbass_drive = audio_clampf(audio_q1000_to_float(vbass_drive_q), 0.1f, 4.0f);
+        next.vbass_mix = audio_clampf(audio_q1000_to_float(vbass_mix_q), 0.0f, 0.25f);
+        next.vbass_even = audio_clampf(audio_q1000_to_float(vbass_even_q), 0.0f, 2.0f);
+        next.vbass_odd = audio_clampf(audio_q1000_to_float(vbass_odd_q), 0.0f, 2.0f);
 
-        inst->limiter_enabled = audio_lua_bool_field(host, L, 1, "limiter", inst->limiter_enabled);
+        next.limiter_enabled = audio_lua_bool_field(host, L, 1, "limiter", next.limiter_enabled);
         limiter_peak_q = audio_lua_q1000_field(host, L, 1, "limiter_peak", 0);
         if (limiter_peak_q > 0) {
-            inst->limiter_threshold = limiter_peak_q / 1000;
+            next.limiter_threshold = limiter_peak_q / 1000;
         } else {
             limiter_db_q = audio_lua_q1000_field(host, L, 1, "limiter_dbfs", -500);
             limiter_db_q = audio_lua_q1000_field(host, L, 1, "limiter_db", limiter_db_q);
@@ -1906,18 +1949,23 @@ static int l_audio_set_effects(lua_State *L)
             } else if (limiter_db_q < -24000) {
                 limiter_db_q = -24000;
             }
-            inst->limiter_threshold = AUDIO_LIMITER_DEFAULT_PEAK;
+            next.limiter_threshold = AUDIO_LIMITER_DEFAULT_PEAK;
         }
-        if (inst->limiter_threshold < 1024) {
-            inst->limiter_threshold = 1024;
-        } else if (inst->limiter_threshold > 32767) {
-            inst->limiter_threshold = 32767;
+        if (next.limiter_threshold < 1024) {
+            next.limiter_threshold = 1024;
+        } else if (next.limiter_threshold > 32767) {
+            next.limiter_threshold = 32767;
         }
-        if (inst->loudness_enabled && inst->limiter_threshold < AUDIO_LIMITER_DEFAULT_PEAK) {
-            inst->limiter_threshold = AUDIO_LIMITER_DEFAULT_PEAK;
+        if (next.loudness_enabled && next.limiter_threshold < AUDIO_LIMITER_DEFAULT_PEAK) {
+            next.limiter_threshold = AUDIO_LIMITER_DEFAULT_PEAK;
         }
 
+        /* No Lua calls while holding the audio lock: an OOM longjmp is safe. */
+        audio_dsp_lock(inst);
+        inst->effects=next;
+        audio_recompute_loudness_gain(inst);
         audio_rebuild_filters(inst);
+        audio_dsp_unlock(inst);
     }
     host->lua.pushboolean(L, 1);
     return 1;
@@ -1971,7 +2019,7 @@ static int l_audio_open(lua_State *L)
         inst->registered = 1;
     }
 
-    if (inst->loudness_enabled && host->file.seek && host->file.size_bytes) {
+    if (inst->effects.loudness_enabled && host->file.seek && host->file.size_bytes) {
         err = host->sd.open(path, MODULE_FILE_READ, &inst->file);
         if ((err != MODULE_OK || !inst->file) && audio_build_alt_mp3_dir_path(path, path_buf, sizeof(path_buf))) {
             path = path_buf;
@@ -2110,7 +2158,16 @@ static int audio_read_pcm(audio_instance_t *inst, uint8_t *dst, size_t want, siz
                 return -1;
             }
             if (decoded == 0 || inst->pcm_len == 0) {
-                break;
+                /* Flush delayed mono samples once, without re-running EQ. */
+                if (decoded == 0 && inst->output_channels == 1 && inst->peak_tail) {
+                    int16_t *tail = (int16_t *)inst->out_buf;
+                    audio_dsp_lock(inst);
+                    inst->pcm_len = inst->peak_tail * 2;
+                    for (uint32_t i=0; i<inst->peak_tail; i++)
+                        tail[i]=audio_peak_sample(&inst->peak,0,0,0,AUDIO_PEAK_OUTPUT_CEILING);
+                    inst->peak_tail=0;
+                    audio_dsp_unlock(inst);
+                } else break;
             }
         }
         avail = inst->pcm_len - inst->pcm_pos;
@@ -2516,6 +2573,9 @@ static void audio_play_task_stop_internal(audio_instance_t *inst, uint32_t wait_
     }
     if (!inst->play_task_running && !inst->producer_task_running) {
         inst->play_task_stop = 0;
+        /* A timed-out producer may have been removed in its DSP section.
+           Only after both tasks stop is it safe to release an orphaned lock. */
+        __atomic_store_n(&inst->dsp_busy, 0, __ATOMIC_RELEASE);
     }
 }
 
@@ -3101,25 +3161,33 @@ static int l_audio_stats(lua_State *L)
     host->lua.setfield(L, -2, "dsp_buffer_bytes");
     host->lua.pushinteger(L, inst->vbass_cap * sizeof(float));
     host->lua.setfield(L, -2, "vbass_buffer_bytes");
-    host->lua.pushinteger(L, inst->eq_enabled ? 1 : 0);
+    host->lua.pushinteger(L, inst->effects.eq_enabled ? 1 : 0);
     host->lua.setfield(L, -2, "eq_enabled");
     host->lua.pushinteger(L, inst->eq_active);
     host->lua.setfield(L, -2, "eq_active");
     host->lua.pushinteger(L, inst->hpf.enabled ? 1 : 0);
     host->lua.setfield(L, -2, "hpf_active");
-    host->lua.pushinteger(L, inst->limiter_enabled ? 1 : 0);
+    host->lua.pushinteger(L, inst->effects.limiter_enabled ? 1 : 0);
     host->lua.setfield(L, -2, "limiter_enabled");
-    host->lua.pushinteger(L, inst->limiter_threshold);
+    host->lua.pushinteger(L, inst->effects.limiter_threshold);
     host->lua.setfield(L, -2, "limiter_threshold");
+    host->lua.pushinteger(L, inst->peak.clipped);
+    host->lua.setfield(L, -2, "clipped_samples");
+    host->lua.pushinteger(L, inst->peak.bass_limited);
+    host->lua.setfield(L, -2, "bass_limited_samples");
+    host->lua.pushinteger(L, AUDIO_PEAK_OUTPUT_DELAY);
+    host->lua.setfield(L, -2, "limiter_delay_samples");
+    host->lua.pushinteger(L, sizeof(inst->peak));
+    host->lua.setfield(L, -2, "limiter_state_bytes");
     host->lua.pushinteger(L, inst->limiter_total_samples ?
                           (int64_t)(((uint64_t)inst->limiter_active_samples * 10000u) /
                                     inst->limiter_total_samples) : 0);
     host->lua.setfield(L, -2, "limiter_active_centipercent");
-    host->lua.pushinteger(L, inst->vbass_enabled ? 1 : 0);
+    host->lua.pushinteger(L, inst->effects.vbass_enabled ? 1 : 0);
     host->lua.setfield(L, -2, "vbass_enabled");
     host->lua.pushinteger(L, audio_vbass_active(inst) ? 1 : 0);
     host->lua.setfield(L, -2, "vbass_active");
-    host->lua.pushinteger(L, inst->loudness_enabled ? 1 : 0);
+    host->lua.pushinteger(L, inst->effects.loudness_enabled ? 1 : 0);
     host->lua.setfield(L, -2, "loudness_enabled");
     host->lua.pushinteger(L, inst->loudness_ready ? 1 : 0);
     host->lua.setfield(L, -2, "loudness_ready");
@@ -3129,7 +3197,7 @@ static int l_audio_stats(lua_State *L)
     host->lua.setfield(L, -2, "loudness_rms");
     host->lua.pushinteger(L, inst->loudness_peak);
     host->lua.setfield(L, -2, "loudness_peak");
-    host->lua.pushinteger(L, inst->loudness_target_rms);
+    host->lua.pushinteger(L, inst->effects.loudness_target_rms);
     host->lua.setfield(L, -2, "loudness_target_rms");
     host->lua.pushinteger(L, inst->loudness_gain_q15);
     host->lua.setfield(L, -2, "loudness_gain_q15");
@@ -3190,35 +3258,10 @@ AUDIO_MODULE_EXPORT int32_t module_create_v2(module_host_resolve_v1_fn resolve,
     inst->pcm_ring_cap = AUDIO_PCM_RING_CAP;
     inst->dsp_cap = AUDIO_DSP_CHUNK_SAMPLES;
     inst->vbass_cap = AUDIO_DSP_CHUNK_SAMPLES;
-    inst->volume_q15 = 32768;
-    inst->loudness_enabled = 1;
+    audio_default_effects(&inst->effects);
     inst->loudness_gain_q15 = 32768;
-    inst->loudness_target_rms = AUDIO_LOUDNESS_DEFAULT_TARGET_RMS;
-    inst->loudness_min_gain_q15 = AUDIO_LOUDNESS_DEFAULT_MIN_Q15;
-    inst->loudness_max_gain_q15 = AUDIO_LOUDNESS_DEFAULT_MAX_Q15;
     inst->output_channels = 1;
     inst->bits_per_sample = 16;
-    inst->limiter_enabled = 1;
-    inst->limiter_threshold = AUDIO_LIMITER_DEFAULT_PEAK;
-    inst->hpf_freq = 150.0f;
-    inst->hpf_q = 0.707f;
-    inst->vbass_enabled = 0;
-    inst->vbass_low_hpf = 85.0f;
-    inst->vbass_low_lpf = 170.0f;
-    inst->vbass_out_hpf = 180.0f;
-    inst->vbass_out_lpf = 620.0f;
-    inst->vbass_drive = 1.5f;
-    inst->vbass_mix = 0.08f;
-    inst->vbass_even = 0.8f;
-    inst->vbass_odd = 0.3f;
-    {
-        static const float default_freq[AUDIO_EQ_MAX_BANDS] = {230.0f, 420.0f, 720.0f, 1150.0f, 1800.0f, 3200.0f, 6200.0f};
-        for (size_t i = 0; i < AUDIO_EQ_MAX_BANDS; ++i) {
-            inst->eq_freq[i] = default_freq[i];
-            inst->eq_gain[i] = 0.0f;
-            inst->eq_q[i] = 0.8f;
-        }
-    }
     inst->in_buf = (uint8_t *)inst->host.heap.malloc(inst->in_cap, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
     inst->prefetch_buf = (uint8_t *)inst->host.heap.malloc(inst->prefetch_cap, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);
     inst->out_buf = (uint8_t *)inst->host.heap.malloc(inst->out_cap, MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT);

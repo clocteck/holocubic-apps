@@ -32,6 +32,11 @@ $output = Join-Path $build "audio.so"
 if ($LASTEXITCODE -ne 0) { throw "audio.so link failed" }
 & cmake "-DOUT=$output" -P $check
 if ($LASTEXITCODE -ne 0) { throw "audio.so validation failed" }
+$readelf = Join-Path $toolDir 'xtensa-esp32s3-elf-readelf.exe'
+$symbols = & $readelf -Ws $output
+if ($LASTEXITCODE -ne 0) { throw 'Cannot validate ELF symbols' }
+$undefined = $symbols | Select-String 'GLOBAL\s+DEFAULT\s+UND'
+if ($undefined) { $undefined | ForEach-Object {$_.Line}; throw 'Unresolved module symbols' }
 & $strip --strip-unneeded --remove-section=.comment --remove-section=.got.loc `
     --remove-section=.dynamic --remove-section=.xt.lit --remove-section=.xt.prop `
     --remove-section=.xtensa.info $output

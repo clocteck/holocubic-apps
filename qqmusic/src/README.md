@@ -25,7 +25,13 @@
 
 `package/` 内容部署到 `/sd/apps/qqmusic/`。`src/` 为源码、构建、测试和资料。
 
-当前发布版本：**1.0.2**（应用清单、说明页与动态模块版本一致）。
+当前发布版本：**1.0.3**（应用清单、说明页与动态模块版本一致）。
+
+1.0.3：虚拟低音不再压低原声，衰减前提取低频并生成带限谐波；最终音量之后增加
+原声优先的双支路前瞻峰值保护，开关低音不重置原声滤波器，并平滑淡入淡出。
+算法、开源参考和测试边界见 [docs/virtual-bass.md](docs/virtual-bass.md)。
+默认预设同步用户 2026-11-16 截图：EQ +6/+4.2/-3.5/-2.5/-0.8 dB，HPF 150 Hz，
+低音开启、mix 0.20、drive 3，提取 75–200 Hz、输出 150–495 Hz；不覆盖已保存设置。
 
 1.0.2 修复约 35 分 47 秒后单调计时溢出导致的请求排队超时；使用整数分段累计，
 并加入设备同配置 int32/float32 Lua 的跨边界、7/30 天加速及实际调度回归测试。
@@ -58,6 +64,7 @@
 ```powershell
 ./qqmusic/src/build.ps1
 python qqmusic/src/tests/test_app.py
+python qqmusic/src/tests/test_dsp.py
 node qqmusic/src/tests/test_web.js
 ./qqmusic/src/deploy.ps1 -Device http://192.168.0.226
 ```

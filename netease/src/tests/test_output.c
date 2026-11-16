@@ -13,5 +13,10 @@ uint32_t ncm_test_ring_read(const uint8_t *ring,uint32_t pos,uint8_t *dst,uint32
 }
 float ncm_test_output_gain(uint32_t volume) { return ncm_output_gain(volume); }
 int16_t ncm_test_output_sample(float sample, uint32_t volume, uint32_t *clipped) {
-  return ncm_output_sample(sample,ncm_output_gain(volume),clipped);
+  ncm_output o;ncm_output_init(&o,44100);
+  int16_t pcm=0;
+  for(unsigned i=0;i<=NCM_OUTPUT_DELAY;i++)
+    pcm=ncm_output_sample(&o,sample,0,ncm_output_gain(volume));
+  *clipped+=o.clipped;
+  return pcm;
 }

@@ -6,10 +6,12 @@ typedef struct {
   int low_hz, high_hz, out_low_hz, out_high_hz;
 } ncm_effects;
 typedef struct {
-  ncm_biquad eq[5], hpf, extract_hp, extract_lp, output_hp, output_lp;
+  ncm_biquad eq[5], hpf, extract_hp, extract_lp, extract_lp2, extract_lp3, output_hp, output_lp;
   ncm_effects settings;
-  float headroom, mix, drive;
-  uint32_t rate, clipped;
+  float headroom, mix, mix_target, mix_slew, drive;
+  uint32_t rate;
 } ncm_dsp;
+/* Zero-initialize before the first configure; subsequent updates retain state. */
 void ncm_dsp_configure(ncm_dsp *d, const ncm_effects *s, uint32_t rate);
-float ncm_dsp_sample(ncm_dsp *d,float x);
+/* Keep dry and synthesized bass separate until final-volume peak protection. */
+float ncm_dsp_sample(ncm_dsp *d,float x,float *bass);

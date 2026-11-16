@@ -21,6 +21,7 @@ PREFIX = r'''
 #include <stdio.h>
 #include "module_abi_types.h"
 #include "ncm_dsp.h"
+#include "ncm_output.h"
 typedef void *esp_audio_simple_dec_handle_t;
 #define EXPORT
 #define PS (MODULE_HEAP_PSRAM | MODULE_HEAP_8BIT)

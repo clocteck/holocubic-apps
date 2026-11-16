@@ -99,7 +99,7 @@ class NativeTests(unittest.TestCase):
         self.assertFalse(dll.qrcodegen_getModule(qr,1,1))
         self.assertTrue(dll.qrcodegen_getModule(qr,3,3))
 
-    def test_doubled_output_and_saturation(self):
+    def test_output_gain_and_lookahead_protection(self):
         gain=self.dll.ncm_test_output_gain
         gain.argtypes=[C.c_uint32];gain.restype=C.c_float
         output=self.dll.ncm_test_output_sample
@@ -107,15 +107,15 @@ class NativeTests(unittest.TestCase):
         output.restype=C.c_int16
         for volume in [0,1,25,50,100]:
             previous_gain=65534.0*volume*.01
-            self.assertAlmostEqual(gain(volume),previous_gain*2,delta=.02)
+            self.assertAlmostEqual(gain(volume)*32767,previous_gain*2,delta=.02)
             clipped=C.c_uint32(0)
             for sample in [-.1,0,.1]:
                 self.assertAlmostEqual(output(sample,volume,C.byref(clipped)),sample*previous_gain*2,delta=1.1)
             self.assertEqual(clipped.value,0)
         clipped=C.c_uint32(0)
-        self.assertEqual(output(1,100,C.byref(clipped)),32112)
-        self.assertEqual(output(-1,100,C.byref(clipped)),-32112)
-        self.assertEqual(clipped.value,2)
+        self.assertAlmostEqual(output(1,100,C.byref(clipped)),.96*32767,delta=1.1)
+        self.assertAlmostEqual(output(-1,100,C.byref(clipped)),-.96*32767,delta=1.1)
+        self.assertEqual(clipped.value,0)
 
     def test_weapi_vectors(self):
         self.dll.ncm_weapi.argtypes=[C.c_char_p,C.c_size_t]
@@ -139,20 +139,23 @@ class NativeTests(unittest.TestCase):
         class Effects(C.Structure):
             _fields_=[("gain10",C.c_int*5)]+[(x,C.c_int)for x in ["hpf_hz","bass","mix1000","drive1000","low_hz","high_hz","out_low_hz","out_high_hz"]]
         class DSP(C.Structure):
-            _fields_=[("eq",Biquad*5)]+[(x,Biquad)for x in ["hpf","extract_hp","extract_lp","output_hp","output_lp"]]+[("settings",Effects)]+[(x,C.c_float)for x in ["headroom","mix","drive"]]+[("rate",C.c_uint32),("clipped",C.c_uint32)]
+            _fields_=[("eq",Biquad*5)]+[(x,Biquad)for x in ["hpf","extract_hp","extract_lp","extract_lp2","extract_lp3","output_hp","output_lp"]]+[("settings",Effects)]+[(x,C.c_float)for x in ["headroom","mix","mix_target","mix_slew","drive"]]+[("rate",C.c_uint32)]
         self.dll.ncm_dsp_configure.argtypes=[C.POINTER(DSP),C.POINTER(Effects),C.c_uint32]
-        self.dll.ncm_dsp_sample.argtypes=[C.POINTER(DSP),C.c_float]
+        self.dll.ncm_dsp_sample.argtypes=[C.POINTER(DSP),C.c_float,C.POINTER(C.c_float)]
         self.dll.ncm_dsp_sample.restype=C.c_float
         fx=Effects((C.c_int*5)(0,0,0,0,0),0,0,0,3500,50,180,120,600)
         d=DSP();self.dll.ncm_dsp_configure(C.byref(d),C.byref(fx),44100)
         self.assertTrue(all(not b.active for b in d.eq))
-        self.assertAlmostEqual(self.dll.ncm_dsp_sample(C.byref(d),0.2),0.2,places=6)
+        bass=C.c_float()
+        self.assertAlmostEqual(self.dll.ncm_dsp_sample(C.byref(d),0.2,C.byref(bass)),0.2,places=6)
+        self.assertEqual(bass.value,0)
         fx.gain10[:]=[60,36,-14,-10,5];fx.bass=1;fx.mix1000=250;fx.hpf_hz=100
         for rate in [22050,44100,48000]:
             self.dll.ncm_dsp_configure(C.byref(d),C.byref(fx),rate)
             for i in range(rate):
-                y=self.dll.ncm_dsp_sample(C.byref(d),math.sin(i*2*math.pi*80/rate))
+                y=self.dll.ncm_dsp_sample(C.byref(d),math.sin(i*2*math.pi*80/rate),C.byref(bass))
                 self.assertTrue(math.isfinite(y))
+                self.assertTrue(math.isfinite(bass.value))
                 self.assertLessEqual(abs(y),0.980001)
 
 class LuaTests(unittest.TestCase):
@@ -420,9 +423,9 @@ class LuaTests(unittest.TestCase):
         self.assertEqual(struct.unpack('<iiHHI',bmp[18:34]),(96,-96,1,16,3))
         html=(ROOT/'package/info.html').read_text(encoding='utf-8')
         self.assertIn('href="/main"',html)
-        self.assertIn('v1.0.2',html)
-        self.assertIn('version = 1.0.2',(ROOT/'package/app.info').read_text(encoding='utf-8'))
-        self.assertIn('"1.0.2"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
+        self.assertIn('v1.0.3',html)
+        self.assertIn('version = 1.0.3',(ROOT/'package/app.info').read_text(encoding='utf-8'))
+        self.assertIn('"1.0.3"',(ROOT/'src/main/ncm_music.c').read_text(encoding='utf-8'))
         icon=re.search(r'src="data:image/png;base64,([^"]+)"',html)
         self.assertIsNotNone(icon)
         self.assertEqual(base64.b64decode(icon[1]),png)

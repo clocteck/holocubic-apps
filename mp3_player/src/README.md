@@ -2,15 +2,21 @@
 
 `audio.so` 是给 Lua music app 使用的低开销音频解码动态模块。
 
+当前 Music/package、Lua 和音频模块版本：**1.14**。
+本次新增独立谐波支路、原声优先双支路前瞻保护、开关淡入淡出、无 Lua 调用的
+调参锁区与 EOF 延迟排空；保留 MP3/WAV、七段接口、响度分析和 I2S 播放路径。
+默认参数采用用户 2026-11-16 预设，旧七段设置的频点/Q 保持不变。
+实现与测试边界见 [docs/virtual-bass.md](docs/virtual-bass.md)。
+
 目标：
 
 - 使用 `espressif/esp_audio_codec` 的 simple decoder 解析 MP3/WAV。
 - 兼容旧 Lua 表面：`open()`、`info()`、`read()`、`close()`、`version()`、`set_effects()`。
 - 默认输出 mono s16le，减少 I2S 写入量和 CPU0 压力。
 - `audio.read(8192)` 在 C 侧聚合多帧 PCM，减少 Lua/C 往返。
-- 7 段 EQ/HPF/limiter 走 `esp-dsp` biquad，ESP32-S3 使用 `dsps_biquad_f32_aes3`。
-- 虚拟低音 `vbass` 走 80-180Hz 提取、2/3 次谐波生成、180-650Hz 输出滤波。
-- 模块固定缓冲约 15.5 KB；MP3 decoder heap 由 `esp_audio_codec` 管理。
+- 7 段 EQ/HPF 走 `esp-dsp` biquad，ESP32-S3 使用 `dsps_biquad_f32_aes3`。
+- 虚拟低音默认 75–200 Hz 提取、偶/奇次谐波生成、150–495 Hz 输出滤波。
+- 输出保护新增约 3.1 KiB 实例内状态；实际缓冲与 heap 以运行统计为准。
 - `stats()`/`get_stats()` 可查看 `vbass_mix`、`vbass_active` 和 `limiter_active_percent`。
 
 `package/main.lua` 是配套的 Lua music app 入口，`package/` 内是可部署运行包。
@@ -32,6 +38,18 @@ cmake --build build --target so --config Release
 ```
 
 此脚本复用已有对象和库，显式设置 `-Bsymbolic`、链接 `libgcc.a`，执行共享对象校验后再剥离非运行时段，产物为 `build/audio.so`。可在 ASCII 路径暂存源文件构建，并将该暂存目录的 `build` 绝对路径传给脚本，避免 Windows 中文/长路径构建问题。
+
+已有匹配 ESP-IDF 的依赖构建时，可使用新增脚本（始终重新编译当前 C 源码，
+不复用旧 `audio_module.o`，检查未解析符号后复制到 package）：
+
+```powershell
+./build.ps1 -DependencyBuild ./build_ascii
+python -X utf8 tests/test_dsp.py
+python -X utf8 tests/test_package.py
+```
+
+依赖库仍需先按上述 CMake 流程生成；不提交 build/managed_components。
+本次没有替换 `mjpeg_player` 或其它 app 内的 audio.so 副本。
 
 设备路径：
 

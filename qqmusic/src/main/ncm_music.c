@@ -44,6 +44,7 @@ typedef struct {
 
   char format[8];
   ncm_dsp dsp;
+  ncm_output output_limiter;
   ncm_effects effects;
   ncm_effects pending_effects;
   volatile uint32_t effects_pending; /* 0 idle, 1 Lua writing, 2 ready */
@@ -61,7 +62,7 @@ static const module_manifest_t manifest = {MODULE_MANIFEST_MAGIC,
                                            MODULE_SDK_VERSION,
                                            sizeof(module_manifest_t),
                                            "qq_music",
-                                           "1.0.2",
+                                           "1.0.3",
                                            "QQ Music PSRAM MP3 decoder",
                                            0,
                                            MODULE_BOOTSTRAP_ABI_VERSION};
@@ -265,8 +266,9 @@ static bool process_pcm(Music *r, uint32_t bytes) {
     for (uint32_t c=0; c<r->source_channels; ++c)
       x += read_sample(r->output + pos + c * (r->source_bits / 8), r->source_bits);
     float sample=(float)x * normalization;
-    sample=ncm_dsp_sample(&r->dsp,sample);
-    r->pcm[count++] = ncm_output_sample(sample,volume,&r->dsp.clipped);
+    float bass;
+    sample=ncm_dsp_sample(&r->dsp,sample,&bass);
+    r->pcm[count++] = ncm_output_sample(&r->output_limiter,sample,bass,volume);
     if (count == PCM) {
       r->busy_us+=r->host.time.micros()-started;
       if (!flush(r,count)) return false;
@@ -347,7 +349,11 @@ static void worker(void *p) {
         break;
       }
       if (r->source_rate && info.sample_rate != r->source_rate) { r->error = 9; break; }
-      if(!r->source_rate) ncm_dsp_configure(&r->dsp,&r->effects,info.sample_rate);
+      if(!r->source_rate){
+        memset(&r->dsp,0,sizeof(r->dsp));
+        ncm_dsp_configure(&r->dsp,&r->effects,info.sample_rate);
+        ncm_output_init(&r->output_limiter,info.sample_rate);
+      }
       r->source_rate = info.sample_rate;
       r->source_channels = info.channel;
       r->source_bits = info.bits_per_sample;
@@ -375,6 +381,12 @@ static void worker(void *p) {
       break;
     }
     r->host.task.yield();
+  }
+  if (r->i2s && !r->stop && !r->error && r->status==4) {
+    /* Drain exactly the lookahead delay, including a partial last block. */
+    for(unsigned i=0;i<NCM_OUTPUT_DELAY;i++)
+      r->pcm[i]=ncm_output_sample(&r->output_limiter,0,0,0);
+    flush(r,NCM_OUTPUT_DELAY);
   }
   if (r->i2s) {
     r->host.i2s.mute(r->i2s);
@@ -505,7 +517,12 @@ static int state_l(lua_State *L) {
   num(L, "source_bits", r->source_bits);
   num(L, "output_rate", r->source_rate);
   num(L, "paused", r->paused);
-  num(L, "clipped_samples", r->dsp.clipped);
+  num(L, "clipped_samples", r->output_limiter.clipped);
+  num(L, "limited_samples", r->output_limiter.limited);
+  num(L, "bass_limited_samples", r->output_limiter.bass_limited);
+  num(L, "limiter_delay_samples", NCM_OUTPUT_DELAY);
+  num(L, "dry_gain_permille", (uint32_t)(1000*r->output_limiter.dry_end));
+  num(L, "bass_gain_permille", (uint32_t)(1000*r->output_limiter.bass_end));
   num(L, "bitrate", r->bitrate);
   num(L, "internal_free", H->heap.free_size(INTERNAL));
   num(L, "internal_peak_delta", r->baseline_internal - r->min_internal);
@@ -635,7 +652,7 @@ EXPORT int32_t module_create_v2(module_host_resolve_v2_fn resolve, void *ctx,
   r->output = malloc(r->output_cap);
   r->pcm = malloc(PCM * 2);
   r->gain = 25;
-  r->effects=(ncm_effects){{60,36,-14,-10,5},100,1,250,3500,50,180,120,600};
+  r->effects=(ncm_effects){{60,42,-35,-25,-8},150,1,200,3000,75,200,150,495};
   if (!r->ring || !r->input || !r->output || !r->pcm) {
     free(r->ring);
     free(r->input);

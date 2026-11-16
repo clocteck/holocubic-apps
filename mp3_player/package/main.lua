@@ -6,7 +6,7 @@ if prev and prev.stop then
 end
 
 MUSIC_PLAYER_APP = {
-  VERSION = "1.12",
+  VERSION = "1.14",
   SCREEN_W = 320,
   SCREEN_H = 240,
   APP_DIR = "/sd/apps/mp3_player",
@@ -117,23 +117,7 @@ APP.needs_rescan = false
 APP.rescan_reason = nil
 
 
-APP.eq_settings = {
-  volume = 0.4,
-  hpf_freq = 100,
-  limiter_dbfs = nil,
-  limiter_peak = 31000,
-  vbass = true,
-  vbass_low_hpf = 50,
-  vbass_low_lpf = 180,
-  vbass_out_hpf = 100,
-  vbass_out_lpf = 600,
-  vbass_drive = 3.5,
-  vbass_mix = 0.25,
-  vbass_even = 1.9,
-  vbass_odd = 0.5,
-  vbass_solo = false,
-  eq = {6.0, 5.9, 3.6, 0.3, -2.6, -0.8, 0.5},
-}
+APP.eq_settings = dofile(APP.APP_DIR .. '/effects_defaults.lua')
 
 
 APP.state = {
@@ -266,9 +250,14 @@ local function eq_settings_snapshot()
     vbass_odd = APP.eq_settings.vbass_odd,
     vbass_solo = APP.eq_settings.vbass_solo,
     eq = {},
+    eq_freqs = {},eq_q = {},
   }
   local eq = APP.eq_settings.eq or {}
-  for i = 1, 7 do out.eq[i] = eq[i] or 0 end
+  for i = 1, 7 do
+    out.eq[i] = eq[i] or 0
+    out.eq_freqs[i] = APP.eq_settings.eq_freqs[i]
+    out.eq_q[i] = APP.eq_settings.eq_q[i]
+  end
   return out
 end
 
@@ -295,6 +284,11 @@ local function merge_eq_settings(data)
   if data.vbass_odd ~= nil then s.vbass_odd = clamp(data.vbass_odd, 0, 2) end
   if data.vbass_solo ~= nil then s.vbass_solo = web_bool(data.vbass_solo) end
   if type(data.eq) == "table" then
+    -- Old saved seven-band curves retain their original frequencies and Q.
+    if type(data.eq_freqs) ~= 'table' then
+      s.eq_freqs={160,250,420,780,1250,2800,4300}
+      s.eq_q={0.75,0.70,0.8,1,1,0.85,0.65}
+    end
     s.eq = s.eq or {}
     for i = 1, 7 do
       local v = data.eq[i] or data.eq[tostring(i)]
@@ -303,6 +297,8 @@ local function merge_eq_settings(data)
   end
   for i = 1, 7 do
     if s.eq[i] == nil then s.eq[i] = 0 end
+    if type(data.eq_freqs)=='table' and data.eq_freqs[i] then s.eq_freqs[i]=clamp(data.eq_freqs[i],20,20000) end
+    if type(data.eq_q)=='table' and data.eq_q[i] then s.eq_q[i]=clamp(data.eq_q[i],0.25,4) end
   end
   return true
 end
@@ -436,7 +432,7 @@ local WEB_HTML = [=[
         <div class="eqRow"><label>提取高通</label><input id="vbassLowHpf" type="range" min="40" max="130" step="5"><span id="vbassLowHpfVal"></span></div>
         <div class="eqRow"><label>提取低通</label><input id="vbassLowLpf" type="range" min="130" max="260" step="5"><span id="vbassLowLpfVal"></span></div>
         <div class="eqRow"><label>输出高通</label><input id="vbassOutHpf" type="range" min="120" max="280" step="5"><span id="vbassOutHpfVal"></span></div>
-        <div class="eqRow"><label>输出低通</label><input id="vbassOutLpf" type="range" min="420" max="900" step="10"><span id="vbassOutLpfVal"></span></div>
+        <div class="eqRow"><label>输出低通</label><input id="vbassOutLpf" type="range" min="420" max="900" step="1"><span id="vbassOutLpfVal"></span></div>
       </div>
     </div>
   </div>
@@ -446,8 +442,8 @@ local WEB_HTML = [=[
 <script>
 const BASE="__APP_BASE__";
 let apiBase=BASE+"/api";
-const BANDS=[160,250,420,780,1250,2800,4300];
-const EQ_DEFAULT={volume:.5,hpf_freq:120,limiter_dbfs:null,limiter_peak:31000,vbass:true,vbass_low_hpf:50,vbass_low_lpf:180,vbass_out_hpf:180,vbass_out_lpf:600,vbass_drive:3.5,vbass_mix:.25,vbass_even:1.9,vbass_odd:.5,vbass_solo:false,eq:[6.0,5.5,3.5,.3,-2.2,-.6,.8]};
+const BANDS=[180,250,420,1000,1250,2500,4300];
+const EQ_DEFAULT={volume:.4,hpf_freq:150,limiter_dbfs:null,limiter_peak:31000,vbass:true,vbass_low_hpf:75,vbass_low_lpf:200,vbass_out_hpf:150,vbass_out_lpf:495,vbass_drive:3,vbass_mix:.20,vbass_even:1.6,vbass_odd:.8,vbass_solo:false,eq:[6,0,4.2,-3.5,0,-2.5,-.8],eq_freqs:BANDS.slice(),eq_q:[1,1,1,1,1,1,1]};
 let items=[], eq=JSON.parse(JSON.stringify(EQ_DEFAULT)), volumeTimer=0, eqTimer=0;
 const $=id=>document.getElementById(id);
 function apiUrl(base,path,params){const u=new URL(base+path,location.origin);Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v));return u}
@@ -466,7 +462,7 @@ async function uploadOne(f){const qi=qitem(f.name);const prep=await request("/up
 async function uploadFiles(fs){const arr=Array.from(fs||[]);for(const f of arr){try{await uploadOne(f)}catch(e){show(e.message,true)}}await load()}
 function normEq(){eq=Object.assign(JSON.parse(JSON.stringify(EQ_DEFAULT)),eq||{});eq.eq=eq.eq||EQ_DEFAULT.eq.slice();return eq}
 function fillMainVolume(){normEq();if(!$("mainVolume"))return;$("mainVolume").value=eq.volume;$("mainVolumeVal").textContent=Number(eq.volume||0).toFixed(2)}
-function fillEq(){normEq();$("hpf").value=eq.hpf_freq;updateEqLabels();fillVbass();const box=$("eqSliders");box.innerHTML="";BANDS.forEach((f,i)=>{const v=Number(eq.eq[i]||0);const d=document.createElement("div");d.className="band";d.innerHTML=`<b>${f}</b><input type="range" min="-6" max="6" step="0.1" value="${v}" data-i="${i}"><span>${v.toFixed(1)}dB</span>`;d.querySelector("input").oninput=e=>{eq.eq[i]=Number(e.target.value);d.querySelector("span").textContent=eq.eq[i].toFixed(1)+"dB";scheduleEqSave()};box.appendChild(d)})}
+function fillEq(){normEq();$("hpf").value=eq.hpf_freq;updateEqLabels();fillVbass();const box=$("eqSliders");box.innerHTML="";eq.eq_freqs.forEach((f,i)=>{const v=Number(eq.eq[i]||0);const d=document.createElement("div");d.className="band";d.innerHTML=`<b>${f}</b><input type="range" min="-6" max="6" step="0.1" value="${v}" data-i="${i}"><span>${v.toFixed(1)}dB</span>`;d.querySelector("input").oninput=e=>{eq.eq[i]=Number(e.target.value);d.querySelector("span").textContent=eq.eq[i].toFixed(1)+"dB";scheduleEqSave()};box.appendChild(d)})}
 function setVal(id,v){if($(id))$(id).value=v}
 function setText(id,v,unit,d){if($(id))$(id).textContent=Number(v||0).toFixed(d||0)+(unit||"")}
 function fillVbass(){setVal("vbassMix",eq.vbass_mix);setVal("vbassDrive",eq.vbass_drive);setVal("vbassLowHpf",eq.vbass_low_hpf);setVal("vbassLowLpf",eq.vbass_low_lpf);setVal("vbassOutHpf",eq.vbass_out_hpf);setVal("vbassOutLpf",eq.vbass_out_lpf);$("vbass").checked=!!eq.vbass;updateVbassLabels()}
@@ -476,7 +472,7 @@ function updateVbassLabels(){setText("vbassMixVal",$("vbassMix").value,"",2);set
 async function loadEq(){const d=await request("/eq");eq=d.eq||eq;normEq();fillMainVolume();fillEq()}
 async function saveVolume(){eq.volume=Number($("mainVolume").value);fillMainVolume();await request("/eq",{method:"POST"},{volume:eq.volume});show("音量已更新",false)}
 function scheduleVolumeSave(){eq.volume=Number($("mainVolume").value);fillMainVolume();clearTimeout(volumeTimer);volumeTimer=setTimeout(()=>saveVolume().catch(e=>show(e.message,true)),120)}
-async function saveEq(){eq.hpf_freq=Number($("hpf").value);readVbass();const p={hpf_freq:eq.hpf_freq,limiter_peak:eq.limiter_peak||30000,vbass:eq.vbass?1:0,vbass_mix:eq.vbass_mix,vbass_drive:eq.vbass_drive,vbass_low_hpf:eq.vbass_low_hpf,vbass_low_lpf:eq.vbass_low_lpf,vbass_out_hpf:eq.vbass_out_hpf,vbass_out_lpf:eq.vbass_out_lpf,vbass_even:eq.vbass_even||1.2,vbass_odd:eq.vbass_odd||.8};eq.eq.forEach((v,i)=>p["eq"+(i+1)]=v);await request("/eq",{method:"POST"},p);show("EQ 已更新",false)}
+async function saveEq(){eq.hpf_freq=Number($("hpf").value);readVbass();const p={hpf_freq:eq.hpf_freq,limiter_peak:eq.limiter_peak||30000,vbass:eq.vbass?1:0,vbass_mix:eq.vbass_mix,vbass_drive:eq.vbass_drive,vbass_low_hpf:eq.vbass_low_hpf,vbass_low_lpf:eq.vbass_low_lpf,vbass_out_hpf:eq.vbass_out_hpf,vbass_out_lpf:eq.vbass_out_lpf,vbass_even:eq.vbass_even||1.2,vbass_odd:eq.vbass_odd||.8};eq.eq.forEach((v,i)=>{p["eq"+(i+1)]=v;p["eq"+(i+1)+"_freq"]=eq.eq_freqs[i];p["eq"+(i+1)+"_q"]=eq.eq_q[i]});await request("/eq",{method:"POST"},p);show("EQ 已更新",false)}
 function scheduleEqSave(){clearTimeout(eqTimer);eqTimer=setTimeout(()=>saveEq().catch(e=>show(e.message,true)),120)}
 function openEq(){fillEq();$("eqDialog").classList.add("open")}
 function closeEq(){$("eqDialog").classList.remove("open")}
@@ -993,6 +989,8 @@ local function web_eq(req)
   end
   for i = 1, 7 do
     local key = "eq" .. i
+    if q[key.."_freq"] ~= nil then APP.eq_settings.eq_freqs[i]=clamp(q[key.."_freq"],20,20000);changed=true end
+    if q[key.."_q"] ~= nil then APP.eq_settings.eq_q[i]=clamp(q[key.."_q"],0.25,4);changed=true end
     if q[key] ~= nil then
       APP.eq_settings.eq[i] = clamp(q[key], -6, 6)
       changed = true
@@ -1770,72 +1768,22 @@ end
 apply_audio_effects = function()
   local audio = APP.audio
   if not audio or not audio.set_effects then return end
-  local eq = APP.eq_settings.eq or {}
-  local ok, err = pcall(function()
-audio.set_effects({
-  volume = APP.eq_settings.volume or 0.44,
-
-  vbass = APP.eq_settings.vbass,
-  vbass_low_hpf = APP.eq_settings.vbass_low_hpf or 45,
-  vbass_low_lpf = APP.eq_settings.vbass_low_lpf or 220,
-  vbass_out_hpf = APP.eq_settings.vbass_out_hpf or 140,
-  vbass_out_lpf = APP.eq_settings.vbass_out_lpf or 760,
-  vbass_drive = APP.eq_settings.vbass_drive or 3.5,
-  vbass_mix = APP.eq_settings.vbass_mix or 0.16,
-  vbass_even = APP.eq_settings.vbass_even or 1.2,
-  vbass_odd = APP.eq_settings.vbass_odd or 0.8,
-  vbass_solo = APP.eq_settings.vbass_solo,
-
-  hpf = true,
-  hpf_freq = APP.eq_settings.hpf_freq or 120,
-  hpf_q = 0.707,
-
-  eq = true,
-  eq_count = 7,
-
-  -- 鼓点低频下沿，轻补，给一点下沉感
-  eq1_freq = 160,
-  eq1_gain = eq[1] or 6.0,
-  eq1_q = 0.75,
-
-  -- 鼓点主体 / 低音感，重点补
-  eq2_freq = 250,
-  eq2_gain = eq[2] or 5.5,
-  eq2_q = 0.70,
-
-  -- 人声浑厚度 / 鼓点身体感
-  eq3_freq = 420,
-  eq3_gain = eq[3] or 3.5,
-  eq3_q = 0.8,
-
-  -- 压桌面反射、箱声、BGM 低中频杂乱
-  eq4_freq = 780,
-  eq4_gain = eq[4] or 0.3,
-  eq4_q = 1.0,
-
-  -- 压塑料感、鼻音、伴奏拥挤
-  eq5_freq = 1250,
-  eq5_gain = eq[5] or -2.2,
-  eq5_q = 1.0,
-
-  -- 压鼓点偏高的“敲击头/啪声”
-  eq6_freq = 2800,
-  eq6_gain = eq[6] or -0.6,
-  eq6_q = 0.85,
-
-  -- 压 BGM 高频乱、刺、硬
-  eq7_freq = 4300,
-  eq7_gain = eq[7] or 0.8,
-  eq7_q = 0.65,
-
-  limiter = true,
-  limiter_peak = APP.eq_settings.limiter_peak or 30000,
-    })
-  end)
-  if ok then
-    web_log("audio.set_effects ok", "volume=" .. tostring(APP.eq_settings.volume or 0.6))
+  local s=APP.eq_settings
+  local fx={volume=s.volume,vbass=s.vbass,vbass_low_hpf=s.vbass_low_hpf,
+    vbass_low_lpf=s.vbass_low_lpf,vbass_out_hpf=s.vbass_out_hpf,vbass_out_lpf=s.vbass_out_lpf,
+    vbass_drive=s.vbass_drive,vbass_mix=s.vbass_mix,vbass_even=s.vbass_even,vbass_odd=s.vbass_odd,
+    hpf=true,hpf_freq=s.hpf_freq,hpf_q=0.707,eq=true,eq_count=7,
+    limiter=true,limiter_peak=s.limiter_peak or 31000}
+  for i=1,7 do
+    fx['eq'..i..'_freq']=s.eq_freqs[i]
+    fx['eq'..i..'_gain']=s.eq[i] or 0
+    fx['eq'..i..'_q']=s.eq_q[i]
+  end
+  local ok,result,err=pcall(audio.set_effects,fx)
+  if ok and result then
+    web_log("audio.set_effects ok", "volume="..tostring(s.volume))
   else
-    web_log("audio.set_effects failed", tostring(err))
+    web_log("audio.set_effects failed", tostring(ok and err or result))
   end
 end
 
