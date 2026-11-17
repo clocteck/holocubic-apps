@@ -1,5 +1,7 @@
 # General App Development Reference
 
+发布应用前请逐项核对 [App 发布检查清单](README_APP_RELEASE.md)：手柄、作者、图标、名称、资源路径、info.html、多语言及云端实际返回。
+
 [English](#general-app-development-reference) | [简体中文](#普通-app-开发参考)
 
 This repository contains example Lua apps that can run directly from the device's SD card. The
