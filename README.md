@@ -8,6 +8,8 @@ This repository contains example Lua apps that can run directly from the device'
 `package/` directory of each app is its deployment package. Copy it to
 `/sd/apps/<app-id>/` on the device, then rescan apps in Launcher to make it available.
 
+Device resources: [HoloCubic platform](https://clocteck.com/pages/holocubic) · [ClocTeck website](https://clocteck.com/)
+
 See [README_LUA.md](README_LUA.md) for the underlying Lua module APIs and
 [README_LVGL.md](README_LVGL.md) for the LVGL UI bindings. This document focuses on the
 project structure, common API entry points, and debugging workflow most useful for DIY apps.

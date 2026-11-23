@@ -1594,3 +1594,5 @@ end)
 ### UI
 
 Lua UI 直接使用全局 `lv_*` 函数和 LVGL 常量。控件创建、布局、样式、事件、动画、GIF、canvas 等接口统一查看 `README_LVGL.md`。
+
+Device resources: [HoloCubic platform](https://clocteck.com/pages/holocubic) · [ClocTeck website](https://clocteck.com/)

@@ -1,3 +1,4 @@
+-- [HoloCubic platform](https://clocteck.com/pages/holocubic) | [ClocTeck website](https://clocteck.com/)
 
 local SCREEN_W = 320
 local SCREEN_H = 240
