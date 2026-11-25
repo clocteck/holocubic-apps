@@ -25,13 +25,18 @@ local function draw(x, y, text, color)
   lv_canvas_draw_text(canvas, x, math.floor(y + 0.5), 320 - x, text, dsc)
 end
 
+local function circle(x, y, radius, color)
+  lv_canvas_draw_arc(canvas, math.floor(x + 0.5), math.floor(y + 0.5), radius, 0, 360, color, 255, 1)
+end
+
 local water = {"---", "---", "--~", "~~~", "~--", "---"}
 local surface_group_width = Aquarium.glyph_width * 3
 local surface_groups = math.floor((tank.right - tank.left) / surface_group_width)
 local surface_start = (tank.left + tank.right - surface_groups * surface_group_width) / 2
 local bubble_x = {65, 178, 274}
+local bubble_radii = {3, 5, 4}
 local kelp_roots = {{57, 35}, {159, 28}, {257, 32}}
-local stem_style = {color = 0x4C9875, width = 1}
+local stem_style = {color = 0x36C447, width = 2}
 
 local function kelp_blade(x, height, phase, direction)
   local y = tank.bottom - 2
@@ -42,8 +47,8 @@ local function kelp_blade(x, height, phase, direction)
   local upper_y = y - math.floor(height * 0.67)
   local tip_x = math.floor(x + bend + 0.5)
   lv_canvas_draw_line(canvas, {x, y, lower_x, lower_y, upper_x, upper_y, tip_x, y - height}, 4, stem_style)
-  lv_canvas_draw_line(canvas, lower_x, lower_y, lower_x - direction * 6, lower_y - 6, 0x417D63, 255, 1)
-  lv_canvas_draw_line(canvas, upper_x, upper_y, upper_x + direction * 5, upper_y - 5, 0x72AB82, 255, 1)
+  lv_canvas_draw_line(canvas, lower_x, lower_y, lower_x - direction * 6, lower_y - 6, 0x249A38, 255, 2)
+  lv_canvas_draw_line(canvas, upper_x, upper_y, upper_x + direction * 5, upper_y - 5, 0x66E64E, 255, 2)
 end
 
 local function render()
@@ -53,16 +58,18 @@ local function render()
 
   for i = 0, surface_groups - 1 do
     local x = surface_start + i * surface_group_width
-    local y = tank:surface(x + surface_group_width / 2)
+    local sample_x = tank.left + (tank.right - tank.left) * i / (surface_groups - 1)
+    local y = tank:surface(sample_x)
     local glyph = water[1 + (i + math.floor(now * 3)) % #water]
-    draw(x, y - 8, glyph, 0x65B8B0)
+    draw(x, y - 8, glyph, 0x2ABFDE)
   end
   for i, origin in ipairs(bubble_x) do
-    local y = 213 - (now * (11 + i) + i * 45) % 182
+    local radius = bubble_radii[i]
+    local y = 213 - (now * (23 + i * 3) + i * 45) % 182
     local x = origin + math.sin(now * 1.8 + i + y * 0.06) * 5
     x = x - tank.flow_x * (213 - y) * 0.18
-    if x >= 15 and x <= 299 and y > tank:surface(x) + 8 then
-      draw(x, y - 7, i == 2 and "O" or "o", 0x689195)
+    if x >= 15 and x <= 299 and y > tank:surface(x) + radius + 2 then
+      circle(x, y, radius, 0x469CFF)
     end
   end
 
@@ -78,16 +85,15 @@ local function render()
     local frame = frames[1 + math.floor(now * 5 + fish.phase) % #frames]
     for row, text in ipairs(frame) do
       local y = fish.y - kind.half_height + (row - 1) * Aquarium.fish_row_height
-      draw(fish.x - kind.half_width, y, text, kind.color)
+      draw(fish.x - kind.half_width, y, text, fish.color)
     end
     if fish.spark > now then
       local x = fish.x + fish.facing * kind.half_width - 3
       draw(x, fish.y - 15, "*", 0xFFECA2)
     end
   end
-  for i, pellet in ipairs(tank.food) do
-    local glyph = i % 2 == 0 and "*" or "+"
-    draw(pellet.x - 4, pellet.y - 7, glyph, 0xFFCD7E)
+  for _, pellet in ipairs(tank.food) do
+    circle(pellet.x, pellet.y, pellet.radius, 0xFFDC40)
   end
 
   lv_canvas_frame_end(canvas)
