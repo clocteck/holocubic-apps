@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>赛博鱼缸</title>
+<style>
+  :root { color-scheme: dark; background: #000; color: #e4fff9; font: 14px/1.55 system-ui, sans-serif }
+  body { max-width: 480px; margin: auto; padding: 18px }
+  header { display: flex; align-items: center; gap: 12px }
+  header div { flex: 1 }
+  img { width: 54px; height: 54px; border: 1px solid #284943; border-radius: 8px }
+  h1 { font-size: 17px; line-height: 1.2; margin: 0 }
+  header p { color: #9ac6bc; margin: 4px 0 0 }
+  button { background: #000; color: #a5e9dc; border: 1px solid #40655f; border-radius: 4px; padding: 5px 8px }
+  button:focus-visible { outline: 2px solid #45f4de; outline-offset: 2px }
+  ul { padding-left: 20px; margin: 15px 0 }
+  li + li { margin-top: 5px }
+  footer { color: #9ab0aa; font-size: 12px }
+  a { color: inherit }
+</style>
+<header>
+  <img alt="赛博鱼缸图标" width="54" height="54" src="data:image/png;base64,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">
+  <div><h1>赛博鱼缸</h1><p data-zh="纯黑背景上的霓虹字符鱼群" data-en="Neon ASCII fish on a pure black background">纯黑背景上的霓虹字符鱼群</p></div>
+  <button type="button" aria-label="切换至英文">EN</button>
+</header>
+<ul>
+  <li data-zh="倾斜设备，水面随姿态摆动，鱼群随水流偏移。水位固定在 90%。" data-en="Tilt the device to sway the water and steer the fish. The tank stays 90% full.">倾斜设备，水面随姿态摆动，鱼群随水流偏移。水位固定在 90%。</li>
+  <li data-zh="每隔 30–60 秒自动投喂。摇晃也可投喂，每次随机撒下 2–5 粒。" data-en="Food drops every 30–60 seconds. Shaking also drops food, with 2–5 pellets per feeding.">每隔 30–60 秒自动投喂。摇晃也可投喂，每次随机撒下 2–5 粒。</li>
+  <li data-zh="使用设备的返回手势退出。" data-en="Use the device's back gesture to exit.">使用设备的返回手势退出。</li>
+</ul>
+<footer>
+  <p data-zh="版本 0.1.3 · 约 63 KiB" data-en="Version 0.1.3 · about 63 KiB">版本 0.1.3 · 约 63 KiB</p>
+  <p><span data-zh="开源协议 GPL-3.0 · 参考项目" data-en="GPL-3.0 · Inspired by">开源协议 GPL-3.0 · 参考项目</span>
+  <a href="https://github.com/POWER-PILL/ASCII-Aquarium">ASCII Aquarium CYD</a> · <a href="https://github.com/xanderchinxyz/OpenGhost">OpenGhost</a></p>
+</footer>
+<script>
+  const button = document.querySelector("button");
+  button.addEventListener("click", () => {
+    const english = document.documentElement.lang !== "en";
+    document.documentElement.lang = english ? "en" : "zh-CN";
+    document.title = english ? "Cyber Aquarium" : "赛博鱼缸";
+    document.querySelector("h1").textContent = document.title;
+    document.querySelector("img").alt = english ? "Cyber Aquarium icon" : "赛博鱼缸图标";
+    document.querySelectorAll("[data-en]").forEach(node => {
+      node.textContent = english ? node.dataset.en : node.dataset.zh;
+    });
+    button.textContent = english ? "中文" : "EN";
+    button.setAttribute("aria-label", english ? "Switch to Chinese" : "切换至英文");
+  });
+</script>
