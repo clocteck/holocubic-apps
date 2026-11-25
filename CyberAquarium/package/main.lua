@@ -36,7 +36,7 @@ local surface_start = (tank.left + tank.right - surface_groups * surface_group_w
 local bubble_x = {65, 178, 274}
 local bubble_radii = {3, 5, 4}
 local kelp_roots = {{57, 35}, {159, 28}, {257, 32}}
-local stem_style = {color = 0x36C447, width = 2}
+local stem_style = {color = 0x56996A, width = 2}
 
 local function kelp_blade(x, height, phase, direction)
   local y = tank.bottom - 2
@@ -47,8 +47,8 @@ local function kelp_blade(x, height, phase, direction)
   local upper_y = y - math.floor(height * 0.67)
   local tip_x = math.floor(x + bend + 0.5)
   lv_canvas_draw_line(canvas, {x, y, lower_x, lower_y, upper_x, upper_y, tip_x, y - height}, 4, stem_style)
-  lv_canvas_draw_line(canvas, lower_x, lower_y, lower_x - direction * 6, lower_y - 6, 0x249A38, 255, 2)
-  lv_canvas_draw_line(canvas, upper_x, upper_y, upper_x + direction * 5, upper_y - 5, 0x66E64E, 255, 2)
+  lv_canvas_draw_line(canvas, lower_x, lower_y, lower_x - direction * 6, lower_y - 6, 0x427C56, 255, 2)
+  lv_canvas_draw_line(canvas, upper_x, upper_y, upper_x + direction * 5, upper_y - 5, 0x75AC7D, 255, 2)
 end
 
 local function render()
